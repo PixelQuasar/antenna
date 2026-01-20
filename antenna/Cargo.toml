@@ -1,0 +1,7 @@
+[package]
+name = "antenna"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+antenna_core = { path = "../antenna_core" }

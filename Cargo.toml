@@ -1,0 +1,6 @@
+[workspace]
+members = ["antenna", "antenna_*"]
+resolver = "2"
+
+[workspace.package]
+rust-version = "1.89.0"
