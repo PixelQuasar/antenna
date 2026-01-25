@@ -1,23 +1,31 @@
+use crate::logger::Logger;
+use crate::utils::constants::DEFAULT_STUN_ADDR;
 use antenna_core::model::packet::Packet;
 use antenna_core::model::signaling::SignalMessage;
 use antenna_core::traits::message::AntennaMessage;
 use postcard::{from_bytes, to_allocvec};
-use serde::{Serialize, de::DeserializeOwned};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
+/// Client-side input for setting up Antenna Engine
 #[derive(Clone)]
 pub struct EngineConfig {
+    /// Signaling server URL
     pub url: String,
+    /// Auth token
     pub auth_token: String,
 }
 
+/// Antenna client state
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionState {
+    /// Disconnected from peer
     Disconnected,
+    /// Initiation of connection in progress (offering / sending own ICE candidate)
     Connecting,
+    /// Connected to peer
     Connected,
 }
 
@@ -38,8 +46,8 @@ pub struct AntennaEngine<T, E> {
 
 impl<T, E> AntennaEngine<T, E>
 where
-    T: AntennaMessage + Serialize,                  // Input (ChatInput)
-    E: AntennaMessage + DeserializeOwned + 'static, // Output (ChatEvent)
+    T: AntennaMessage,           // Input
+    E: AntennaMessage + 'static, // Output
 {
     pub fn new(config: EngineConfig) -> Result<Self, JsValue> {
         let inner = Rc::new(RefCell::new(EngineInner {
@@ -57,28 +65,24 @@ where
             _phantom_out: std::marker::PhantomData,
         };
 
-        // Запускаем процесс подключения
-        engine.connect(config)?;
+        engine.ws_setup(config)?;
 
         Ok(engine)
     }
 
-    fn connect(&self, config: EngineConfig) -> Result<(), JsValue> {
+    /// Setting up WS client and initiating basic connection
+    fn ws_setup(&self, config: EngineConfig) -> Result<(), JsValue> {
         let ws = web_sys::WebSocket::new(&config.url)?;
         ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
-        // --- WebSocket Callbacks Setup ---
-
-        // 1. On Open: Шлем "Join"
         let onopen_callback = {
             let inner = self.inner.clone();
             let token = config.auth_token.clone();
-            Closure::wrap(Box::new(move |_| {
+            Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_| {
                 web_sys::console::log_1(&"WS Open".into());
 
-                // Формируем Join сообщение
                 let join_msg = SignalMessage::Join {
-                    room: "default".to_string(), // Хардкод для теста, потом параметр
+                    room: "DEFAULT".to_string(), // TODO add dynamic room param
                     token: Some(token.clone()),
                 };
 
@@ -87,49 +91,47 @@ where
                 wss.send_with_str(&json).unwrap();
 
                 inner.borrow_mut().state = ConnectionState::Connecting;
-            }) as Box<dyn FnMut(JsValue)>)
+            }))
         };
         ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
-        onopen_callback.forget(); // Утечка памяти намеренная (живет пока живет WS)
+        onopen_callback.forget();
 
-        // 2. On Message (Signaling)
         let onmessage_callback = {
             let inner = self.inner.clone();
-            Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
-                // Если текст (Сигналлинг)
-                if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
-                    let text: String = text.into();
-                    Self::handle_signal(&inner, text);
-                }
-            }) as Box<dyn FnMut(web_sys::MessageEvent)>)
+            Closure::<dyn FnMut(web_sys::MessageEvent)>::wrap(Box::new(
+                move |e: web_sys::MessageEvent| {
+                    if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
+                        let text = text.into();
+                        Self::handle_signal(&inner, text);
+                    }
+                },
+            ))
         };
         ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
         onmessage_callback.forget();
 
-        // Сохраняем WS
         self.inner.borrow_mut().ws = Some(ws);
 
         Ok(())
     }
 
-    /// Обработка сигналов (Offer/Answer/Ice)
-    async fn handle_signal(inner: &Rc<RefCell<EngineInner>>, text: String) {
+    /// handle basic signaling messages - getting offer from other peer and getting ice candidate
+    fn handle_signal(inner: &Rc<RefCell<EngineInner>>, text: String) {
         let msg: SignalMessage = match serde_json::from_str(&text) {
             Ok(m) => m,
             Err(e) => {
-                web_sys::console::warn_1(&format!("Signal parse error: {}", e).into());
-                return;
+                return web_sys::console::warn_1(
+                    &Logger::warn_msg(&format!("Signal parse error: {}", e)).into(),
+                );
             }
         };
 
         match msg {
             SignalMessage::Offer { sdp } => {
                 web_sys::console::log_1(&"Got Offer".into());
-                let inner_clone = inner.clone();
-
-                // Запускаем асинхронную задачу для обработки SDP
+                let inner = inner.clone();
                 wasm_bindgen_futures::spawn_local(async move {
-                    Self::setup_peer_connection_and_answer(inner_clone, sdp).await;
+                    Self::setup_peer_connection_and_answer(inner.clone(), sdp).await;
                 });
             }
             SignalMessage::IceCandidate {
@@ -142,67 +144,59 @@ where
                     let mut init = web_sys::RtcIceCandidateInit::new(&candidate);
                     init.sdp_mid(sdp_mid.as_deref());
                     init.sdp_m_line_index(sdp_m_line_index);
-
                     let candidate_obj = web_sys::RtcIceCandidate::new(&init).unwrap();
-                    let _ = wasm_bindgen_futures::JsFuture::from(
-                        pc.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&candidate_obj)),
-                    )
-                    .await;
+                    let _ = pc.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&candidate_obj));
                 }
             }
             _ => {}
         }
     }
 
-    /// Создание PC, установка Offer, отправка Answer
+    /// Initiating PeerConnection, setting up offer, sending answer
     async fn setup_peer_connection_and_answer(inner: Rc<RefCell<EngineInner>>, remote_sdp: String) {
-        // Конфиг ICE (Google Stun)
-        let mut rtc_config = web_sys::RtcConfiguration::new();
+        let rtc_config = web_sys::RtcConfiguration::new();
         let ice_server = web_sys::RtcIceServer::new();
-        ice_server.set_urls(&JsValue::from_str("stun:stun.l.google.com:19302"));
+        ice_server.set_urls(&JsValue::from_str(DEFAULT_STUN_ADDR));
         let ice_servers_arr = js_sys::Array::new();
         ice_servers_arr.push(&ice_server);
-        rtc_config.ice_servers(&ice_servers_arr);
-
+        rtc_config.set_ice_servers(&ice_servers_arr);
         let pc = web_sys::RtcPeerConnection::new_with_configuration(&rtc_config).unwrap();
 
-        // --- Handlers ---
-
-        // 1. On Data Channel (Самое важное для чата!)
-        let on_dc = {
+        let ondatachannel_callback = {
             let inner = inner.clone();
-            Closure::wrap(Box::new(move |ev: web_sys::RtcDataChannelEvent| {
-                let dc = ev.channel();
-                web_sys::console::log_1(&format!("DataChannel received: {}", dc.label()).into());
-
-                // Навешиваем обработчики на сам канал
-                Self::setup_data_channel(&inner, dc);
-            })
-                as Box<dyn FnMut(web_sys::RtcDataChannelEvent)>)
+            Closure::<dyn FnMut(web_sys::RtcDataChannelEvent)>::wrap(Box::new(
+                move |ev: web_sys::RtcDataChannelEvent| {
+                    let dc = ev.channel();
+                    web_sys::console::log_1(
+                        &format!("DataChannel received: {}", dc.label()).into(),
+                    );
+                    Self::setup_data_channel(&inner, dc);
+                },
+            ))
         };
-        pc.set_ondatachannel(Some(on_dc.as_ref().unchecked_ref()));
-        on_dc.forget();
+        pc.set_ondatachannel(Some(ondatachannel_callback.as_ref().unchecked_ref()));
+        ondatachannel_callback.forget();
 
-        // 2. On Ice Candidate -> Шлем на сервер
-        let on_ice = {
+        let onicecandidate_callback = {
             let inner = inner.clone();
-            Closure::wrap(Box::new(move |ev: web_sys::RtcPeerConnectionIceEvent| {
-                if let Some(candidate) = ev.candidate() {
-                    let msg = SignalMessage::IceCandidate {
-                        candidate: candidate.candidate(),
-                        sdp_mid: candidate.sdp_mid(),
-                        sdp_m_line_index: candidate.sdp_m_line_index(),
-                    };
-                    let json = serde_json::to_string(&msg).unwrap();
-                    if let Some(ws) = &inner.borrow().ws {
-                        ws.send_with_str(&json).unwrap();
+            Closure::<dyn FnMut(web_sys::RtcPeerConnectionIceEvent)>::wrap(Box::new(
+                move |ev: web_sys::RtcPeerConnectionIceEvent| {
+                    if let Some(candidate) = ev.candidate() {
+                        let msg = SignalMessage::IceCandidate {
+                            candidate: candidate.candidate(),
+                            sdp_mid: candidate.sdp_mid(),
+                            sdp_m_line_index: candidate.sdp_m_line_index(),
+                        };
+                        let json = serde_json::to_string(&msg).unwrap();
+                        if let Some(ws) = &inner.borrow().ws {
+                            ws.send_with_str(&json).unwrap();
+                        }
                     }
-                }
-            })
-                as Box<dyn FnMut(web_sys::RtcPeerConnectionIceEvent)>)
+                },
+            ))
         };
-        pc.set_onicecandidate(Some(on_ice.as_ref().unchecked_ref()));
-        on_ice.forget();
+        pc.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
+        onicecandidate_callback.forget();
 
         // --- Logic ---
 
@@ -244,15 +238,17 @@ where
         // On Message (Входящие данные)
         let on_msg = {
             let inner = inner.clone();
-            Closure::wrap(Box::new(move |ev: web_sys::MessageEvent| {
-                if let Ok(ab) = ev.data().dyn_into::<js_sys::ArrayBuffer>() {
-                    let bytes = js_sys::Uint8Array::new(&ab).to_vec();
+            Closure::<dyn FnMut(web_sys::MessageEvent)>::wrap(Box::new(
+                move |ev: web_sys::MessageEvent| {
+                    if let Ok(ab) = ev.data().dyn_into::<js_sys::ArrayBuffer>() {
+                        let bytes = js_sys::Uint8Array::new(&ab).to_vec();
 
-                    if let Ok(packet) = from_bytes::<Packet<E>>(&bytes) {
-                        Self::dispatch_event(&inner, packet);
+                        if let Ok(packet) = from_bytes::<Packet<E>>(&bytes) {
+                            Self::dispatch_event(&inner, packet);
+                        }
                     }
-                }
-            }) as Box<dyn FnMut(web_sys::MessageEvent)>)
+                },
+            ))
         };
         dc.set_onmessage(Some(on_msg.as_ref().unchecked_ref()));
         on_msg.forget();
@@ -260,12 +256,12 @@ where
         // On Open (Канал готов!)
         let on_open = {
             let inner = inner.clone();
-            Closure::wrap(Box::new(move |_| {
+            Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_| {
                 web_sys::console::log_1(&"DataChannel OPEN".into());
                 inner.borrow_mut().state = ConnectionState::Connected;
 
                 // TODO: Отправить все сообщения из очереди
-            }) as Box<dyn FnMut(JsValue)>)
+            }))
         };
         dc.set_onopen(Some(on_open.as_ref().unchecked_ref()));
         on_open.forget();
