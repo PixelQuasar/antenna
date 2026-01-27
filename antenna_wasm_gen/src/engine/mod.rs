@@ -1,7 +1,7 @@
 use crate::logger::Logger;
 use crate::utils::constants::DEFAULT_STUN_ADDR;
-use antenna_core::model::packet::Packet;
-use antenna_core::model::signaling::SignalMessage;
+use antenna_core::model::Packet;
+use antenna_core::model::SignalMessage;
 use antenna_core::traits::message::AntennaMessage;
 use postcard::{from_bytes, to_allocvec};
 use std::cell::RefCell;
@@ -216,7 +216,7 @@ where
             .unwrap();
 
         let mut answer_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
-        answer_init.sdp(&answer_sdp);
+        answer_init.set_sdp(&answer_sdp);
 
         // setLocalDescription
         let _ = wasm_bindgen_futures::JsFuture::from(pc.set_local_description(&answer_init)).await;
