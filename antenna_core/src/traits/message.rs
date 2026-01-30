@@ -1,4 +1,4 @@
-use crate::model::channel::Channel;
+use crate::model::Channel;
 use serde::{Serialize, de::DeserializeOwned};
 
 pub trait AntennaMessage: Serialize + DeserializeOwned + Send + Sync + 'static {

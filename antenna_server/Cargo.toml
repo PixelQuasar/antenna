@@ -6,3 +6,9 @@ rust-version.workspace = true
 
 [dependencies]
 antenna_core = { path = "../antenna_core" }
+async-trait = "0.1.89"
+bytes = "1.11.0"
+dashmap = "7.0.0-rc2"
+tracing = "0.1.44"
+tokio = "1.49.0"
+webrtc = "0.14.0"
