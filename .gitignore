@@ -1,0 +1,41 @@
+/target/
+**/target/
+
+# Cargo lock
+# Keep Cargo.lock for binaries; optional for libraries
+# Cargo.lock
+
+# Rustfmt
+rustfmt.toml.bak
+
+# IDEs / editors
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Env / secrets
+.env
+.env.*
+
+# Profiling / coverage
+*.profraw
+*.profdata
+coverage/
+tarpaulin-report.html
+lcov.info
+
+# Build artifacts / binaries (optional)
+*.exe
+*.dll
+*.so
+*.dylib
+
+# rust-analyzer
+rust-project.json
