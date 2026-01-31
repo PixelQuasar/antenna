@@ -18,7 +18,7 @@ pub struct EngineConfig {
     pub auth_token: String,
 }
 
-/// Antenna client state
+/// Antenna client room
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionState {
     /// Disconnected from peer

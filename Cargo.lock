@@ -79,9 +79,11 @@ name = "antenna_server"
 version = "0.1.0"
 dependencies = [
  "antenna_core",
+ "anyhow",
  "async-trait",
  "bytes",
  "dashmap",
+ "serde_json",
  "tokio",
  "tracing",
  "webrtc",

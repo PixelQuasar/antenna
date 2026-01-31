@@ -1,4 +1,5 @@
 mod context;
+mod room;
 mod traits;
 mod transport;
 
