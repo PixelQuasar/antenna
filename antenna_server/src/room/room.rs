@@ -41,7 +41,7 @@ pub trait SignalingOutput: Send + Sync {
 
 /// Основной актор комнаты.
 /// Управляет состоянием, пирами и вызывает пользовательскую логику.
-pub struct NexusRoom {
+pub struct Room {
     /// Пользовательская логика (геймплей).
     behavior: Box<dyn RoomBehavior>,
 
@@ -69,14 +69,14 @@ pub struct NexusRoom {
     transport_config: TransportConfig,
 }
 
-impl NexusRoom {
+impl Room {
     pub fn new(
         behavior: Box<dyn RoomBehavior>,
         command_rx: mpsc::Receiver<RoomCommand>,
         signaling: Box<dyn SignalingOutput>,
     ) -> Self {
         // Создаем канал MPSC для сбора событий от всех WebRTC подключений в один поток
-        let (transport_tx, transport_rx) = mpsc::channel(100);
+        let (transport_tx, transport_rx) = mpsc::channel(256);
 
         Self {
             behavior,
@@ -93,7 +93,7 @@ impl NexusRoom {
     /// Запуск главного цикла (Event Loop) комнаты.
     /// Блокирующий метод (асинхронно), должен быть запущен через tokio::spawn.
     pub async fn run(mut self) {
-        info!("NexusRoom event loop started");
+        info!("Room event loop started");
 
         loop {
             // Создаем временный контекст для передачи в RoomBehavior.
@@ -126,14 +126,14 @@ impl NexusRoom {
             }
         }
 
-        info!("NexusRoom event loop finished");
+        info!("Room event loop finished");
     }
 
     /// Обработка команд от сигнального слоя.
     async fn handle_command(&mut self, cmd: RoomCommand) {
         match cmd {
             RoomCommand::JoinRequest { peer_id, offer } => {
-                info!("Processing JoinRequest for user {}", peer_id);
+                info!("Processing JoinRequest for user {:?}", peer_id);
 
                 // Если пользователь уже есть (например, реконнект), очищаем старое
                 if self.transports.contains_key(&peer_id) {
@@ -142,7 +142,7 @@ impl NexusRoom {
 
                 // 1. Создаем новый транспорт
                 let transport_res = ConnectionWrapper::new(
-                    peer_id.clone(),
+                    peer_id,
                     self.transport_config.clone(),
                     self.transport_tx.clone(), // передаем sender
                 )
@@ -152,7 +152,7 @@ impl NexusRoom {
                     Ok(transport) => {
                         // 2. Устанавливаем удаленный дескрипшн (Offer)
                         if let Err(e) = transport.set_remote_description(offer).await {
-                            error!("SDP error for {}: {}", peer_id, e);
+                            error!("SDP error for {:?}: {:?}", peer_id, e);
                             return;
                         }
 

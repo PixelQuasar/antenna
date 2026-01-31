@@ -3,7 +3,7 @@ use bytes::Bytes;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info};
-
+use std::default::Default;
 use webrtc::api::APIBuilder;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
@@ -19,7 +19,6 @@ use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use antenna_core::model::PeerId;
 
 /// События, которые транспорт генерирует для логики Комнаты (Room).
-#[derive(Debug)]
 pub enum TransportEvent {
     /// DataChannel успешно открыт и готов к передаче данных.
     /// Передаем сам канал, чтобы RoomContext мог его сохранить.

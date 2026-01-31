@@ -1,5 +1,5 @@
 use crate::logger::Logger;
-use crate::utils::constants::DEFAULT_STUN_ADDR;
+use antenna_core::utils::DEFAULT_STUN_ADDR;
 use antenna_core::model::Packet;
 use antenna_core::model::SignalMessage;
 use antenna_core::traits::message::AntennaMessage;
