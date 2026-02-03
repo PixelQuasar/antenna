@@ -5,6 +5,12 @@ edition = "2024"
 
 [dependencies]
 antenna_core = { path = "../antenna_core" }
-antenna_wasm_gen = { path = "../antenna_wasm_gen" }
-antenna_server = { path = "../antenna_server" }
-antenna_codegen = { path = "../antenna_codegen" }
+antenna_wasm_gen = { path = "../antenna_wasm_gen", optional = true }
+antenna_server = { path = "../antenna_server", optional = true }
+antenna_codegen = { path = "../antenna_codegen", optional = true }
+
+[features]
+default = ["server"]
+server = ["dep:antenna_server"]
+client = ["dep:antenna_wasm_gen"]
+full = ["server", "client"]
