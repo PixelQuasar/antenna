@@ -9,3 +9,15 @@ impl PeerId {
         Self(Uuid::new_v4())
     }
 }
+
+impl From<&str> for PeerId {
+    fn from(s: &str) -> Self {
+        Self(Uuid::parse_str(s).unwrap())
+    }
+}
+
+impl From<String> for PeerId {
+    fn from(s: String) -> Self {
+        Self(Uuid::parse_str(&s).unwrap())
+    }
+}

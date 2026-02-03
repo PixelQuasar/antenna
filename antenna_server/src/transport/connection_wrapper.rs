@@ -1,9 +1,12 @@
+use crate::transport::transport_config::TransportConfig;
+use crate::transport::transport_event::TransportEvent;
+use antenna_core::model::PeerId;
 use anyhow::{Context, Result};
 use bytes::Bytes;
+use std::default::Default;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{debug, error, info};
-use std::default::Default;
+use tracing::{debug, info};
 use webrtc::api::APIBuilder;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
@@ -15,38 +18,6 @@ use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
-
-use antenna_core::model::PeerId;
-
-/// События, которые транспорт генерирует для логики Комнаты (Room).
-pub enum TransportEvent {
-    /// DataChannel успешно открыт и готов к передаче данных.
-    /// Передаем сам канал, чтобы RoomContext мог его сохранить.
-    DataChannelReady(PeerId, Arc<RTCDataChannel>),
-
-    /// Соединение с пиром разорвано.
-    Disconnected(PeerId),
-
-    /// Получено бинарное сообщение от пира.
-    Message(PeerId, Bytes),
-
-    /// Сгенерирован локальный ICE-кандидат, его нужно отправить клиенту (через Signalling).
-    CandidateGenerated(PeerId, String),
-}
-
-/// Конфигурация для WebRTC
-#[derive(Clone)]
-pub struct TransportConfig {
-    pub ice_servers: Vec<String>,
-}
-
-impl Default for TransportConfig {
-    fn default() -> Self {
-        Self {
-            ice_servers: vec!["stun:stun.l.google.com:19302".to_owned()],
-        }
-    }
-}
 
 pub struct ConnectionWrapper {
     pub peer_id: PeerId,
@@ -65,7 +36,7 @@ impl ConnectionWrapper {
         let mut m = MediaEngine::default();
         m.register_default_codecs()?;
         // 2. Регистрация интерцепторов (метрики, RTCP отчеты)
-        let mut registry = register_default_interceptors(Registry::new(), &mut m)?;
+        let registry = register_default_interceptors(Registry::new(), &mut m)?;
 
         // 3. Создание API объекта
         let api = APIBuilder::new()
@@ -98,7 +69,7 @@ impl ConnectionWrapper {
                 let uid = uid_state.clone();
 
                 Box::pin(async move {
-                    info!("Peer Connection State changed for user {}: {}", uid, s);
+                    info!("Peer Connection State changed for user {:?}: {:?}", uid, s);
                     match s {
                         RTCPeerConnectionState::Failed
                         | RTCPeerConnectionState::Disconnected
@@ -119,14 +90,16 @@ impl ConnectionWrapper {
             let uid = uid_ice.clone();
 
             Box::pin(async move {
-                if let Some(candidate) = c {
-                    // Конвертируем в JSON, совместимый с JS API
-                    if let Ok(json_candidate) = serde_json::to_string(&candidate.to_json()) {
-                        let _ = tx
-                            .send(TransportEvent::CandidateGenerated(uid, json_candidate))
-                            .await;
-                    }
-                }
+                let Some(candidate) = c else { return };
+                let Ok(json_candidate) = candidate.to_json() else {
+                    return;
+                };
+                let Ok(str_candidate) = serde_json::to_string(&json_candidate) else {
+                    return;
+                };
+                let _ = tx
+                    .send(TransportEvent::CandidateGenerated(uid, str_candidate))
+                    .await;
             })
         }));
 
@@ -138,7 +111,11 @@ impl ConnectionWrapper {
             let uid = uid_dc.clone();
 
             Box::pin(async move {
-                debug!("New DataChannel '{}' created for user {}", dс.label(), uid);
+                debug!(
+                    "New DataChannel '{:?}' created for user {:?}",
+                    dс.label(),
+                    uid
+                );
 
                 // Нам нужно дождаться on_open, чтобы канал был готов к записи
                 let dс_on_open = dс.clone();
@@ -150,7 +127,7 @@ impl ConnectionWrapper {
                     let channel_ready = dс_on_open.clone(); // Клонируем арк, чтобы передать вовне
 
                     Box::pin(async move {
-                        info!("DataChannel open and ready for user {}", uid);
+                        info!("DataChannel open and ready for user {:?}", uid);
                         // ТУТ ИСПРАВЛЕНИЕ: Передаем сам канал в Room
                         let _ = tx
                             .send(TransportEvent::DataChannelReady(uid, channel_ready))
