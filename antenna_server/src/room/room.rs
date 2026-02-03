@@ -1,5 +1,3 @@
-use anyhow::Result;
-use async_trait::async_trait;
 use dashmap::DashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -10,34 +8,12 @@ use tracing::{error, info, warn};
 use webrtc::data_channel::RTCDataChannel;
 
 // Internal imports
-use crate::context::RoomContext;
-use crate::traits::RoomBehavior;
+use crate::room::context::RoomContext;
+use crate::room::room_behavior::RoomBehavior;
+use crate::room::room_command::RoomCommand;
+use crate::signaling::SignalingOutput;
 use crate::transport::{ConnectionWrapper, TransportConfig, TransportEvent};
 use antenna_core::model::PeerId;
-
-/// Команды, поступающие в комнату от сигнального сервера (WebSocket/HTTP).
-#[derive(Debug)]
-pub enum RoomCommand {
-    /// Запрос на подключение: новый пользователь прислал SDP Offer.
-    JoinRequest { peer_id: PeerId, offer: String },
-
-    /// ICE Candidate от клиента (для пробития NAT).
-    IceCandidate { peer_id: PeerId, candidate: String },
-
-    /// Сигнал о разрыве WebSocket соединения.
-    Disconnect { peer_id: PeerId },
-}
-
-/// Трейт, который должна реализовать внешняя система (WebSocket сервер),
-/// чтобы комната могла отправлять ответы клиентам (SDP Answer, ICE).
-#[async_trait]
-pub trait SignalingOutput: Send + Sync {
-    /// Отправить SDP Answer конкретному пользователю.
-    async fn send_answer(&self, peer_id: PeerId, sdp: String);
-
-    /// Отправить ICE кандидата конкретному пользователю.
-    async fn send_ice(&self, peer_id: PeerId, candidate: String);
-}
 
 /// Основной актор комнаты.
 /// Управляет состоянием, пирами и вызывает пользовательскую логику.
@@ -142,9 +118,9 @@ impl Room {
 
                 // 1. Создаем новый транспорт
                 let transport_res = ConnectionWrapper::new(
-                    peer_id,
+                    peer_id.clone(),
                     self.transport_config.clone(),
-                    self.transport_tx.clone(), // передаем sender
+                    self.transport_tx.clone(),
                 )
                 .await;
 
@@ -165,19 +141,21 @@ impl Room {
                                 // 5. Отправляем ответ клиенту через WebSocket
                                 self.signaling.send_answer(peer_id, answer_sdp).await;
                             }
-                            Err(e) => error!("Failed to create answer for {}: {}", peer_id, e),
+                            Err(e) => error!("Failed to create answer for {:?}: {:?}", peer_id, e),
                         }
                     }
-                    Err(e) => error!("Failed to create transport for {}: {}", peer_id, e),
+                    Err(e) => error!("Failed to create transport for {:?}: {:?}", peer_id, e),
                 }
             }
 
             RoomCommand::IceCandidate { peer_id, candidate } => {
-                if let Some(transport) = self.transports.get(&peer_id) {
-                    if let Err(e) = transport.add_ice_candidate(candidate).await {
-                        warn!("Failed to add ICE candidate for {}: {}", peer_id, e);
-                    }
-                }
+                let Some(transport) = self.transports.get(&peer_id) else {
+                    return;
+                };
+                let Err(e) = transport.add_ice_candidate(candidate).await else {
+                    return;
+                };
+                warn!("Failed to add ICE candidate for {:?}: {:?}", peer_id, e);
             }
 
             RoomCommand::Disconnect { peer_id } => {
@@ -192,7 +170,7 @@ impl Room {
     async fn handle_transport_event(&mut self, event: TransportEvent, ctx: &RoomContext) {
         match event {
             TransportEvent::DataChannelReady(peer_id, channel) => {
-                info!("User {} fully joined (DataChannel ready).", peer_id);
+                info!("User {:?} fully joined (DataChannel ready).", peer_id);
 
                 // 1. Сохраняем канал в общуюкарту, чтобы Context мог слать данные
                 self.peers_data.insert(peer_id.clone(), channel);
@@ -208,7 +186,7 @@ impl Room {
 
             TransportEvent::Disconnected(peer_id) => {
                 // Разрыв WebRTC соединения (таймаут или ошибка сети)
-                info!("Transport disconnected for {}", peer_id);
+                info!("Transport disconnected for {:?}", peer_id);
                 self.remove_peer_with_notify(&peer_id, ctx).await;
             }
 
@@ -237,8 +215,9 @@ impl Room {
         self.peers_data.remove(peer_id);
 
         // Закрываем PeerConnection и удаляем транспорт
-        if let Some(transport) = self.transports.remove(peer_id) {
-            let _ = transport.close().await;
-        }
+        let Some(transport) = self.transports.remove(peer_id) else {
+            return;
+        };
+        let _ = transport.close().await;
     }
 }
