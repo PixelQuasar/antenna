@@ -1,4 +1,4 @@
-use antenna_core::model::PeerId;
+use antenna_core::PeerId;
 use bytes::Bytes;
 use std::sync::Arc;
 use webrtc::data_channel::RTCDataChannel;

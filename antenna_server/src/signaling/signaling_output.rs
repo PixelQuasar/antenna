@@ -1,4 +1,4 @@
-use antenna_core::model::PeerId;
+use antenna_core::PeerId;
 use async_trait::async_trait;
 
 /// Трейт, который должна реализовать внешняя система (WebSocket сервер),

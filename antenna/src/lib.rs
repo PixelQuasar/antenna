@@ -1,7 +1,5 @@
-pub use antenna_core::model::PeerId;
-
-pub mod model {
-    pub use antenna_core::model::*;
+pub mod utils {
+    pub use antenna_core::*;
 }
 
 #[cfg(feature = "server")]

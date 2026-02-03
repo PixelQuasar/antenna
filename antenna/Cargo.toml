@@ -7,10 +7,10 @@ edition = "2024"
 antenna_core = { path = "../antenna_core" }
 antenna_wasm_gen = { path = "../antenna_wasm_gen", optional = true }
 antenna_server = { path = "../antenna_server", optional = true }
-antenna_codegen = { path = "../antenna_codegen", optional = true }
+antenna_codegen = { path = "../antenna_codegen" }
 
 [features]
-default = ["server"]
+default = []
 server = ["dep:antenna_server"]
 client = ["dep:antenna_wasm_gen"]
 full = ["server", "client"]

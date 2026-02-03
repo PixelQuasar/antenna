@@ -13,7 +13,7 @@ use crate::room::room_behavior::RoomBehavior;
 use crate::room::room_command::RoomCommand;
 use crate::signaling::SignalingOutput;
 use crate::transport::{ConnectionWrapper, TransportConfig, TransportEvent};
-use antenna_core::model::PeerId;
+use antenna_core::PeerId;
 
 /// Основной актор комнаты.
 /// Управляет состоянием, пирами и вызывает пользовательскую логику.

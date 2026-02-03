@@ -1,4 +1,4 @@
-use antenna_core::model::PeerId;
+use antenna_core::PeerId;
 use bytes::Bytes;
 use dashmap::DashMap;
 use std::ops::Deref;

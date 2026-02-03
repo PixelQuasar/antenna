@@ -1,5 +1,5 @@
 use crate::room::context::RoomContext;
-use antenna_core::model::PeerId;
+use antenna_core::PeerId;
 use async_trait::async_trait;
 use bytes::Bytes; // Предполагаем, что UserId определен в core
 

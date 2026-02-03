@@ -1,6 +1,6 @@
 use crate::transport::transport_config::TransportConfig;
 use crate::transport::transport_event::TransportEvent;
-use antenna_core::model::PeerId;
+use antenna_core::PeerId;
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use std::default::Default;

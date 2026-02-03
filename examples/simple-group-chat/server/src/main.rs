@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use axum::{Router, routing::get};
 use bytes::Bytes;
+use postcard::{from_bytes, to_allocvec};
 use std::net::SocketAddr;
 use tokio::sync::mpsc;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{Level, info};
 
-use antenna::PeerId;
 use antenna::server::{
     Room,             // Оркестратор комнаты
     RoomBehavior,     // Трейт для нашей логики
@@ -15,6 +15,8 @@ use antenna::server::{
     SignalingService, // WebSocket упралвение
     ws_handler,       // Готовый хендлер для Axum
 };
+use antenna::utils::{Packet, PeerId};
+use shared::{ChatClientMsg, ChatServerMsg};
 
 struct ChatRoom;
 
@@ -35,20 +37,38 @@ impl RoomBehavior for ChatRoom {
 
     /// Вызывается, когда приходят бинарные данные через WebRTC
     async fn on_message(&self, ctx: &RoomContext, user_id: PeerId, data: Bytes) {
-        // Предполагаем, что клиент шлет UTF-8 текст
-        let text = String::from_utf8_lossy(&data);
-        info!("Msg from {:?}: {:?}", user_id, text);
+        // 1. Десериализация (Байты -> Struct)
+        // Твой клиентский код шлет Packet::User(msg), упакованный в postcard.
+        // Значит, сервер должен ожидать Packet<ChatClientMsg>.
 
-        // Форматируем сообщение: "[ID]: Text"
-        let broadcast_msg = format!("[{}:?]: {:?}", user_id, text);
+        match from_bytes::<Packet<ChatClientMsg>>(&data) {
+            Ok(Packet::User(client_msg)) => {
+                // Логика чата
+                print!("Got msg from {:?}: {:?}", user_id, client_msg.text);
 
-        // Рассылаем всем подключенным (включая отправителя)
-        ctx.broadcast(Bytes::from(broadcast_msg)).await;
+                let response = ChatServerMsg {
+                    author_id: user_id.to_string(),
+                    text: client_msg.text,
+                    timestamp: 123456789,
+                };
+
+                let response_packet = Packet::User(response);
+
+                if let Ok(response_bytes) = to_allocvec(&response_packet) {
+                    ctx.broadcast(Bytes::from(response_bytes)).await;
+                }
+            }
+            Ok(Packet::System(_)) => { /* Ping/Pong ignore */ }
+            Err(e) => {
+                eprintln!("Failed to deserialize message: {}", e);
+            }
+            _ => {}
+        }
     }
 
     /// Вызывается при разрыве соединения
     async fn on_leave(&self, _ctx: &RoomContext, user_id: PeerId) {
-        info!("<<< User left the chat: {}", user_id);
+        info!("<<< User left the chat: {:?}", user_id);
     }
 }
 
@@ -69,7 +89,7 @@ async fn main() {
 
     // 4. Создаем Комнату
     // Передаем ей нашу логику (ChatRoom), входящий канал команд и "выхлоп" сигналинга (для отправки ответов)
-    let room = NexusRoom::new(
+    let room = Room::new(
         Box::new(ChatRoom),
         cmd_rx,
         Box::new(signaling.clone()), // Клонируем сервис (внутри Arc), чтобы передать владение

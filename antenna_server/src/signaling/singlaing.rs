@@ -16,7 +16,7 @@ use tracing::{error, info, warn};
 
 use crate::room::RoomCommand;
 use crate::signaling::SignalingOutput;
-use antenna_core::model::PeerId;
+use antenna_core::PeerId;
 // --- Протокол обмена (JSON) ---
 
 /// Сообщения, приходящие от клиента (браузера)

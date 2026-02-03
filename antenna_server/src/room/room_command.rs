@@ -1,4 +1,4 @@
-use antenna_core::model::PeerId;
+use antenna_core::PeerId;
 
 /// Команды, поступающие в комнату от сигнального сервера (WebSocket/HTTP).
 #[derive(Debug)]

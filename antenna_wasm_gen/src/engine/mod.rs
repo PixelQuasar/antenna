@@ -1,8 +1,8 @@
 use crate::logger::Logger;
+use antenna_core::Message;
+use antenna_core::Packet;
+use antenna_core::SignalMessage;
 use antenna_core::utils::DEFAULT_STUN_ADDR;
-use antenna_core::model::Packet;
-use antenna_core::model::SignalMessage;
-use antenna_core::traits::message::AntennaMessage;
 use postcard::{from_bytes, to_allocvec};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -46,8 +46,8 @@ pub struct AntennaEngine<T, E> {
 
 impl<T, E> AntennaEngine<T, E>
 where
-    T: AntennaMessage,           // Input
-    E: AntennaMessage + 'static, // Output
+    T: Message,           // Input
+    E: Message + 'static, // Output
 {
     pub fn new(config: EngineConfig) -> Result<Self, JsValue> {
         let inner = Rc::new(RefCell::new(EngineInner {
