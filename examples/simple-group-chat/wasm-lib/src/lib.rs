@@ -18,7 +18,6 @@ impl ChatWrapper {
     }
 
     pub fn send_message(&self, text: String) {
-        // Мы обязаны создать структуру, которую ожидает общий протокол
         let msg = ChatClientMsg { text };
         self.engine.send(msg);
     }
