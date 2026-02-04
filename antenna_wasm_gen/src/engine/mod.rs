@@ -46,8 +46,8 @@ pub struct AntennaEngine<T, E> {
 
 impl<T, E> AntennaEngine<T, E>
 where
-    T: Message,           // Input
-    E: Message + 'static, // Output
+    T: Message,
+    E: Message + 'static,
 {
     pub fn new(config: EngineConfig) -> Result<Self, JsValue> {
         let inner = Rc::new(RefCell::new(EngineInner {
@@ -198,15 +198,11 @@ where
         pc.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
         onicecandidate_callback.forget();
 
-        // --- Logic ---
+        let desc_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Offer);
+        desc_init.set_sdp(&remote_sdp);
 
-        let mut desc_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Offer);
-        desc_init.sdp(&remote_sdp);
-
-        // setRemoteDescription
         let _ = wasm_bindgen_futures::JsFuture::from(pc.set_remote_description(&desc_init)).await;
 
-        // createAnswer
         let answer = wasm_bindgen_futures::JsFuture::from(pc.create_answer())
             .await
             .unwrap();
@@ -218,10 +214,8 @@ where
         let mut answer_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
         answer_init.set_sdp(&answer_sdp);
 
-        // setLocalDescription
         let _ = wasm_bindgen_futures::JsFuture::from(pc.set_local_description(&answer_init)).await;
 
-        // Отправка Answer по WS
         let msg = SignalMessage::Answer { sdp: answer_sdp };
         let json = serde_json::to_string(&msg).unwrap();
         if let Some(ws) = &inner.borrow().ws {
@@ -231,11 +225,9 @@ where
         inner.borrow_mut().pc = Some(pc);
     }
 
-    /// Настройка Data Channel
     fn setup_data_channel(inner: &Rc<RefCell<EngineInner>>, dc: web_sys::RtcDataChannel) {
         dc.set_binary_type(web_sys::RtcDataChannelType::Arraybuffer);
 
-        // On Message (Входящие данные)
         let on_msg = {
             let inner = inner.clone();
             Closure::<dyn FnMut(web_sys::MessageEvent)>::wrap(Box::new(
@@ -253,14 +245,13 @@ where
         dc.set_onmessage(Some(on_msg.as_ref().unchecked_ref()));
         on_msg.forget();
 
-        // On Open (Канал готов!)
         let on_open = {
             let inner = inner.clone();
             Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_| {
                 web_sys::console::log_1(&"DataChannel OPEN".into());
                 inner.borrow_mut().state = ConnectionState::Connected;
 
-                // TODO: Отправить все сообщения из очереди
+                // TODO: SEND ALL MESSAGES FROM QUEUE
             }))
         };
         dc.set_onopen(Some(on_open.as_ref().unchecked_ref()));
@@ -269,7 +260,6 @@ where
         inner.borrow_mut().dc = Some(dc);
     }
 
-    /// Отправка события в JS
     fn dispatch_event(inner: &Rc<RefCell<EngineInner>>, packet: Packet<E>) {
         if let Some(cb) = &inner.borrow().js_callback {
             match packet {
@@ -279,18 +269,16 @@ where
                     }
                 }
                 Packet::System(sys) => {
-                    // Обработка пингов и прочего
+                    // Handling pings and etc
                 }
                 _ => {}
             }
         }
     }
 
-    /// Публичный метод: Отправка данных
     pub fn send(&self, msg: T) {
         let mut inner = self.inner.borrow_mut();
 
-        // Упаковка Packet::User(msg)
         let packet = Packet::User(msg);
         let bytes = to_allocvec(&packet).unwrap();
 
@@ -301,7 +289,6 @@ where
             }
         }
 
-        // Если не подключено - в очередь
         inner.message_queue.push(bytes);
     }
 

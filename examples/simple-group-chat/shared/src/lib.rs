@@ -1,7 +1,9 @@
 use antenna::utils::{Channel, Message};
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, TS)]
+#[ts(export)]
 pub struct ChatClientMsg {
     pub text: String,
 }
@@ -12,7 +14,8 @@ impl Message for ChatClientMsg {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, TS)]
+#[ts(export)]
 pub struct ChatServerMsg {
     pub author_id: String,
     pub text: String,

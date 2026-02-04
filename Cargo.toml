@@ -1,5 +1,5 @@
 [workspace]
-members = ["antenna", "antenna_wasm_gen", "antenna_codegen", "antenna_server", "antenna_core"]
+members = ["antenna", "antenna_wasm_gen", "antenna_codegen", "antenna_server", "antenna_core", "antenna-cli"]
 resolver = "2"
 
 [workspace.package]
