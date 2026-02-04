@@ -28,7 +28,7 @@ function App() {
                 await init();
                 const userId = self.crypto.randomUUID();
 
-                const url = `ws://127.0.0.1:3000/ws/${userId}`;
+                const url = `${SERVER_URL}/${userId}`;
 
                 console.log(`Connecting to ${url}...`);
                 const client = new ChatWrapper(url, AUTH_TOKEN);
