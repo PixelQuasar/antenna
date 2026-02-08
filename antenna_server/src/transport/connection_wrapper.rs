@@ -86,6 +86,7 @@ impl ConnectionWrapper {
         let ice_tx = event_tx.clone();
         let uid_ice = peer_id.clone();
         peer_connection.on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
+            println!("ice: {:?}", c);
             let tx = ice_tx.clone();
             let uid = uid_ice.clone();
 
@@ -106,22 +107,22 @@ impl ConnectionWrapper {
         // C. Обработка входящего DataChannel (клиент инициирует создание канала)
         let dc_tx = event_tx.clone();
         let uid_dc = peer_id.clone();
-        peer_connection.on_data_channel(Box::new(move |dс: Arc<RTCDataChannel>| {
+        peer_connection.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
             let tx = dc_tx.clone();
             let uid = uid_dc.clone();
 
             Box::pin(async move {
                 debug!(
                     "New DataChannel '{:?}' created for user {:?}",
-                    dс.label(),
+                    dc.label(),
                     uid
                 );
 
                 // Нам нужно дождаться on_open, чтобы канал был готов к записи
-                let dс_on_open = dс.clone();
+                let dс_on_open = dc.clone();
                 let tx_open = tx.clone();
                 let uid_open = uid.clone();
-                dс.on_open(Box::new(move || {
+                dc.on_open(Box::new(move || {
                     let tx = tx_open.clone();
                     let uid = uid_open.clone();
                     let channel_ready = dс_on_open.clone(); // Клонируем арк, чтобы передать вовне
@@ -138,7 +139,7 @@ impl ConnectionWrapper {
                 // Обработка входящих сообщений
                 let tx_msg = tx.clone();
                 let uid_msg = uid.clone();
-                dс.on_message(Box::new(move |msg: DataChannelMessage| {
+                dc.on_message(Box::new(move |msg: DataChannelMessage| {
                     let tx = tx_msg.clone();
                     let uid = uid_msg.clone();
                     Box::pin(async move {

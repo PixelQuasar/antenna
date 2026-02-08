@@ -21,6 +21,7 @@ impl RoomContext {
     /// Отправить бинарное сообщение конкретному пользователю.
     pub async fn send(&self, peer_id: &PeerId, data: Bytes) {
         if let Some(peer) = self.peers.get(peer_id) {
+            println!("sending data {:?}", data);
             // DataChannel::send ожидает Bytes и является асинхронным
             if let Err(e) = peer.send(&data).await {
                 error!("Failed to send message to user {:?}: {}", peer_id, e);
