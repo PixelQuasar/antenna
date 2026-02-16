@@ -125,3 +125,13 @@ features = [
 
 [workspace.dependencies.webrtc]
 version = "0.17.1"
+
+[workspace.dependencies.clap]
+version = "4.0"
+features = ["derive"]
+
+[workspace.dependencies.colored]
+version = "3.1.1"
+
+[workspace.dependencies.dialoguer]
+version = "0.12"

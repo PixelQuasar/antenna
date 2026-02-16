@@ -1,10 +1,9 @@
 import React, {useEffect, useRef, useState} from 'react';
-import './App.css';
 
-import init, {ChatWrapper} from '../wasm-pkg';
+import init, {ChatWrapper} from './generated/wasm';
 
-import type {ChatClientMsg} from "./types/ChatClientMsg";
-import type {ChatServerMsg} from "./types/ChatServerMsg";
+import type {ChatClientMsg} from "./generated/types/ChatClientMsg";
+import type {ChatServerMsg} from "./generated/types/ChatServerMsg";
 
 const SERVER_URL = "ws://127.0.0.1:3000/ws";
 const AUTH_TOKEN = "test-token-123";
