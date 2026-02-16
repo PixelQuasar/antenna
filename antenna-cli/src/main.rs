@@ -47,7 +47,6 @@ fn main() -> Result<()> {
             let types_path = out_path.join("types");
             let wasm_path = out_path.join("wasm");
 
-            // 1. Очистка старого
             if out_path.exists() {
                 fs::remove_dir_all(out_path)?;
             }

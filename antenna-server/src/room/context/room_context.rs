@@ -1,6 +1,7 @@
 use antenna_core::PeerId;
 use bytes::Bytes;
 use dashmap::DashMap;
+use std::fmt;
 use std::sync::Arc;
 use tracing::error;
 use webrtc::data_channel::RTCDataChannel;
@@ -8,6 +9,15 @@ use webrtc::data_channel::RTCDataChannel;
 #[derive(Clone)]
 pub struct RoomContext {
     peers: Arc<DashMap<PeerId, Arc<RTCDataChannel>>>,
+}
+
+impl fmt::Debug for RoomContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RoomContext")
+            .field("peers_count", &self.peers.len())
+            .field("peer_ids", &self.list_users())
+            .finish()
+    }
 }
 
 impl RoomContext {

@@ -26,10 +26,11 @@ impl RoomBehavior for ChatRoom {
     }
 
     async fn on_message(&self, ctx: &RoomContext, user_id: PeerId, data: Bytes) {
+        println!("{:#?}", ctx);
+        println!("{:#?}, {:#?}", user_id, data);
         match from_bytes::<Packet<ChatClientMsg>>(&data) {
             Ok(Packet::User(client_msg)) => {
-                // Логика чата
-                print!("Got msg from {:?}: {:?}", user_id, client_msg.text);
+                println!("Got msg from {:?}: {:?}", user_id, client_msg.text);
 
                 let response = ChatServerMsg {
                     author_id: user_id.to_string(),
