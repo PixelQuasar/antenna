@@ -1,11 +1,11 @@
 [package]
-name = "antenna_server"
+name = "antenna-server"
 version = "0.1.0"
 edition = "2024"
 rust-version.workspace = true
 
 [dependencies]
-antenna_core = { workspace = true }
+antenna-core = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 dashmap = { workspace = true }

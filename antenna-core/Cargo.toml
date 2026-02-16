@@ -1,5 +1,5 @@
 [package]
-name = "antenna_core"
+name = "antenna-core"
 version = "0.1.0"
 edition = "2024"
 rust-version.workspace = true

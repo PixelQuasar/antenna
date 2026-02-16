@@ -4,15 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-antenna_core = { workspace = true }
-antenna_wasm_gen = { workspace = true, optional = true }
-antenna_server = { workspace = true, optional = true }
-antenna_codegen = { workspace = true}
+antenna-core = { workspace = true }
+antenna-wasm-gen = { workspace = true, optional = true }
+antenna-server = { workspace = true, optional = true }
+antenna-codegen = { workspace = true}
 # transitive dependency for uuid in browser
 getrandom = { version = "0.2.17", features = ["js"], optional = true}
 
 [features]
 default = []
-server = ["dep:antenna_server"]
-client = ["dep:antenna_wasm_gen", "dep:getrandom"]
+server = ["dep:antenna-server"]
+client = ["dep:antenna-wasm-gen", "dep:getrandom"]
 full = ["server", "client"]

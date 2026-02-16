@@ -2,27 +2,27 @@
 resolver = "2"
 members = [
     "antenna",
-    "antenna_wasm_gen",
-    "antenna_codegen",
-    "antenna_server",
-    "antenna_core",
+    "antenna-wasm-gen",
+    "antenna-codegen",
+    "antenna-server",
+    "antenna-core",
     "antenna-cli",
 ]
 
 [workspace.package]
 rust-version = "1.89.0"
 
-[workspace.dependencies.antenna_core]
-path = "antenna_core"
+[workspace.dependencies.antenna-core]
+path = "antenna-core"
 
-[workspace.dependencies.antenna_wasm_gen]
-path = "antenna_wasm_gen"
+[workspace.dependencies.antenna-wasm-gen]
+path = "antenna-wasm-gen"
 
-[workspace.dependencies.antenna_server]
-path = "antenna_server"
+[workspace.dependencies.antenna-server]
+path = "antenna-server"
 
-[workspace.dependencies.antenna_codegen]
-path = "antenna_codegen"
+[workspace.dependencies.antenna-codegen]
+path = "antenna-codegen"
 
 [workspace.dependencies.anyhow]
 version = "1.0.101"
