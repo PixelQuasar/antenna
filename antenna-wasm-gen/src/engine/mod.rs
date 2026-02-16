@@ -9,24 +9,25 @@ use std::rc::Rc;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
-/// Client-side input for setting up Antenna Engine
 #[derive(Clone)]
 pub struct EngineConfig {
-    /// Signaling server URL
     pub url: String,
-    /// Auth token
     pub auth_token: String,
 }
 
 /// Antenna client room
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionState {
-    /// Disconnected from peer
     Disconnected,
-    /// Initiation of connection in progress (offering / sending own ICE candidate)
     Connecting,
-    /// Connected to peer
     Connected,
+}
+
+#[derive(serde::Deserialize)]
+struct InnerIce {
+    candidate: String,
+    sdp_mid: Option<String>,
+    sdp_m_line_index: Option<u16>,
 }
 
 struct EngineInner {
@@ -46,7 +47,7 @@ pub struct AntennaEngine<T, E> {
 
 impl<T, E> AntennaEngine<T, E>
 where
-    T: Message,
+    T: Message + Clone + 'static,
     E: Message + 'static,
 {
     pub fn new(config: EngineConfig) -> Result<Self, JsValue> {
@@ -66,15 +67,14 @@ where
         };
 
         engine.ws_setup(config)?;
-
         Ok(engine)
     }
 
-    /// Setting up WS client and initiating basic connection
     fn ws_setup(&self, config: EngineConfig) -> Result<(), JsValue> {
         let ws = web_sys::WebSocket::new(&config.url)?;
         ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
+        // ON OPEN
         let onopen_callback = {
             let inner = self.inner.clone();
             let token = config.auth_token.clone();
@@ -82,26 +82,29 @@ where
                 web_sys::console::log_1(&"WS Open".into());
 
                 let join_msg = SignalMessage::Join {
-                    room: "DEFAULT".to_string(), // TODO add dynamic room param
+                    room: "DEFAULT".to_string(),
                     token: Some(token.clone()),
                 };
 
                 let json = serde_json::to_string(&join_msg).unwrap();
-                let wss = inner.borrow().ws.clone().unwrap();
-                wss.send_with_str(&json).unwrap();
-
+                if let Some(ws) = &inner.borrow().ws {
+                    ws.send_with_str(&json).unwrap();
+                }
                 inner.borrow_mut().state = ConnectionState::Connecting;
             }))
         };
         ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
         onopen_callback.forget();
 
+        // ON MESSAGE
         let onmessage_callback = {
             let inner = self.inner.clone();
             Closure::<dyn FnMut(web_sys::MessageEvent)>::wrap(Box::new(
                 move |e: web_sys::MessageEvent| {
                     if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
-                        let text = text.into();
+                        let text: String = text.into();
+                        // Лог входящего сырого сообщения
+                        web_sys::console::log_1(&format!("WS IN: {}", text).into());
                         Self::handle_signal(&inner, text);
                     }
                 },
@@ -111,121 +114,248 @@ where
         onmessage_callback.forget();
 
         self.inner.borrow_mut().ws = Some(ws);
-
         Ok(())
     }
 
-    /// handle basic signaling messages - getting offer from other peer and getting ice candidate
-    fn handle_signal(inner: &Rc<RefCell<EngineInner>>, text: String) {
+    // ------------------------------------------------------------------------
+    // CORE SIGNALING LOGIC
+    // ------------------------------------------------------------------------
+
+    fn handle_signal(inner_rc: &Rc<RefCell<EngineInner>>, text: String) {
         let msg: SignalMessage = match serde_json::from_str(&text) {
             Ok(m) => m,
             Err(e) => {
-                return web_sys::console::warn_1(
-                    &Logger::warn_msg(&format!("Signal parse error: {}", e)).into(),
-                );
+                let err_text = format!("JSON Error: {}. Text: {}", e, text);
+                web_sys::console::warn_1(&err_text.into());
+                return;
             }
         };
 
+        let inner = inner_rc.clone();
+
         match msg {
-            SignalMessage::Offer { sdp } => {
-                web_sys::console::log_1(&"Got Offer".into());
-                let inner = inner.clone();
+            // [ВАЖНО] 1. Сервер сказал "Привет" -> Мы начинаем WebRTC
+            SignalMessage::Welcome { .. } => {
+                web_sys::console::log_1(&"Received Welcome. Initiating connection...".into());
                 wasm_bindgen_futures::spawn_local(async move {
-                    Self::setup_peer_connection_and_answer(inner.clone(), sdp).await;
+                    Self::initiate_connection(inner).await;
                 });
             }
+
+            // [ВАЖНО] 2. Сервер прислал Offer (если кто-то другой вошел)
+            SignalMessage::Offer { sdp } => {
+                web_sys::console::log_1(&"Received Offer from Server".into());
+                wasm_bindgen_futures::spawn_local(async move {
+                    Self::handle_remote_offer(inner, sdp).await;
+                });
+            }
+
+            // [ВАЖНО] 3. Сервер ответил на наш Offer
+            SignalMessage::Answer { sdp } => {
+                web_sys::console::log_1(&"Received Answer from Server".into());
+                wasm_bindgen_futures::spawn_local(async move {
+                    if let Some(pc) = inner.borrow().pc.clone() {
+                        let mut desc =
+                            web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
+                        desc.set_sdp(&sdp);
+                        if let Err(e) =
+                            wasm_bindgen_futures::JsFuture::from(pc.set_remote_description(&desc))
+                                .await
+                        {
+                            web_sys::console::error_1(&e);
+                        } else {
+                            web_sys::console::log_1(&"Remote description set (Answer)".into());
+                        }
+                    }
+                });
+            }
+
+            // 4. ICE Candidate
             SignalMessage::IceCandidate {
                 candidate,
                 sdp_mid,
                 sdp_m_line_index,
             } => {
-                // Добавляем кандидата в PC
-                if let Some(pc) = &inner.borrow().pc {
-                    let init = web_sys::RtcIceCandidateInit::new(&candidate);
-                    init.set_sdp_mid(sdp_mid.as_deref());
-                    init.set_sdp_m_line_index(sdp_m_line_index);
-                    let candidate_obj = web_sys::RtcIceCandidate::new(&init).unwrap();
-                    let _ = pc.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&candidate_obj));
+                if let Some(pc) = inner.borrow().pc.clone() {
+                    // ЛОГИКА ИСПРАВЛЕНИЯ:
+                    // Проверяем, пришел ли JSON внутри строки candidate
+                    let (real_candidate, real_mid, real_idx) = if candidate.trim().starts_with('{')
+                    {
+                        // Пытаемся распарсить вложенный JSON от сервера
+                        match serde_json::from_str::<InnerIce>(&candidate) {
+                            Ok(inner) => (inner.candidate, inner.sdpMid, inner.sdpMLineIndex),
+                            Err(e) => {
+                                web_sys::console::warn_1(
+                                    &format!("Failed to parse inner ICE json: {}", e).into(),
+                                );
+                                (candidate, sdp_mid, sdp_m_line_index)
+                            }
+                        }
+                    } else {
+                        // Если пришла нормальная строка, используем как есть
+                        (candidate, sdp_mid, sdp_m_line_index)
+                    };
+
+                    // Теперь создаем объект для браузера с ПРАВИЛЬНЫМИ данными
+                    let mut init = web_sys::RtcIceCandidateInit::new(&real_candidate);
+
+                    if let Some(mid) = real_mid {
+                        init.set_sdp_mid(Some(&mid));
+                    }
+                    if let Some(idx) = real_idx {
+                        init.set_sdp_m_line_index(Some(idx));
+                    }
+
+                    // Логируем, что добавляем
+                    web_sys::console::log_1(&format!("Adding ICE: {}", real_candidate).into());
+
+                    let promise = pc.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&init));
+
+                    // Необязательно, но полезно отловить ошибку добавления
+                    wasm_bindgen_futures::spawn_local(async move {
+                        if let Err(e) = wasm_bindgen_futures::JsFuture::from(promise).await {
+                            web_sys::console::warn_1(&format!("Error adding ICE: {:?}", e).into());
+                        }
+                    });
                 }
             }
+            // Игнорируем Join, так как это сообщение от клиента к серверу
             _ => {}
         }
     }
 
-    /// Initiating PeerConnection, setting up offer, sending answer
-    async fn setup_peer_connection_and_answer(inner: Rc<RefCell<EngineInner>>, remote_sdp: String) {
-        let rtc_config = web_sys::RtcConfiguration::new();
+    // ------------------------------------------------------------------------
+    // WEBRTC LOGIC
+    // ------------------------------------------------------------------------
+
+    // Вспомогательная функция: создание PC и ICE
+    fn create_pc(inner: &Rc<RefCell<EngineInner>>) -> Result<web_sys::RtcPeerConnection, JsValue> {
+        let mut rtc_config = web_sys::RtcConfiguration::new();
         let ice_server = web_sys::RtcIceServer::new();
         ice_server.set_urls(&JsValue::from_str(DEFAULT_STUN_ADDR));
         let ice_servers_arr = js_sys::Array::new();
         ice_servers_arr.push(&ice_server);
         rtc_config.set_ice_servers(&ice_servers_arr);
-        let pc = web_sys::RtcPeerConnection::new_with_configuration(&rtc_config).unwrap();
 
-        let ondatachannel_callback = {
-            let inner = inner.clone();
-            Closure::<dyn FnMut(web_sys::RtcDataChannelEvent)>::wrap(Box::new(
-                move |ev: web_sys::RtcDataChannelEvent| {
-                    let dc = ev.channel();
-                    web_sys::console::log_1(
-                        &format!("DataChannel received: {}", dc.label()).into(),
-                    );
-                    Self::setup_data_channel(&inner, dc);
-                },
-            ))
-        };
-        pc.set_ondatachannel(Some(ondatachannel_callback.as_ref().unchecked_ref()));
-        ondatachannel_callback.forget();
+        let pc = web_sys::RtcPeerConnection::new_with_configuration(&rtc_config)?;
 
-        let onicecandidate_callback = {
-            let inner = inner.clone();
-            Closure::<dyn FnMut(web_sys::RtcPeerConnectionIceEvent)>::wrap(Box::new(
-                move |ev: web_sys::RtcPeerConnectionIceEvent| {
-                    if let Some(candidate) = ev.candidate() {
-                        let msg = SignalMessage::IceCandidate {
-                            candidate: candidate.candidate(),
-                            sdp_mid: candidate.sdp_mid(),
-                            sdp_m_line_index: candidate.sdp_m_line_index(),
-                        };
-                        let json = serde_json::to_string(&msg).unwrap();
-                        if let Some(ws) = &inner.borrow().ws {
-                            ws.send_with_str(&json).unwrap();
-                        }
+        // ICE HANDLER
+        let inner_clone = inner.clone();
+        let onice = Closure::wrap(Box::new(move |ev: web_sys::RtcPeerConnectionIceEvent| {
+            if let Some(candidate) = ev.candidate() {
+                let msg = SignalMessage::IceCandidate {
+                    candidate: candidate.candidate(),
+                    sdp_mid: candidate.sdp_mid(),
+                    sdp_m_line_index: candidate.sdp_m_line_index(),
+                };
+                // Отправляем ICE сразу
+                if let Ok(json) = serde_json::to_string(&msg) {
+                    if let Some(ws) = &inner_clone.borrow().ws {
+                        let _ = ws.send_with_str(&json);
                     }
-                },
-            ))
-        };
-        pc.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
-        onicecandidate_callback.forget();
+                }
+            }
+        })
+            as Box<dyn FnMut(web_sys::RtcPeerConnectionIceEvent)>);
 
-        let desc_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Offer);
-        desc_init.set_sdp(&remote_sdp);
+        pc.set_onicecandidate(Some(onice.as_ref().unchecked_ref()));
+        onice.forget();
 
-        let _ = wasm_bindgen_futures::JsFuture::from(pc.set_remote_description(&desc_init)).await;
+        Ok(pc)
+    }
 
-        let answer = wasm_bindgen_futures::JsFuture::from(pc.create_answer())
+    /// [Сценарий 1] Мы инициаторы (после Welcome)
+    async fn initiate_connection(inner: Rc<RefCell<EngineInner>>) {
+        let pc = Self::create_pc(&inner).expect("Failed to create PC");
+
+        // 1. Инициатор создает DataChannel
+        let dc = pc.create_data_channel("chat");
+        Self::setup_data_channel(&inner, dc);
+
+        // 2. Создаем Offer
+        let offer_promise = pc.create_offer();
+        let offer_val = wasm_bindgen_futures::JsFuture::from(offer_promise)
             .await
             .unwrap();
-        let answer_sdp = js_sys::Reflect::get(&answer, &JsValue::from_str("sdp"))
+        let offer_sdp = js_sys::Reflect::get(&offer_val, &"sdp".into())
             .unwrap()
             .as_string()
             .unwrap();
 
-        let answer_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
-        answer_init.set_sdp(&answer_sdp);
+        // 3. Set Local
+        let mut desc = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Offer);
+        desc.set_sdp(&offer_sdp);
+        wasm_bindgen_futures::JsFuture::from(pc.set_local_description(&desc))
+            .await
+            .unwrap();
 
-        let _ = wasm_bindgen_futures::JsFuture::from(pc.set_local_description(&answer_init)).await;
-
-        let msg = SignalMessage::Answer { sdp: answer_sdp };
+        // 4. Send
+        web_sys::console::log_1(&"Sending OFFER to server...".into());
+        let msg = SignalMessage::Offer { sdp: offer_sdp };
         let json = serde_json::to_string(&msg).unwrap();
+
+        inner.borrow_mut().pc = Some(pc);
         if let Some(ws) = &inner.borrow().ws {
             ws.send_with_str(&json).unwrap();
         }
-
-        inner.borrow_mut().pc = Some(pc);
     }
 
+    /// [Сценарий 2] Мы приемники (Сервер прислал Offer)
+    async fn handle_remote_offer(inner: Rc<RefCell<EngineInner>>, remote_sdp: String) {
+        let pc = Self::create_pc(&inner).expect("Failed to create PC");
+
+        // Приемник ждет DataChannel (ondatachannel)
+        let inner_dc = inner.clone();
+        let ondatachannel_callback =
+            Closure::wrap(Box::new(move |ev: web_sys::RtcDataChannelEvent| {
+                let dc = ev.channel();
+                web_sys::console::log_1(&format!("Received DataChannel: {}", dc.label()).into());
+                Self::setup_data_channel(&inner_dc, dc);
+            })
+                as Box<dyn FnMut(web_sys::RtcDataChannelEvent)>);
+        pc.set_ondatachannel(Some(ondatachannel_callback.as_ref().unchecked_ref()));
+        ondatachannel_callback.forget();
+
+        // Set Remote
+        let mut desc_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Offer);
+        desc_init.set_sdp(&remote_sdp);
+        wasm_bindgen_futures::JsFuture::from(pc.set_remote_description(&desc_init))
+            .await
+            .unwrap();
+
+        // Create Answer
+        let answer = wasm_bindgen_futures::JsFuture::from(pc.create_answer())
+            .await
+            .unwrap();
+        let answer_sdp = js_sys::Reflect::get(&answer, &"sdp".into())
+            .unwrap()
+            .as_string()
+            .unwrap();
+
+        // Set Local
+        let mut answer_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
+        answer_init.set_sdp(&answer_sdp);
+        wasm_bindgen_futures::JsFuture::from(pc.set_local_description(&answer_init))
+            .await
+            .unwrap();
+
+        // Send Answer
+        web_sys::console::log_1(&"Sending ANSWER to server...".into());
+        let msg = SignalMessage::Answer { sdp: answer_sdp };
+        let json = serde_json::to_string(&msg).unwrap();
+
+        inner.borrow_mut().pc = Some(pc);
+        if let Some(ws) = &inner.borrow().ws {
+            ws.send_with_str(&json).unwrap();
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // DATA CHANNEL & EVENTS
+    // ------------------------------------------------------------------------
+
     fn setup_data_channel(inner: &Rc<RefCell<EngineInner>>, dc: web_sys::RtcDataChannel) {
+        // ... (Этот код у вас был верным, оставляем как есть) ...
         dc.set_binary_type(web_sys::RtcDataChannelType::Arraybuffer);
 
         let on_msg = {
@@ -234,7 +364,6 @@ where
                 move |ev: web_sys::MessageEvent| {
                     if let Ok(ab) = ev.data().dyn_into::<js_sys::ArrayBuffer>() {
                         let bytes = js_sys::Uint8Array::new(&ab).to_vec();
-
                         if let Ok(packet) = from_bytes::<Packet<E>>(&bytes) {
                             Self::dispatch_event(&inner, packet);
                         }
@@ -251,7 +380,11 @@ where
                 web_sys::console::log_1(&"DataChannel OPEN".into());
                 inner.borrow_mut().state = ConnectionState::Connected;
 
-                // TODO: SEND ALL MESSAGES FROM QUEUE
+                if let Some(dc) = &inner.borrow().dc {
+                    for msg in inner.borrow_mut().message_queue.drain(..) {
+                        let _ = dc.send_with_u8_array(&msg);
+                    }
+                }
             }))
         };
         dc.set_onopen(Some(on_open.as_ref().unchecked_ref()));
@@ -260,6 +393,7 @@ where
         inner.borrow_mut().dc = Some(dc);
     }
 
+    // ... dispatch_event, send, set_event_handler без изменений ...
     fn dispatch_event(inner: &Rc<RefCell<EngineInner>>, packet: Packet<E>) {
         if let Some(cb) = &inner.borrow().js_callback {
             match packet {
@@ -268,9 +402,6 @@ where
                         let _ = cb.call1(&JsValue::NULL, &js_val);
                     }
                 }
-                Packet::System(_sys) => {
-                    // TODO Handling pings and etc
-                }
                 _ => {}
             }
         }
@@ -278,17 +409,14 @@ where
 
     pub fn send(&self, msg: T) {
         let mut inner = self.inner.borrow_mut();
-
         let packet = Packet::User(msg);
         let bytes = to_allocvec(&packet).unwrap();
-
         if let Some(dc) = &inner.dc {
             if dc.ready_state() == web_sys::RtcDataChannelState::Open {
                 let _ = dc.send_with_u8_array(&bytes);
                 return;
             }
         }
-
         inner.message_queue.push(bytes);
     }
 

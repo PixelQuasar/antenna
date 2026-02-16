@@ -105,18 +105,15 @@ impl Room {
         info!("Room event loop finished");
     }
 
-    /// Обработка команд от сигнального слоя.
     async fn handle_command(&mut self, cmd: RoomCommand) {
         match cmd {
             RoomCommand::JoinRequest { peer_id, offer } => {
                 info!("Processing JoinRequest for user {:?}", peer_id);
 
-                // Если пользователь уже есть (например, реконнект), очищаем старое
                 if self.transports.contains_key(&peer_id) {
                     self.remove_peer(&peer_id).await;
                 }
 
-                // 1. Создаем новый транспорт
                 let transport_res = ConnectionWrapper::new(
                     peer_id.clone(),
                     self.transport_config.clone(),
@@ -126,19 +123,14 @@ impl Room {
 
                 match transport_res {
                     Ok(transport) => {
-                        // 2. Устанавливаем удаленный дескрипшн (Offer)
                         if let Err(e) = transport.set_remote_description(offer).await {
                             error!("SDP error for {:?}: {:?}", peer_id, e);
                             return;
                         }
 
-                        // 3. Создаем локальный дескрипшн (Answer)
                         match transport.create_answer().await {
                             Ok(answer_sdp) => {
-                                // 4. Сохраняем транспорт, чтобы соединение жило
                                 self.transports.insert(peer_id.clone(), transport);
-
-                                // 5. Отправляем ответ клиенту через WebSocket
                                 self.signaling.send_answer(peer_id, answer_sdp).await;
                             }
                             Err(e) => error!("Failed to create answer for {:?}: {:?}", peer_id, e),
@@ -159,7 +151,6 @@ impl Room {
             }
 
             RoomCommand::Disconnect { peer_id } => {
-                // Удаление инициировано сигнальным слоем (закрыл вкладку)
                 self.remove_peer_with_notify(&peer_id, &RoomContext::new(self.peers_data.clone()))
                     .await;
             }

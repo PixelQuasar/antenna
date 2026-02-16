@@ -27,6 +27,7 @@ async fn handle_socket(socket: WebSocket, peer_id: PeerId, service: SignalingSer
 
     let mut send_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
+            println!("MSG {:?}", msg);
             if sender.send(msg).await.is_err() {
                 break;
             }
@@ -47,6 +48,7 @@ async fn handle_socket(socket: WebSocket, peer_id: PeerId, service: SignalingSer
                                     peer_id: peer_id.clone(),
                                     offer: sdp,
                                 };
+                                info!("{:?}", cmd);
                                 if let Err(e) = service.room_cmd_tx.send(cmd).await {
                                     error!("Room died: {}", e);
                                     break;
@@ -57,10 +59,18 @@ async fn handle_socket(socket: WebSocket, peer_id: PeerId, service: SignalingSer
                                     peer_id: peer_id.clone(),
                                     candidate,
                                 };
+                                info!("{:?}", cmd);
                                 let _ = service.room_cmd_tx.send(cmd).await;
                             }
                             SignalMessage::Join { room, .. } => {
                                 info!("Peer {:?} wants to join room '{}'", peer_id, room);
+
+                                service.send_signal(
+                                    peer_id.clone(),
+                                    SignalMessage::Welcome {
+                                        peer_id: peer_id.clone(),
+                                    },
+                                )
                             }
                             _ => {}
                         },

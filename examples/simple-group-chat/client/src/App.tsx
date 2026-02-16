@@ -18,6 +18,7 @@ function App() {
     const chatRef = useRef<ChatWrapper | null>(null);
     const runOnce = useRef(false);
 
+
     useEffect(() => {
         if (runOnce.current) return;
         runOnce.current = true;
