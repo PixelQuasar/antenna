@@ -17,18 +17,6 @@ pub enum RoomEvent {
 }
 
 /// A test implementation of RoomBehavior that records all events.
-///
-/// # Example
-///
-/// ```ignore
-/// let behavior = TestRoomBehavior::new();
-/// let events = behavior.events();
-///
-/// // ... run room with this behavior ...
-///
-/// let recorded = events.lock().await;
-/// assert!(recorded.iter().any(|e| matches!(e, RoomEvent::Join { .. })));
-/// ```
 #[derive(Clone)]
 pub struct TestRoomBehavior {
     events: Arc<Mutex<Vec<RoomEvent>>>,
@@ -43,22 +31,6 @@ impl TestRoomBehavior {
             events: Arc::new(Mutex::new(Vec::new())),
             on_join_callback: None,
         }
-    }
-
-    /// Create a new TestRoomBehavior with a custom on_join callback.
-    pub fn with_on_join<F>(callback: F) -> Self
-    where
-        F: Fn(&RoomContext, PeerId) + Send + Sync + 'static,
-    {
-        Self {
-            events: Arc::new(Mutex::new(Vec::new())),
-            on_join_callback: Some(Arc::new(callback)),
-        }
-    }
-
-    /// Get a clone of the events Arc for verification.
-    pub fn events(&self) -> Arc<Mutex<Vec<RoomEvent>>> {
-        Arc::clone(&self.events)
     }
 
     /// Get all recorded events (convenience method).

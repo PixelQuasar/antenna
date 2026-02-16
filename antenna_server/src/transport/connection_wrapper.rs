@@ -25,26 +25,21 @@ pub struct ConnectionWrapper {
 }
 
 impl ConnectionWrapper {
-    /// Инициализация нового WebRTC соединения.
-    /// event_tx — канал, в который транспорт будет "выплевывать" события для главного цикла Room.
     pub async fn new(
         peer_id: PeerId,
         config: TransportConfig,
         event_tx: mpsc::Sender<TransportEvent>,
     ) -> Result<Self> {
-        // 1. Настройка MediaEngine (регистрация кодеков, даже если используем только DataChannel)
         let mut m = MediaEngine::default();
         m.register_default_codecs()?;
-        // 2. Регистрация интерцепторов (метрики, RTCP отчеты)
+
         let registry = register_default_interceptors(Registry::new(), &mut m)?;
 
-        // 3. Создание API объекта
         let api = APIBuilder::new()
             .with_media_engine(m)
             .with_interceptor_registry(registry)
             .build();
 
-        // 4. Конфигурация ICE серверов (STUN/TURN)
         let rtc_config = RTCConfiguration {
             ice_servers: vec![RTCIceServer {
                 urls: config.ice_servers,
@@ -54,13 +49,8 @@ impl ConnectionWrapper {
             ..Default::default()
         };
 
-        // 5. Создание PeerConnection
         let peer_connection = Arc::new(api.new_peer_connection(rtc_config).await?);
 
-        // --- Настройка Callbacks (Замыканий) ---
-        // Важно: мы клонируем event_tx и user_id для каждого замыкания, так как они должны быть 'static.
-
-        // A. Мониторинг состояния соединения (Connected/Disconnected)
         let state_tx = event_tx.clone();
         let uid_state = peer_id.clone();
         peer_connection.on_peer_connection_state_change(Box::new(
@@ -82,7 +72,6 @@ impl ConnectionWrapper {
             },
         ));
 
-        // B. Trickle ICE: отправка локальных кандидатов клиенту
         let ice_tx = event_tx.clone();
         let uid_ice = peer_id.clone();
         peer_connection.on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
@@ -104,7 +93,6 @@ impl ConnectionWrapper {
             })
         }));
 
-        // C. Обработка входящего DataChannel (клиент инициирует создание канала)
         let dc_tx = event_tx.clone();
         let uid_dc = peer_id.clone();
         peer_connection.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
@@ -118,25 +106,23 @@ impl ConnectionWrapper {
                     uid
                 );
 
-                // Нам нужно дождаться on_open, чтобы канал был готов к записи
-                let dс_on_open = dc.clone();
+                let dc_on_open = dc.clone();
                 let tx_open = tx.clone();
                 let uid_open = uid.clone();
                 dc.on_open(Box::new(move || {
                     let tx = tx_open.clone();
                     let uid = uid_open.clone();
-                    let channel_ready = dс_on_open.clone(); // Клонируем арк, чтобы передать вовне
+                    let channel_ready = dc_on_open.clone();
 
                     Box::pin(async move {
                         info!("DataChannel open and ready for user {:?}", uid);
-                        // ТУТ ИСПРАВЛЕНИЕ: Передаем сам канал в Room
+
                         let _ = tx
                             .send(TransportEvent::DataChannelReady(uid, channel_ready))
                             .await;
                     })
                 }));
 
-                // Обработка входящих сообщений
                 let tx_msg = tx.clone();
                 let uid_msg = uid.clone();
                 dc.on_message(Box::new(move |msg: DataChannelMessage| {
@@ -156,7 +142,6 @@ impl ConnectionWrapper {
         })
     }
 
-    /// Применить удаленный SDP Offer (полученный от клиента)
     pub async fn set_remote_description(&self, sdp: String) -> Result<()> {
         let desc =
             webrtc::peer_connection::sdp::session_description::RTCSessionDescription::offer(sdp)?;
@@ -164,7 +149,6 @@ impl ConnectionWrapper {
         Ok(())
     }
 
-    /// Создать локальный SDP Answer и установить его как LocalDescription
     pub async fn create_answer(&self) -> Result<String> {
         let answer = self.peer_connection.create_answer(None).await?;
         self.peer_connection
@@ -173,7 +157,6 @@ impl ConnectionWrapper {
         Ok(answer.sdp)
     }
 
-    /// Добавить удаленного ICE-кандидата (Trickle ICE)
     pub async fn add_ice_candidate(&self, candidate_json: String) -> Result<()> {
         let candidate: webrtc::ice_transport::ice_candidate::RTCIceCandidateInit =
             serde_json::from_str(&candidate_json).context("Failed to parse ICE candidate JSON")?;
@@ -181,7 +164,6 @@ impl ConnectionWrapper {
         Ok(())
     }
 
-    /// Закрыть WebRTC соединение
     pub async fn close(&self) -> Result<()> {
         self.peer_connection.close().await?;
         Ok(())

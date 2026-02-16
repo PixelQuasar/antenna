@@ -141,9 +141,9 @@ where
             } => {
                 // Добавляем кандидата в PC
                 if let Some(pc) = &inner.borrow().pc {
-                    let mut init = web_sys::RtcIceCandidateInit::new(&candidate);
-                    init.sdp_mid(sdp_mid.as_deref());
-                    init.sdp_m_line_index(sdp_m_line_index);
+                    let init = web_sys::RtcIceCandidateInit::new(&candidate);
+                    init.set_sdp_mid(sdp_mid.as_deref());
+                    init.set_sdp_m_line_index(sdp_m_line_index);
                     let candidate_obj = web_sys::RtcIceCandidate::new(&init).unwrap();
                     let _ = pc.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&candidate_obj));
                 }
@@ -211,7 +211,7 @@ where
             .as_string()
             .unwrap();
 
-        let mut answer_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
+        let answer_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
         answer_init.set_sdp(&answer_sdp);
 
         let _ = wasm_bindgen_futures::JsFuture::from(pc.set_local_description(&answer_init)).await;
@@ -268,8 +268,8 @@ where
                         let _ = cb.call1(&JsValue::NULL, &js_val);
                     }
                 }
-                Packet::System(sys) => {
-                    // Handling pings and etc
+                Packet::System(_sys) => {
+                    // TODO Handling pings and etc
                 }
                 _ => {}
             }

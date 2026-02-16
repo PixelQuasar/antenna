@@ -9,11 +9,11 @@ impl Logger {
         Self::log_msg(&format!("WARNING: {}", msg))
     }
 
-    pub fn error_msg(msg: &str) -> String {
+    pub fn _error_msg(msg: &str) -> String {
         Self::log_msg(&format!("ERROR: {}", msg))
     }
 
-    pub fn debug_msg(msg: &str) -> String {
+    pub fn _debug_msg(msg: &str) -> String {
         Self::log_msg(&format!("DEBUG: {}", msg))
     }
 }

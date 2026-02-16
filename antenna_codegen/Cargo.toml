@@ -5,4 +5,4 @@ edition = "2024"
 rust-version.workspace = true
 
 [dependencies]
-antenna_core = { path = "../antenna_core" }
+antenna_core = { workspace = true }

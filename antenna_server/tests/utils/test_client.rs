@@ -1,8 +1,3 @@
-//! WebRTC test client for simulating peer connections.
-//!
-//! This module provides a TestClient that can connect to a Room
-//! using real WebRTC, exchange SDP/ICE, and send/receive messages.
-
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use std::sync::Arc;
@@ -25,15 +20,12 @@ use antenna_core::PeerId;
 pub struct TestClientConfig {
     /// ICE servers to use (default: none for local testing).
     pub ice_servers: Vec<String>,
-    /// Data channel label.
-    pub channel_label: String,
 }
 
 impl Default for TestClientConfig {
     fn default() -> Self {
         Self {
             ice_servers: vec![],
-            channel_label: "data".to_string(),
         }
     }
 }
@@ -54,28 +46,21 @@ pub struct TestClient {
     connection_state: Arc<Mutex<RTCPeerConnectionState>>,
     /// Generated ICE candidates (to be sent to the server).
     ice_candidates: Arc<Mutex<Vec<String>>>,
-    /// Channel to receive ICE candidates as they're generated.
-    ice_tx: mpsc::UnboundedSender<String>,
-    ice_rx: Arc<Mutex<mpsc::UnboundedReceiver<String>>>,
 }
 
 impl TestClient {
     /// Create a new TestClient with the given peer ID and configuration.
     pub async fn new(peer_id: PeerId, config: TestClientConfig) -> Result<Self> {
-        // Setup media engine
         let mut media_engine = MediaEngine::default();
         media_engine.register_default_codecs()?;
 
-        // Setup interceptors
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
-        // Build API
         let api = APIBuilder::new()
             .with_media_engine(media_engine)
             .with_interceptor_registry(registry)
             .build();
 
-        // Configure ICE servers
         let ice_servers = if config.ice_servers.is_empty() {
             vec![]
         } else {
@@ -90,18 +75,15 @@ impl TestClient {
             ..Default::default()
         };
 
-        // Create peer connection
         let peer_connection = Arc::new(api.new_peer_connection(rtc_config).await?);
 
-        // Setup channels
         let (dc_open_tx, dc_open_rx) = mpsc::channel(1);
-        let (ice_tx, ice_rx) = mpsc::unbounded_channel();
+        let (ice_tx, _ice_rx) = mpsc::unbounded_channel();
         let received_messages = Arc::new(Mutex::new(Vec::new()));
         let data_channel: Arc<Mutex<Option<Arc<RTCDataChannel>>>> = Arc::new(Mutex::new(None));
         let connection_state = Arc::new(Mutex::new(RTCPeerConnectionState::New));
         let ice_candidates = Arc::new(Mutex::new(Vec::new()));
 
-        // Setup connection state callback
         let state_clone = Arc::clone(&connection_state);
         peer_connection.on_peer_connection_state_change(Box::new(move |state| {
             let state_clone = Arc::clone(&state_clone);
@@ -111,7 +93,6 @@ impl TestClient {
             })
         }));
 
-        // Setup ICE candidate callback
         let ice_tx_clone = ice_tx.clone();
         let ice_candidates_clone = Arc::clone(&ice_candidates);
         peer_connection.on_ice_candidate(Box::new(move |candidate| {
@@ -130,7 +111,6 @@ impl TestClient {
             })
         }));
 
-        // Setup data channel callback (for answerer side - when server creates channel)
         let dc_clone = Arc::clone(&data_channel);
         let messages_clone = Arc::clone(&received_messages);
         let dc_open_tx_clone = dc_open_tx.clone();
@@ -142,10 +122,8 @@ impl TestClient {
             Box::pin(async move {
                 tracing::debug!("[TestClient] Data channel received: {}", dc.label());
 
-                // Store the data channel
                 *dc_clone.lock().await = Some(Arc::clone(&dc));
 
-                // Setup on_open callback
                 let dc_open_tx2 = dc_open_tx.clone();
                 dc.on_open(Box::new(move || {
                     let dc_open_tx = dc_open_tx2.clone();
@@ -155,7 +133,6 @@ impl TestClient {
                     })
                 }));
 
-                // Setup message callback
                 let messages = Arc::clone(&messages_clone);
                 dc.on_message(Box::new(move |msg: DataChannelMessage| {
                     let messages = Arc::clone(&messages);
@@ -177,8 +154,6 @@ impl TestClient {
             dc_open_rx: Arc::new(Mutex::new(dc_open_rx)),
             connection_state,
             ice_candidates,
-            ice_tx,
-            ice_rx: Arc::new(Mutex::new(ice_rx)),
         })
     }
 
@@ -186,14 +161,12 @@ impl TestClient {
     ///
     /// Returns the SDP offer string to be sent to the server.
     pub async fn create_offer(&self) -> Result<String> {
-        // Create data channel first (client-initiated)
         let dc = self
             .peer_connection
             .create_data_channel("data", None)
             .await
             .context("Failed to create data channel")?;
 
-        // Setup callbacks for the data channel we created
         let messages = Arc::clone(&self.received_messages);
         dc.on_message(Box::new(move |msg: DataChannelMessage| {
             let messages = Arc::clone(&messages);
@@ -213,17 +186,14 @@ impl TestClient {
             })
         }));
 
-        // Store the data channel
         *self.data_channel.lock().await = Some(dc);
 
-        // Create offer
         let offer = self
             .peer_connection
             .create_offer(None)
             .await
             .context("Failed to create offer")?;
 
-        // Set local description
         self.peer_connection
             .set_local_description(offer.clone())
             .await
@@ -252,7 +222,6 @@ impl TestClient {
                 Ok(candidates)
             }
             Err(_) => {
-                // Return what we have so far
                 let candidates = self.ice_candidates.lock().await.clone();
                 tracing::warn!(
                     "[TestClient] ICE gathering timeout, returning {} candidates",
@@ -340,44 +309,6 @@ impl TestClient {
         Ok(())
     }
 
-    /// Send a text message through the data channel.
-    pub async fn send_text(&self, text: &str) -> Result<()> {
-        self.send_message(text.as_bytes()).await
-    }
-
-    /// Get all received messages.
-    pub async fn get_received_messages(&self) -> Vec<Bytes> {
-        self.received_messages.lock().await.clone()
-    }
-
-    /// Wait for a specific number of messages with timeout.
-    pub async fn wait_for_messages(&self, count: usize, timeout_ms: u64) -> Result<Vec<Bytes>> {
-        let start = std::time::Instant::now();
-        let timeout = std::time::Duration::from_millis(timeout_ms);
-
-        loop {
-            let messages = self.received_messages.lock().await.clone();
-            if messages.len() >= count {
-                return Ok(messages);
-            }
-
-            if start.elapsed() > timeout {
-                anyhow::bail!(
-                    "Timeout waiting for {} messages (got {})",
-                    count,
-                    messages.len()
-                );
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        }
-    }
-
-    /// Get the current connection state.
-    pub async fn connection_state(&self) -> RTCPeerConnectionState {
-        *self.connection_state.lock().await
-    }
-
     /// Close the peer connection.
     pub async fn close(&self) -> Result<()> {
         self.peer_connection
@@ -385,18 +316,6 @@ impl TestClient {
             .await
             .context("Failed to close peer connection")?;
         Ok(())
-    }
-
-    /// Get the next ICE candidate (blocking with timeout).
-    pub async fn next_ice_candidate(&self, timeout_ms: u64) -> Option<String> {
-        let mut rx = self.ice_rx.lock().await;
-        let timeout_result =
-            tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), rx.recv()).await;
-
-        match timeout_result {
-            Ok(Some(candidate)) => Some(candidate),
-            _ => None,
-        }
     }
 }
 

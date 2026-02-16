@@ -5,19 +5,19 @@ edition = "2024"
 rust-version.workspace = true
 
 [dependencies]
-antenna_core = { path = "../antenna_core" }
-async-trait = {workspace = true}
-bytes = {workspace = true}
-dashmap = {workspace = true}
-tracing = {workspace = true}
-tokio = {workspace = true}
-webrtc = {workspace = true}
-anyhow = {workspace = true}
-serde = {workspace = true}
-serde_json = {workspace = true}
-axum = {workspace = true }
-futures = {workspace = true}
+antenna_core = { workspace = true }
+async-trait = { workspace = true }
+bytes = { workspace = true }
+dashmap = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+webrtc = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+axum = { workspace = true }
+futures = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true}
+tokio = { workspace = true }
 tracing-subscriber = { workspace = true }

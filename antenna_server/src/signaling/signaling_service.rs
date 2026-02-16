@@ -2,18 +2,11 @@ use crate::room::RoomCommand;
 use crate::signaling::SignalingOutput;
 use antenna_core::{PeerId, SignalMessage};
 use async_trait::async_trait;
-use axum::{
-    extract::{
-        Path, State,
-        ws::{Message, WebSocket, WebSocketUpgrade},
-    },
-    response::IntoResponse,
-};
+use axum::extract::ws::Message;
 use dashmap::DashMap;
-use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 struct SignalingInner {
     peers: DashMap<PeerId, mpsc::UnboundedSender<Message>>,

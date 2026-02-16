@@ -5,7 +5,7 @@ edition = "2024"
 rust-version.workspace = true
 
 [dependencies]
-antenna_core = { path = "../antenna_core" }
+antenna_core = { workspace = true}
 wasm-bindgen =  { workspace = true }
 js-sys = { workspace = true }
 wasm-bindgen-futures =  { workspace = true }
