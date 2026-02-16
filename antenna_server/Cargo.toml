@@ -6,14 +6,18 @@ rust-version.workspace = true
 
 [dependencies]
 antenna_core = { path = "../antenna_core" }
-async-trait = "0.1.89"
-bytes = "1.11.0"
-dashmap = "7.0.0-rc2"
-tracing = "0.1.44"
-tokio = "1.49.0"
-webrtc = "0.14.0"
-anyhow = "1.0.100"
-serde = "1.0.228"
-serde_json = "1.0.149"
-axum = { version = "0.8.8", features = ["ws"] }
-futures = "0.3.31"
+async-trait = {workspace = true}
+bytes = {workspace = true}
+dashmap = {workspace = true}
+tracing = {workspace = true}
+tokio = {workspace = true}
+webrtc = {workspace = true}
+anyhow = {workspace = true}
+serde = {workspace = true}
+serde_json = {workspace = true}
+axum = {workspace = true }
+futures = {workspace = true}
+
+[dev-dependencies]
+tokio = { workspace = true}
+tracing-subscriber = { workspace = true }
