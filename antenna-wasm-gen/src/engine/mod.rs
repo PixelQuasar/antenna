@@ -177,10 +177,12 @@ where
             let inner = inner.clone();
             Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_| {
                 Logger::info(&"DataChannel OPEN");
-                inner.borrow_mut().state = ConnectionState::Connected;
 
-                if let Some(dc) = &inner.borrow().dc {
-                    for msg in inner.borrow_mut().message_queue.drain(..) {
+                let mut inner_mut = inner.borrow_mut();
+                inner_mut.state = ConnectionState::Connected;
+
+                if let Some(dc) = &inner_mut.dc {
+                    for msg in inner_mut.message_queue.drain(..) {
                         let _ = dc.send_with_u8_array(&msg);
                     }
                 }
