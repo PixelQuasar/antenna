@@ -1,4 +1,4 @@
-FROM rust:1.85 as wasm-builder
+FROM rust:1.89 as wasm-builder
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ RUN cargo build --release -p antenna-cli
 
 # Run antenna-cli to generate bindings
 WORKDIR /app/examples/simple-group-chat
-RUN ../../target/release/antenna-cli build --shared ./shared --client ./wasm-lib --out ./client/src/generated
+RUN /app/target/release/antenna-cli build --shared ./shared --client ./wasm-lib --out ./client/src/generated
 
 # Build the wasm library
 WORKDIR /app/examples/simple-group-chat/wasm-lib
