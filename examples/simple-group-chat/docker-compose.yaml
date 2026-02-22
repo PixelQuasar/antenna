@@ -13,19 +13,20 @@ services:
       - --log-file=stdout
       - --min-port=49160
       - --max-port=49200
-      - --realm=localhost
+      - --realm=demo-voicechat.quasarity.com
       - --user=user:password
       - --lt-cred-mech
       - --fingerprint
       - --no-tls
       - --no-dtls
+      - --external-ip=demo-voicechat.quasarity.com
 
   server:
     build:
       context: ../..
       dockerfile: examples/simple-group-chat/server/Dockerfile
     environment:
-      - TURN_URL=turn:coturn:3478
+      - TURN_URL=turn:demo-voicechat.quasarity.com:3478
       - TURN_USERNAME=user
       - TURN_CREDENTIAL=password
     depends_on:
