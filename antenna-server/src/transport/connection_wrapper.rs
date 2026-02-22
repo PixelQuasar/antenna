@@ -158,8 +158,25 @@ impl ConnectionWrapper {
     }
 
     pub async fn add_ice_candidate(&self, candidate_json: String) -> Result<()> {
-        let candidate: webrtc::ice_transport::ice_candidate::RTCIceCandidateInit =
-            serde_json::from_str(&candidate_json).context("Failed to parse ICE candidate JSON")?;
+        if candidate_json.is_empty() {
+            return Ok(());
+        }
+
+        if let Ok(candidate) = serde_json::from_str::<
+            webrtc::ice_transport::ice_candidate::RTCIceCandidateInit,
+        >(&candidate_json)
+        {
+            self.peer_connection.add_ice_candidate(candidate).await?;
+            return Ok(());
+        }
+
+        // Fallback for raw candidate string
+        let candidate = webrtc::ice_transport::ice_candidate::RTCIceCandidateInit {
+            candidate: candidate_json,
+            sdp_mid: None,
+            sdp_mline_index: None,
+            username_fragment: None,
+        };
         self.peer_connection.add_ice_candidate(candidate).await?;
         Ok(())
     }

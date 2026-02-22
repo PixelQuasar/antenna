@@ -35,6 +35,7 @@ where
                 },
             ))
         };
+
         dc.set_onmessage(Some(on_msg.as_ref().unchecked_ref()));
         on_msg.forget();
 
@@ -43,7 +44,6 @@ where
             Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_| {
                 Logger::info(&"DataChannel OPEN");
 
-                // 1. Get DC and drain messages safely
                 let (dc, messages) = {
                     let mut inner_mut = inner.borrow_mut();
                     inner_mut.state = ConnectionState::Connected;
@@ -52,7 +52,6 @@ where
                     (dc, msgs)
                 };
 
-                // 2. Send messages without holding the lock
                 if let Some(dc) = dc {
                     for msg in messages {
                         if let Err(e) = dc.send_with_u8_array(&msg) {
