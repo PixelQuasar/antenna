@@ -2,7 +2,6 @@ use crate::AntennaEngine;
 use crate::engine::EngineService;
 use crate::logger::Logger;
 use antenna_core::Message;
-
 use antenna_core::SignalMessage;
 use std::cell::RefCell;
 use std::rc::Rc;
