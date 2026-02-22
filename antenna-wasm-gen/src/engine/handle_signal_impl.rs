@@ -12,7 +12,7 @@ where
     T: Message + Clone + 'static,
     E: Message + 'static,
 {
-    pub(crate) fn handle_signal(inner_rc: &Rc<RefCell<EngineInner>>, text: String) {
+    pub(super) fn handle_signal(inner_rc: &Rc<RefCell<EngineInner>>, text: String) {
         let msg: SignalMessage = match serde_json::from_str(&text) {
             Ok(m) => m,
             Err(e) => {
@@ -36,7 +36,7 @@ where
             SignalMessage::Welcome { .. } => {
                 Logger::info(&"Received Welcome. Initiating connection...");
                 wasm_bindgen_futures::spawn_local(async move {
-                    Self::initiate_connection(inner).await;
+                    Self::init_connection(inner).await;
                 });
             }
 

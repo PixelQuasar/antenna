@@ -17,7 +17,7 @@ where
     T: Message + Clone + 'static,
     E: Message + 'static,
 {
-    pub(crate) fn create_pc(
+    pub(super) fn create_pc(
         inner: &Rc<RefCell<EngineInner>>,
     ) -> Result<web_sys::RtcPeerConnection, JsValue> {
         let rtc_config = web_sys::RtcConfiguration::new();
