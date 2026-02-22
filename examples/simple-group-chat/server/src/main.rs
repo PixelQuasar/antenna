@@ -3,7 +3,6 @@ use axum::{Router, routing::get};
 use bytes::Bytes;
 use postcard::{from_bytes, to_allocvec};
 use std::net::SocketAddr;
-use tokio::sync::mpsc;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{Level, info};
 
@@ -66,8 +65,8 @@ async fn main() {
     info!("Initializing Chat Server...");
 
     let turn_url = env::var("TURN_URL").expect("TURN_URL is not set");
-    let turn_username = env::var("TURN_USERNAME");
-    let turn_credential = env::var("TURN_CREDENTIAL");
+    let turn_username = env::var("TURN_USERNAME").ok();
+    let turn_credential = env::var("TURN_CREDENTIAL").ok();
 
     let ice_servers = vec![IceServerConfig {
         urls: vec![turn_url],

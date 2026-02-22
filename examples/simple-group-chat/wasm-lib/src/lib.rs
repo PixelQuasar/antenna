@@ -1,4 +1,4 @@
-use antenna::client::{AntennaEngine, EngineConfig, IceServerConfig};
+use antenna::client::{AntennaEngine, EngineConfig};
 use shared::{ChatClientMsg, ChatServerMsg};
 use wasm_bindgen::prelude::*;
 use web_sys::js_sys;
