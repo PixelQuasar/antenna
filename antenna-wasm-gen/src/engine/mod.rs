@@ -183,7 +183,7 @@ where
                     {
                         // Пытаемся распарсить вложенный JSON от сервера
                         match serde_json::from_str::<InnerIce>(&candidate) {
-                            Ok(inner) => (inner.candidate, inner.sdpMid, inner.sdpMLineIndex),
+                            Ok(inner) => (inner.candidate, inner.sdp_mid, inner.sdp_m_line_index),
                             Err(e) => {
                                 web_sys::console::warn_1(
                                     &format!("Failed to parse inner ICE json: {}", e).into(),
