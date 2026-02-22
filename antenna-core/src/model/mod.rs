@@ -6,7 +6,7 @@ mod room;
 mod signaling;
 
 pub use channel::Channel;
-pub use packet::Packet;
+pub use packet::{Packet, SystemMessage};
 pub use peer::PeerId;
 pub use request::RequestId;
 pub use room::RoomId;

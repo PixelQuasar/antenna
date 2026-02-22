@@ -41,5 +41,35 @@ where
         if let Some(ws) = &service.borrow().ws {
             ws.send_with_str(&json).unwrap();
         }
+
+        let service_clone = service.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            loop {
+                let promise = js_sys::Promise::new(&mut |resolve, _| {
+                    web_sys::window()
+                        .unwrap()
+                        .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 5000)
+                        .unwrap();
+                });
+                wasm_bindgen_futures::JsFuture::from(promise).await.unwrap();
+
+                let service = service_clone.borrow();
+                if let Some(dc) = &service.dc {
+                    if dc.ready_state() == web_sys::RtcDataChannelState::Open {
+                        let ping: antenna_core::Packet<T> =
+                            antenna_core::Packet::System(antenna_core::SystemMessage::Ping {
+                                timestamp: js_sys::Date::now() as u64,
+                            });
+                        if let Ok(bytes) = postcard::to_allocvec(&ping) {
+                            let _ = dc.send_with_u8_array(&bytes);
+                        }
+                    } else if dc.ready_state() == web_sys::RtcDataChannelState::Closed {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        });
     }
 }

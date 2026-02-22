@@ -17,7 +17,7 @@ struct ChatRoom;
 #[async_trait]
 impl RoomBehavior for ChatRoom {
     async fn on_join(&self, ctx: &RoomContext, user_id: PeerId) {
-        info!(">>> User joined the chat: {:?}", user_id);
+        info!(">>> User joined the chat: {:?}", ƒ);
 
         let welcome = format!("Welcome to Antenna Chat, {:?}!", user_id);
         ctx.send(&user_id, Bytes::from(welcome)).await;

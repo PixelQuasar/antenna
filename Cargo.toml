@@ -116,13 +116,17 @@ features = [
     "RtcDataChannelType",
     "RtcIceCandidate",
     "RtcIceCandidateInit",
+    "RtcIceConnectionState",
     "RtcIceServer",
+    "RtcOfferOptions",
     "RtcPeerConnection",
     "RtcPeerConnectionIceEvent",
+    "RtcPeerConnectionState",
     "RtcSdpType",
     "RtcSessionDescription",
     "RtcSessionDescriptionInit",
     "WebSocket",
+    "Window",
     "console",
 ]
 
