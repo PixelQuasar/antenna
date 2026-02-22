@@ -1,4 +1,4 @@
-FROM rust:1.85 as wasm-builder
+FROM rust:1.89 as wasm-builder
 
 WORKDIR /app
 
