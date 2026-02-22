@@ -178,12 +178,21 @@ where
             Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_| {
                 Logger::info(&"DataChannel OPEN");
 
-                let mut inner_mut = inner.borrow_mut();
-                inner_mut.state = ConnectionState::Connected;
+                // 1. Get DC and drain messages safely
+                let (dc, messages) = {
+                    let mut inner_mut = inner.borrow_mut();
+                    inner_mut.state = ConnectionState::Connected;
+                    let dc = inner_mut.dc.clone();
+                    let msgs: Vec<Vec<u8>> = inner_mut.message_queue.drain(..).collect();
+                    (dc, msgs)
+                };
 
-                if let Some(dc) = &inner_mut.dc {
-                    for msg in inner_mut.message_queue.drain(..) {
-                        let _ = dc.send_with_u8_array(&msg);
+                // 2. Send messages without holding the lock
+                if let Some(dc) = dc {
+                    for msg in messages {
+                        if let Err(e) = dc.send_with_u8_array(&msg) {
+                            Logger::warn(&format!("Failed to send buffered message: {:?}", e));
+                        }
                     }
                 }
             }))
