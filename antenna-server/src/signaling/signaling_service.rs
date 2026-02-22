@@ -1,6 +1,6 @@
 use crate::room::RoomCommand;
 use crate::signaling::SignalingOutput;
-use antenna_core::{PeerId, SignalMessage};
+use antenna_core::{IceServerConfig, PeerId, SignalMessage};
 use async_trait::async_trait;
 use axum::extract::ws::Message;
 use dashmap::DashMap;
@@ -10,6 +10,7 @@ use tracing::{error, warn};
 
 struct SignalingInner {
     peers: DashMap<PeerId, mpsc::UnboundedSender<Message>>,
+    ice_servers: Vec<IceServerConfig>,
 }
 
 #[derive(Clone)]
@@ -19,13 +20,18 @@ pub struct SignalingService {
 }
 
 impl SignalingService {
-    pub fn new(room_cmd_tx: mpsc::Sender<RoomCommand>) -> Self {
+    pub fn new(room_cmd_tx: mpsc::Sender<RoomCommand>, ice_servers: Vec<IceServerConfig>) -> Self {
         Self {
             inner: Arc::new(SignalingInner {
                 peers: DashMap::new(),
+                ice_servers,
             }),
             room_cmd_tx,
         }
+    }
+
+    pub fn get_ice_servers(&self) -> Vec<IceServerConfig> {
+        self.inner.ice_servers.clone()
     }
 
     pub fn add_peer(&self, peer_id: PeerId, tx: mpsc::UnboundedSender<Message>) {

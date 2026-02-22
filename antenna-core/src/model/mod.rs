@@ -10,4 +10,4 @@ pub use packet::Packet;
 pub use peer::PeerId;
 pub use request::RequestId;
 pub use room::RoomId;
-pub use signaling::SignalMessage;
+pub use signaling::{IceServerConfig, SignalMessage};

@@ -31,7 +31,23 @@ function App() {
                 const url = `${SERVER_URL}/${userId}`;
 
                 console.log(`Connecting to ${url}...`);
-                const client = new ChatWrapper(url, AUTH_TOKEN);
+                
+                // TODO: Replace with your own TURN server credentials
+                const iceServers = [
+                    {
+                        urls: ["stun:stun.l.google.com:19302"],
+                    },
+                    // Example TURN server configuration:
+                    /*
+                    {
+                        urls: ["turn:global.turn.metered.ca:80"],
+                        username: "your_username",
+                        credential: "your_password"
+                    }
+                    */
+                ];
+
+                const client = new ChatWrapper(url, AUTH_TOKEN, iceServers);
 
                 client.on_event((rawEvent: any) => {
                     const event = rawEvent as ChatServerMsg;
@@ -72,8 +88,6 @@ function App() {
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') handleSend();
     };
-
-    // === Render ===
 
     if (error) {
         return <div className="error">Error: {error}</div>;

@@ -8,8 +8,9 @@ use tower_http::cors::{Any, CorsLayer};
 use tracing::{Level, info};
 
 use antenna::server::{Room, RoomBehavior, RoomCommand, RoomContext, SignalingService, ws_handler};
-use antenna::utils::{Packet, PeerId};
+use antenna::utils::{IceServerConfig, Packet, PeerId};
 use shared::{ChatClientMsg, ChatServerMsg};
+use std::env;
 
 struct ChatRoom;
 
@@ -65,7 +66,17 @@ async fn main() {
 
     let (cmd_tx, cmd_rx) = mpsc::channel::<RoomCommand>(100);
 
-    let signaling = SignalingService::new(cmd_tx);
+    let turn_url = env::var("TURN_URL").unwrap_or_else(|_| "turn:localhost:3478".to_string());
+    let turn_username = env::var("TURN_USERNAME").unwrap_or_else(|_| "user".to_string());
+    let turn_credential = env::var("TURN_CREDENTIAL").unwrap_or_else(|_| "password".to_string());
+
+    let ice_servers = vec![IceServerConfig {
+        urls: vec![turn_url],
+        username: Some(turn_username),
+        credential: Some(turn_credential),
+    }];
+
+    let signaling = SignalingService::new(cmd_tx, ice_servers);
 
     let room = Room::new(Box::new(ChatRoom), cmd_rx, Box::new(signaling.clone()));
 
@@ -84,7 +95,7 @@ async fn main() {
         .layer(cors)
         .with_state(signaling);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     info!("Signaling server listening on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

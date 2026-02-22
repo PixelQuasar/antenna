@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  coturn:
+    image: coturn/coturn
+    restart: always
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "49160-49200:49160-49200/udp"
+    command:
+      - -n
+      - --log-file=stdout
+      - --min-port=49160
+      - --max-port=49200
+      - --realm=localhost
+      - --user=user:password
+      - --lt-cred-mech
+      - --fingerprint
+      - --no-tls
+      - --no-dtls
+
+  server:
+    build:
+      context: ../..
+      dockerfile: examples/simple-group-chat/server/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - TURN_URL=turn:coturn:3478
+      - TURN_USERNAME=user
+      - TURN_CREDENTIAL=password
+    depends_on:
+      - coturn
+
+  client:
+    build:
+      context: ../..
+      dockerfile: examples/simple-group-chat/client/Dockerfile
+    ports:
+      - "5173:5173"
+    depends_on:
+      - server

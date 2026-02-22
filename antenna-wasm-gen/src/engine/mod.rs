@@ -1,8 +1,10 @@
 use crate::logger::Logger;
 use antenna_core::Message;
 use antenna_core::Packet;
-use antenna_core::SignalMessage;
-use antenna_core::utils::DEFAULT_STUN_ADDR;
+use antenna_core::utils::{
+    DEFAULT_STUN_ADDR, DEFAULT_STUN_ADDR_2, DEFAULT_STUN_ADDR_3, DEFAULT_STUN_ADDR_4,
+};
+use antenna_core::{IceServerConfig, SignalMessage};
 use postcard::{from_bytes, to_allocvec};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -13,6 +15,7 @@ use wasm_bindgen::prelude::*;
 pub struct EngineConfig {
     pub url: String,
     pub auth_token: String,
+    pub ice_servers: Option<Vec<IceServerConfig>>,
 }
 
 /// Antenna client room
@@ -24,6 +27,7 @@ pub enum ConnectionState {
 }
 
 #[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct InnerIce {
     candidate: String,
     sdp_mid: Option<String>,
@@ -37,6 +41,7 @@ struct EngineInner {
     dc: Option<web_sys::RtcDataChannel>,
     message_queue: Vec<Vec<u8>>,
     js_callback: Option<js_sys::Function>,
+    ice_servers: Option<Vec<IceServerConfig>>,
 }
 
 pub struct AntennaEngine<T, E> {
@@ -58,6 +63,7 @@ where
             dc: None,
             message_queue: Vec::new(),
             js_callback: None,
+            ice_servers: config.ice_servers.clone(),
         }));
 
         let engine = AntennaEngine {
@@ -134,6 +140,14 @@ where
         let inner = inner_rc.clone();
 
         match msg {
+            SignalMessage::IceConfig { ice_servers } => {
+                Logger::info(&format!(
+                    "Received ICE Config: {} servers",
+                    ice_servers.len()
+                ));
+                inner.borrow_mut().ice_servers = Some(ice_servers);
+            }
+
             // [ВАЖНО] 1. Сервер сказал "Привет" -> Мы начинаем WebRTC
             SignalMessage::Welcome { .. } => {
                 Logger::info(&"Received Welcome. Initiating connection...");
@@ -229,10 +243,42 @@ where
     // Вспомогательная функция: создание PC и ICE
     fn create_pc(inner: &Rc<RefCell<EngineInner>>) -> Result<web_sys::RtcPeerConnection, JsValue> {
         let rtc_config = web_sys::RtcConfiguration::new();
-        let ice_server = web_sys::RtcIceServer::new();
-        ice_server.set_urls(&JsValue::from_str(DEFAULT_STUN_ADDR));
         let ice_servers_arr = js_sys::Array::new();
-        ice_servers_arr.push(&ice_server);
+
+        let inner_ref = inner.borrow();
+        if let Some(servers) = &inner_ref.ice_servers {
+            for server_config in servers {
+                let rtc_ice_server = web_sys::RtcIceServer::new();
+
+                let urls = js_sys::Array::new();
+                for url in &server_config.urls {
+                    urls.push(&JsValue::from_str(url));
+                }
+                rtc_ice_server.set_urls(&urls);
+
+                if let Some(username) = &server_config.username {
+                    rtc_ice_server.set_username(username);
+                }
+
+                if let Some(credential) = &server_config.credential {
+                    rtc_ice_server.set_credential(credential);
+                }
+
+                ice_servers_arr.push(&rtc_ice_server);
+            }
+        } else {
+            // Fallback to default STUN if no config provided
+            let stun_urls = js_sys::Array::new();
+            stun_urls.push(&JsValue::from_str(DEFAULT_STUN_ADDR));
+            stun_urls.push(&JsValue::from_str(DEFAULT_STUN_ADDR_2));
+            stun_urls.push(&JsValue::from_str(DEFAULT_STUN_ADDR_3));
+            stun_urls.push(&JsValue::from_str(DEFAULT_STUN_ADDR_4));
+
+            let stun_server = web_sys::RtcIceServer::new();
+            stun_server.set_urls(&stun_urls);
+            ice_servers_arr.push(&stun_server);
+        }
+
         rtc_config.set_ice_servers(&ice_servers_arr);
 
         let pc = web_sys::RtcPeerConnection::new_with_configuration(&rtc_config)?;
