@@ -1,9 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use antenna_core::utils::{
-    DEFAULT_STUN_ADDR, DEFAULT_STUN_ADDR_2, DEFAULT_STUN_ADDR_3, DEFAULT_STUN_ADDR_4,
-};
 use antenna_core::{Message, SignalMessage};
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::Closure;
@@ -44,16 +41,6 @@ where
 
                 ice_servers_arr.push(&rtc_ice_server);
             }
-        } else {
-            let stun_urls = js_sys::Array::new();
-            stun_urls.push(&JsValue::from_str(DEFAULT_STUN_ADDR));
-            stun_urls.push(&JsValue::from_str(DEFAULT_STUN_ADDR_2));
-            stun_urls.push(&JsValue::from_str(DEFAULT_STUN_ADDR_3));
-            stun_urls.push(&JsValue::from_str(DEFAULT_STUN_ADDR_4));
-
-            let stun_server = web_sys::RtcIceServer::new();
-            stun_server.set_urls(&stun_urls);
-            ice_servers_arr.push(&stun_server);
         }
 
         rtc_config.set_ice_servers(&ice_servers_arr);

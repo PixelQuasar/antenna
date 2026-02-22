@@ -18,6 +18,7 @@ mod ws_setup_impl;
 pub struct EngineConfig {
     pub url: String,
     pub auth_token: String,
+    pub room_id: String,
     pub ice_servers: Option<Vec<IceServerConfig>>,
 }
 

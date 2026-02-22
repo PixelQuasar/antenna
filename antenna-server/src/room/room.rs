@@ -39,7 +39,7 @@ pub struct Room {
     transport_tx: mpsc::Sender<TransportEvent>,
 
     /// Интерфейс для отправки signaling-сообщений наружу.
-    signaling: Box<dyn SignalingOutput>,
+    signaling: Arc<dyn SignalingOutput>,
 
     /// Настройки WebRTC (STUN/TURN).
     transport_config: TransportConfig,
@@ -49,7 +49,7 @@ impl Room {
     pub fn new(
         behavior: Box<dyn RoomBehavior>,
         command_rx: mpsc::Receiver<RoomCommand>,
-        signaling: Box<dyn SignalingOutput>,
+        signaling: Arc<dyn SignalingOutput>,
     ) -> Self {
         // Создаем канал MPSC для сбора событий от всех WebRTC подключений в один поток
         let (transport_tx, transport_rx) = mpsc::channel(256);

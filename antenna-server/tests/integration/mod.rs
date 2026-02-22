@@ -2,6 +2,8 @@ pub mod connection_tests;
 pub mod messaging_tests;
 pub mod multi_peer_tests;
 
+use std::sync::Arc;
+
 use tokio::sync::mpsc;
 use tracing::Level;
 
@@ -25,7 +27,7 @@ pub fn create_test_room() -> (
     let (signaling, signal_rx) = MockSignalingOutput::new();
     let behavior = TestRoomBehavior::new();
 
-    let room = Room::new(Box::new(behavior.clone()), cmd_rx, Box::new(signaling));
+    let room = Room::new(Box::new(behavior.clone()), cmd_rx, Arc::new(signaling));
 
     tokio::spawn(async move {
         room.run().await;

@@ -7,10 +7,11 @@ use tokio::sync::mpsc;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{Level, info};
 
-use antenna::server::{Room, RoomBehavior, RoomCommand, RoomContext, SignalingService, ws_handler};
+use antenna::server::{RoomBehavior, RoomContext, RoomManager, SignalingService, ws_handler};
 use antenna::utils::{IceServerConfig, Packet, PeerId};
 use shared::{ChatClientMsg, ChatServerMsg};
 use std::env;
+use std::sync::Arc;
 
 struct ChatRoom;
 
@@ -64,26 +65,28 @@ async fn main() {
 
     info!("Initializing Chat Server...");
 
-    let (cmd_tx, cmd_rx) = mpsc::channel::<RoomCommand>(100);
-
-    let turn_url = env::var("TURN_URL").unwrap_or_else(|_| "turn:localhost:3478".to_string());
-    let turn_username = env::var("TURN_USERNAME").unwrap_or_else(|_| "user".to_string());
-    let turn_credential = env::var("TURN_CREDENTIAL").unwrap_or_else(|_| "password".to_string());
+    let turn_url = env::var("TURN_URL").expect("TURN_URL is not set");
+    let turn_username = env::var("TURN_USERNAME");
+    let turn_credential = env::var("TURN_CREDENTIAL");
 
     let ice_servers = vec![IceServerConfig {
         urls: vec![turn_url],
-        username: Some(turn_username),
-        credential: Some(turn_credential),
+        username: turn_username,
+        credential: turn_credential,
     }];
 
-    let signaling = SignalingService::new(cmd_tx, ice_servers);
+    let signaling = SignalingService::new(ice_servers);
+    let signaling_arc = Arc::new(signaling.clone());
 
-    let room = Room::new(Box::new(ChatRoom), cmd_rx, Box::new(signaling.clone()));
+    let room_manager = RoomManager::new(
+        || Box::new(ChatRoom),
+        signaling_arc.clone(),
+    );
 
-    tokio::spawn(async move {
-        room.run().await;
+    let state = Arc::new(antenna::server::AppState {
+        signaling: signaling.clone(),
+        room_manager,
     });
-    info!("Room loop started.");
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -93,7 +96,7 @@ async fn main() {
     let app = Router::new()
         .route("/ws/{user_id}", get(ws_handler))
         .layer(cors)
-        .with_state(signaling);
+        .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     info!("Signaling server listening on http://{}", addr);

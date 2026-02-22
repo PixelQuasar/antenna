@@ -27,6 +27,7 @@ services:
       dockerfile: examples/simple-group-chat/server/Dockerfile
     environment:
       - TURN_URL=turn:demo-voicechat.quasarity.com:3478
+      # - TURN_URL=stun:stun.l.google.com:19302
       - TURN_USERNAME=user
       - TURN_CREDENTIAL=password
     depends_on:

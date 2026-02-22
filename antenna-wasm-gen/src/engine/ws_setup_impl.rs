@@ -18,11 +18,12 @@ where
         let onopen_callback = {
             let service = self.service.clone();
             let token = config.auth_token.clone();
+            let room_id = config.room_id.clone();
             Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_| {
                 Logger::info(&"WS Open");
 
                 let join_msg = SignalMessage::Join {
-                    room: "DEFAULT".to_string(),
+                    room: room_id.clone(),
                     token: Some(token.clone()),
                 };
 

@@ -13,15 +13,24 @@ function App() {
     const [isReady, setIsReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [inputText, setInputText] = useState("");
+    const [roomId, setRoomId] = useState<string | null>(null);
+    const [roomInput, setRoomInput] = useState("");
 
     const [messages, setMessages] = useState<ChatServerMsg[]>([]);
 
     const chatRef = useRef<ChatWrapper | null>(null);
     const runOnce = useRef(false);
 
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const room = params.get("room");
+        if (room) {
+            setRoomId(room);
+        }
+    }, []);
 
     useEffect(() => {
-        if (runOnce.current) return;
+        if (!roomId || runOnce.current) return;
         runOnce.current = true;
 
         const startWasm = async () => {
@@ -31,24 +40,9 @@ function App() {
 
                 const url = `${SERVER_URL}/${userId}`;
 
-                console.log(`Connecting to ${url}...`);
-                
-                // TODO: Replace with your own TURN server credentials
-                const iceServers = [
-                    {
-                        urls: ["stun:stun.l.google.com:19302"],
-                    },
-                    // Example TURN server configuration:
-                    /*
-                    {
-                        urls: ["turn:global.turn.metered.ca:80"],
-                        username: "your_username",
-                        credential: "your_password"
-                    }
-                    */
-                ];
+                console.log(`Connecting to ${url} in room ${roomId}...`);
 
-                const client = new ChatWrapper(url, AUTH_TOKEN, iceServers);
+                const client = new ChatWrapper(url, AUTH_TOKEN, roomId);
 
                 client.on_event((event: ChatServerMsg) => {
                     console.log("Received:", event);
@@ -68,7 +62,45 @@ function App() {
         return () => {
             chatRef.current?.free();
         };
-    }, []);
+    }, [roomId]);
+
+    const handleJoinRoom = () => {
+        if (roomInput.trim()) {
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.set("room", roomInput.trim());
+            window.history.pushState({}, "", newUrl);
+            setRoomId(roomInput.trim());
+        }
+    };
+
+    if (!roomId) {
+        return (
+            <div className="join-container" style={{padding: '20px', maxWidth: '400px', margin: '100px auto', textAlign: 'center'}}>
+                <h1>Join a Chat Room</h1>
+                <input
+                    type="text"
+                    value={roomInput}
+                    onChange={(e) => setRoomInput(e.target.value)}
+                    placeholder="Enter Room ID"
+                    style={{padding: '10px', width: '100%', marginBottom: '10px', borderRadius: '4px', border: '1px solid #ccc'}}
+                />
+                <button
+                    onClick={handleJoinRoom}
+                    style={{
+                        padding: '10px 20px',
+                        cursor: 'pointer',
+                        background: '#007bff',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        width: '100%'
+                    }}
+                >
+                    Join
+                </button>
+            </div>
+        );
+    }
 
     const handleSend = () => {
         if (!chatRef.current || !inputText.trim()) return;
@@ -99,7 +131,7 @@ function App() {
 
     return (
         <div className="chat-container" style={{padding: '20px', maxWidth: '600px', margin: '0 auto'}}>
-            <h1>Antenna Chat 📡</h1>
+            <h1>Antenna Chat 📡 <span style={{fontSize: '0.6em', color: '#666'}}>({roomId})</span></h1>
 
             <div className="messages-list" style={{
                 border: '1px solid #ccc',
@@ -118,7 +150,8 @@ function App() {
                     <div key={idx} className="message-item" style={{
                         background: '#f1f1f1',
                         padding: '8px',
-                        borderRadius: '6px'
+                        borderRadius: '6px',
+                        color: "#000",
                     }}>
                         <div style={{fontWeight: 'bold', fontSize: '0.8em', color: '#555'}}>
                             {msg.author_id} <span

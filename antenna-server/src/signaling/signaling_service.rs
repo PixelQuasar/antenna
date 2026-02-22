@@ -1,4 +1,3 @@
-use crate::room::RoomCommand;
 use crate::signaling::SignalingOutput;
 use antenna_core::{IceServerConfig, PeerId, SignalMessage};
 use async_trait::async_trait;
@@ -16,17 +15,15 @@ struct SignalingInner {
 #[derive(Clone)]
 pub struct SignalingService {
     inner: Arc<SignalingInner>,
-    pub(crate) room_cmd_tx: mpsc::Sender<RoomCommand>,
 }
 
 impl SignalingService {
-    pub fn new(room_cmd_tx: mpsc::Sender<RoomCommand>, ice_servers: Vec<IceServerConfig>) -> Self {
+    pub fn new(ice_servers: Vec<IceServerConfig>) -> Self {
         Self {
             inner: Arc::new(SignalingInner {
                 peers: DashMap::new(),
                 ice_servers,
             }),
-            room_cmd_tx,
         }
     }
 

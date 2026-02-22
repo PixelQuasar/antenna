@@ -11,17 +11,12 @@ pub struct ChatWrapper {
 #[wasm_bindgen]
 impl ChatWrapper {
     #[wasm_bindgen(constructor)]
-    pub fn new(
-        url: String,
-        auth_token: String,
-        ice_servers: JsValue,
-    ) -> Result<ChatWrapper, JsValue> {
-        let ice_servers: Option<Vec<IceServerConfig>> =
-            serde_wasm_bindgen::from_value(ice_servers)?;
+    pub fn new(url: String, auth_token: String, room_id: String) -> Result<ChatWrapper, JsValue> {
         let config = EngineConfig {
             url,
             auth_token,
-            ice_servers,
+            room_id,
+            ice_servers: None,
         };
         let engine = AntennaEngine::new(config)?;
         Ok(ChatWrapper { engine })
