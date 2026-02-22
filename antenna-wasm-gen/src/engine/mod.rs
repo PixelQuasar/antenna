@@ -79,7 +79,7 @@ where
             let inner = self.inner.clone();
             let token = config.auth_token.clone();
             Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_| {
-                web_sys::console::log_1(&"WS Open".into());
+                Logger::info(&"WS Open");
 
                 let join_msg = SignalMessage::Join {
                     room: "DEFAULT".to_string(),
@@ -104,7 +104,7 @@ where
                     if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
                         let text: String = text.into();
                         // Лог входящего сырого сообщения
-                        web_sys::console::log_1(&format!("WS IN: {}", text).into());
+                        Logger::info(&format!("WS IN: {}", text));
                         Self::handle_signal(&inner, text);
                     }
                 },
@@ -126,7 +126,7 @@ where
             Ok(m) => m,
             Err(e) => {
                 let err_text = format!("JSON Error: {}. Text: {}", e, text);
-                web_sys::console::warn_1(&err_text.into());
+                Logger::warn(&err_text);
                 return;
             }
         };
@@ -136,7 +136,7 @@ where
         match msg {
             // [ВАЖНО] 1. Сервер сказал "Привет" -> Мы начинаем WebRTC
             SignalMessage::Welcome { .. } => {
-                web_sys::console::log_1(&"Received Welcome. Initiating connection...".into());
+                Logger::info(&"Received Welcome. Initiating connection...");
                 wasm_bindgen_futures::spawn_local(async move {
                     Self::initiate_connection(inner).await;
                 });
@@ -144,7 +144,7 @@ where
 
             // [ВАЖНО] 2. Сервер прислал Offer (если кто-то другой вошел)
             SignalMessage::Offer { sdp } => {
-                web_sys::console::log_1(&"Received Offer from Server".into());
+                Logger::info(&"Received Offer from Server");
                 wasm_bindgen_futures::spawn_local(async move {
                     Self::handle_remote_offer(inner, sdp).await;
                 });
@@ -152,19 +152,19 @@ where
 
             // [ВАЖНО] 3. Сервер ответил на наш Offer
             SignalMessage::Answer { sdp } => {
-                web_sys::console::log_1(&"Received Answer from Server".into());
+                Logger::info(&"Received Answer from Server");
                 wasm_bindgen_futures::spawn_local(async move {
                     if let Some(pc) = inner.borrow().pc.clone() {
-                        let mut desc =
+                        let desc =
                             web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
                         desc.set_sdp(&sdp);
                         if let Err(e) =
                             wasm_bindgen_futures::JsFuture::from(pc.set_remote_description(&desc))
                                 .await
                         {
-                            web_sys::console::error_1(&e);
+                            Logger::error(&e);
                         } else {
-                            web_sys::console::log_1(&"Remote description set (Answer)".into());
+                            Logger::info(&"Remote description set (Answer)");
                         }
                     }
                 });
@@ -185,9 +185,7 @@ where
                         match serde_json::from_str::<InnerIce>(&candidate) {
                             Ok(inner) => (inner.candidate, inner.sdp_mid, inner.sdp_m_line_index),
                             Err(e) => {
-                                web_sys::console::warn_1(
-                                    &format!("Failed to parse inner ICE json: {}", e).into(),
-                                );
+                                Logger::warn(&format!("Failed to parse inner ICE json: {}", e));
                                 (candidate, sdp_mid, sdp_m_line_index)
                             }
                         }
@@ -197,7 +195,7 @@ where
                     };
 
                     // Теперь создаем объект для браузера с ПРАВИЛЬНЫМИ данными
-                    let mut init = web_sys::RtcIceCandidateInit::new(&real_candidate);
+                    let init = web_sys::RtcIceCandidateInit::new(&real_candidate);
 
                     if let Some(mid) = real_mid {
                         init.set_sdp_mid(Some(&mid));
@@ -207,14 +205,14 @@ where
                     }
 
                     // Логируем, что добавляем
-                    web_sys::console::log_1(&format!("Adding ICE: {}", real_candidate).into());
+                    Logger::info(&format!("Adding ICE: {}", real_candidate));
 
                     let promise = pc.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&init));
 
                     // Необязательно, но полезно отловить ошибку добавления
                     wasm_bindgen_futures::spawn_local(async move {
                         if let Err(e) = wasm_bindgen_futures::JsFuture::from(promise).await {
-                            web_sys::console::warn_1(&format!("Error adding ICE: {:?}", e).into());
+                            Logger::warn(&format!("Error adding ICE: {:?}", e));
                         }
                     });
                 }
@@ -230,7 +228,7 @@ where
 
     // Вспомогательная функция: создание PC и ICE
     fn create_pc(inner: &Rc<RefCell<EngineInner>>) -> Result<web_sys::RtcPeerConnection, JsValue> {
-        let mut rtc_config = web_sys::RtcConfiguration::new();
+        let rtc_config = web_sys::RtcConfiguration::new();
         let ice_server = web_sys::RtcIceServer::new();
         ice_server.set_urls(&JsValue::from_str(DEFAULT_STUN_ADDR));
         let ice_servers_arr = js_sys::Array::new();
@@ -283,14 +281,14 @@ where
             .unwrap();
 
         // 3. Set Local
-        let mut desc = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Offer);
+        let desc = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Offer);
         desc.set_sdp(&offer_sdp);
         wasm_bindgen_futures::JsFuture::from(pc.set_local_description(&desc))
             .await
             .unwrap();
 
         // 4. Send
-        web_sys::console::log_1(&"Sending OFFER to server...".into());
+        Logger::info(&"Sending OFFER to server...");
         let msg = SignalMessage::Offer { sdp: offer_sdp };
         let json = serde_json::to_string(&msg).unwrap();
 
@@ -309,7 +307,7 @@ where
         let ondatachannel_callback =
             Closure::wrap(Box::new(move |ev: web_sys::RtcDataChannelEvent| {
                 let dc = ev.channel();
-                web_sys::console::log_1(&format!("Received DataChannel: {}", dc.label()).into());
+                Logger::info(&format!("Received DataChannel: {}", dc.label()));
                 Self::setup_data_channel(&inner_dc, dc);
             })
                 as Box<dyn FnMut(web_sys::RtcDataChannelEvent)>);
@@ -317,7 +315,7 @@ where
         ondatachannel_callback.forget();
 
         // Set Remote
-        let mut desc_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Offer);
+        let desc_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Offer);
         desc_init.set_sdp(&remote_sdp);
         wasm_bindgen_futures::JsFuture::from(pc.set_remote_description(&desc_init))
             .await
@@ -333,14 +331,14 @@ where
             .unwrap();
 
         // Set Local
-        let mut answer_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
+        let answer_init = web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
         answer_init.set_sdp(&answer_sdp);
         wasm_bindgen_futures::JsFuture::from(pc.set_local_description(&answer_init))
             .await
             .unwrap();
 
         // Send Answer
-        web_sys::console::log_1(&"Sending ANSWER to server...".into());
+        Logger::info(&"Sending ANSWER to server...");
         let msg = SignalMessage::Answer { sdp: answer_sdp };
         let json = serde_json::to_string(&msg).unwrap();
 
@@ -377,7 +375,7 @@ where
         let on_open = {
             let inner = inner.clone();
             Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_| {
-                web_sys::console::log_1(&"DataChannel OPEN".into());
+                Logger::info(&"DataChannel OPEN");
                 inner.borrow_mut().state = ConnectionState::Connected;
 
                 if let Some(dc) = &inner.borrow().dc {

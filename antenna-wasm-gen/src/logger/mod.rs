@@ -1,19 +1,22 @@
+use wasm_bindgen::JsValue;
+use web_sys::console;
+
 pub struct Logger;
 
 impl Logger {
-    fn log_msg(msg: &str) -> String {
-        format!("[ANTENNA LOG] {}", msg)
+    pub fn info(msg: &str) {
+        console::log_1(&format!("[INFO] {}", msg).into());
     }
 
-    pub fn warn_msg(msg: &str) -> String {
-        Self::log_msg(&format!("WARNING: {}", msg))
+    pub fn warn(msg: &str) {
+        console::log_1(&format!("[WARN] {}", msg).into());
     }
 
-    pub fn _error_msg(msg: &str) -> String {
-        Self::log_msg(&format!("ERROR: {}", msg))
+    pub fn error(err: &JsValue) {
+        console::log_2(&format!("[ERROR]").into(), err);
     }
 
-    pub fn _debug_msg(msg: &str) -> String {
-        Self::log_msg(&format!("DEBUG: {}", msg))
+    pub fn _debug(msg: &str) {
+        console::log_1(&format!("[DEBUG] {}", msg).into());
     }
 }
