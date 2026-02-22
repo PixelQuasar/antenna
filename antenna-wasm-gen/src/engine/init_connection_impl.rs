@@ -1,5 +1,5 @@
 use crate::AntennaEngine;
-use crate::engine::EngineInner;
+use crate::engine::EngineService;
 use crate::logger::Logger;
 use antenna_core::Message;
 
@@ -12,11 +12,11 @@ where
     T: Message + Clone + 'static,
     E: Message + 'static,
 {
-    pub(super) async fn init_connection(inner: Rc<RefCell<EngineInner>>) {
-        let pc = Self::create_pc(&inner).expect("Failed to create PC");
+    pub(super) async fn init_connection(service: Rc<RefCell<EngineService>>) {
+        let pc = Self::create_pc(&service).expect("Failed to create PC");
 
         let dc = pc.create_data_channel("chat");
-        Self::setup_data_channel(&inner, dc);
+        Self::setup_data_channel(&service, dc);
 
         let offer_promise = pc.create_offer();
         let offer_val = wasm_bindgen_futures::JsFuture::from(offer_promise)
@@ -37,8 +37,8 @@ where
         let msg = SignalMessage::Offer { sdp: offer_sdp };
         let json = serde_json::to_string(&msg).unwrap();
 
-        inner.borrow_mut().pc = Some(pc);
-        if let Some(ws) = &inner.borrow().ws {
+        service.borrow_mut().pc = Some(pc);
+        if let Some(ws) = &service.borrow().ws {
             ws.send_with_str(&json).unwrap();
         }
     }

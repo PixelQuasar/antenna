@@ -21,7 +21,6 @@ pub struct EngineConfig {
     pub ice_servers: Option<Vec<IceServerConfig>>,
 }
 
-/// Antenna client room
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionState {
     Disconnected,
@@ -31,13 +30,13 @@ pub enum ConnectionState {
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct InnerIce {
+struct IcePayload {
     candidate: String,
     sdp_mid: Option<String>,
     sdp_m_line_index: Option<u16>,
 }
 
-struct EngineInner {
+struct EngineService {
     state: ConnectionState,
     ws: Option<web_sys::WebSocket>,
     pc: Option<web_sys::RtcPeerConnection>,
@@ -48,7 +47,7 @@ struct EngineInner {
 }
 
 pub struct AntennaEngine<T, E> {
-    inner: Rc<RefCell<EngineInner>>,
+    service: Rc<RefCell<EngineService>>,
     _phantom_in: std::marker::PhantomData<T>,
     _phantom_out: std::marker::PhantomData<E>,
 }
@@ -59,7 +58,7 @@ where
     E: Message + 'static,
 {
     pub fn new(config: EngineConfig) -> Result<Self, JsValue> {
-        let inner = Rc::new(RefCell::new(EngineInner {
+        let service = Rc::new(RefCell::new(EngineService {
             state: ConnectionState::Disconnected,
             ws: None,
             pc: None,
@@ -70,7 +69,7 @@ where
         }));
 
         let engine = AntennaEngine {
-            inner,
+            service,
             _phantom_in: std::marker::PhantomData,
             _phantom_out: std::marker::PhantomData,
         };
@@ -79,8 +78,8 @@ where
         Ok(engine)
     }
 
-    fn dispatch_event(inner: &Rc<RefCell<EngineInner>>, packet: Packet<E>) {
-        if let Some(cb) = &inner.borrow().js_callback {
+    fn dispatch_event(service: &Rc<RefCell<EngineService>>, packet: Packet<E>) {
+        if let Some(cb) = &service.borrow().js_callback {
             match packet {
                 Packet::User(event) => {
                     if let Ok(js_val) = serde_wasm_bindgen::to_value(&event) {
@@ -93,19 +92,19 @@ where
     }
 
     pub fn send(&self, msg: T) {
-        let mut inner = self.inner.borrow_mut();
+        let mut service = self.service.borrow_mut();
         let packet = Packet::User(msg);
         let bytes = to_allocvec(&packet).unwrap();
-        if let Some(dc) = &inner.dc {
+        if let Some(dc) = &service.dc {
             if dc.ready_state() == web_sys::RtcDataChannelState::Open {
                 let _ = dc.send_with_u8_array(&bytes);
                 return;
             }
         }
-        inner.message_queue.push(bytes);
+        service.message_queue.push(bytes);
     }
 
     pub fn set_event_handler(&self, callback: js_sys::Function) {
-        self.inner.borrow_mut().js_callback = Some(callback);
+        self.service.borrow_mut().js_callback = Some(callback);
     }
 }

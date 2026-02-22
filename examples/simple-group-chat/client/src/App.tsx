@@ -50,8 +50,7 @@ function App() {
 
                 const client = new ChatWrapper(url, AUTH_TOKEN, iceServers);
 
-                client.on_event((rawEvent: any) => {
-                    const event = rawEvent as ChatServerMsg;
+                client.on_event((event: ChatServerMsg) => {
                     console.log("Received:", event);
                     setMessages((prev) => [...prev, event]);
                 });

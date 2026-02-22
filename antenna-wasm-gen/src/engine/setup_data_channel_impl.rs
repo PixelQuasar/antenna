@@ -1,6 +1,6 @@
 use crate::AntennaEngine;
 use crate::ConnectionState;
-use crate::engine::EngineInner;
+use crate::engine::EngineService;
 use crate::logger::Logger;
 use antenna_core::Message;
 use antenna_core::Packet;
@@ -17,7 +17,7 @@ where
     E: Message + 'static,
 {
     pub(super) fn setup_data_channel(
-        inner: &Rc<RefCell<EngineInner>>,
+        inner: &Rc<RefCell<EngineService>>,
         dc: web_sys::RtcDataChannel,
     ) {
         dc.set_binary_type(web_sys::RtcDataChannelType::Arraybuffer);

@@ -15,9 +15,8 @@ where
         let ws: WebSocket = web_sys::WebSocket::new(&config.url)?;
         ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
-        // ON OPEN
         let onopen_callback = {
-            let inner = self.inner.clone();
+            let service = self.service.clone();
             let token = config.auth_token.clone();
             Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_| {
                 Logger::info(&"WS Open");
@@ -28,23 +27,23 @@ where
                 };
 
                 let json = serde_json::to_string(&join_msg).unwrap();
-                if let Some(ws) = &inner.borrow().ws {
+                if let Some(ws) = &service.borrow().ws {
                     ws.send_with_str(&json).unwrap();
                 }
-                inner.borrow_mut().state = ConnectionState::Connecting;
+                service.borrow_mut().state = ConnectionState::Connecting;
             }))
         };
         ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
         onopen_callback.forget();
 
         let onmessage_callback = {
-            let inner = self.inner.clone();
+            let service = self.service.clone();
             Closure::<dyn FnMut(web_sys::MessageEvent)>::wrap(Box::new(
                 move |e: web_sys::MessageEvent| {
                     if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
                         let text: String = text.into();
                         Logger::info(&format!("WS IN: {}", text));
-                        Self::handle_signal(&inner, text);
+                        Self::handle_signal(&service, text);
                     }
                 },
             ))
@@ -52,7 +51,7 @@ where
         ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
         onmessage_callback.forget();
 
-        self.inner.borrow_mut().ws = Some(ws);
+        self.service.borrow_mut().ws = Some(ws);
         Ok(())
     }
 }

@@ -1,7 +1,7 @@
 use crate::transport::transport_config::TransportConfig;
 use crate::transport::transport_event::TransportEvent;
 use antenna_core::PeerId;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use bytes::Bytes;
 use std::default::Default;
 use std::sync::Arc;

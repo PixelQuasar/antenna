@@ -1,5 +1,5 @@
 use crate::AntennaEngine;
-use crate::engine::EngineInner;
+use crate::engine::EngineService;
 use crate::logger::Logger;
 use antenna_core::Message;
 
@@ -14,15 +14,18 @@ where
     T: Message + Clone + 'static,
     E: Message + 'static,
 {
-    pub(super) async fn handle_remote_offer(inner: Rc<RefCell<EngineInner>>, remote_sdp: String) {
-        let pc = Self::create_pc(&inner).expect("Failed to create PC");
+    pub(super) async fn handle_remote_offer(
+        service: Rc<RefCell<EngineService>>,
+        remote_sdp: String,
+    ) {
+        let pc = Self::create_pc(&service).expect("Failed to create PC");
 
-        let inner_dc = inner.clone();
+        let service_clone = service.clone();
         let ondatachannel_callback =
             Closure::wrap(Box::new(move |ev: web_sys::RtcDataChannelEvent| {
                 let dc = ev.channel();
                 Logger::info(&format!("Received DataChannel: {}", dc.label()));
-                Self::setup_data_channel(&inner_dc, dc);
+                Self::setup_data_channel(&service_clone, dc);
             })
                 as Box<dyn FnMut(web_sys::RtcDataChannelEvent)>);
         pc.set_ondatachannel(Some(ondatachannel_callback.as_ref().unchecked_ref()));
@@ -53,8 +56,8 @@ where
         let msg = SignalMessage::Answer { sdp: answer_sdp };
         let json = serde_json::to_string(&msg).unwrap();
 
-        inner.borrow_mut().pc = Some(pc);
-        if let Some(ws) = &inner.borrow().ws {
+        service.borrow_mut().pc = Some(pc);
+        if let Some(ws) = &service.borrow().ws {
             ws.send_with_str(&json).unwrap();
         }
     }

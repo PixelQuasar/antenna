@@ -4,7 +4,7 @@ use std::rc::Rc;
 use antenna_core::{Message, SignalMessage};
 
 use crate::AntennaEngine;
-use crate::engine::{EngineInner, InnerIce};
+use crate::engine::{EngineService, IcePayload};
 use crate::logger::Logger;
 
 impl<T, E> AntennaEngine<T, E>
@@ -12,7 +12,7 @@ where
     T: Message + Clone + 'static,
     E: Message + 'static,
 {
-    pub(super) fn handle_signal(inner_rc: &Rc<RefCell<EngineInner>>, text: String) {
+    pub(super) fn handle_signal(service: &Rc<RefCell<EngineService>>, text: String) {
         let msg: SignalMessage = match serde_json::from_str(&text) {
             Ok(m) => m,
             Err(e) => {
@@ -22,7 +22,7 @@ where
             }
         };
 
-        let inner = inner_rc.clone();
+        let service = service.clone();
 
         match msg {
             SignalMessage::IceConfig { ice_servers } => {
@@ -30,27 +30,27 @@ where
                     "Received ICE Config: {} servers",
                     ice_servers.len()
                 ));
-                inner.borrow_mut().ice_servers = Some(ice_servers);
+                service.borrow_mut().ice_servers = Some(ice_servers);
             }
 
             SignalMessage::Welcome { .. } => {
                 Logger::info(&"Received Welcome. Initiating connection...");
                 wasm_bindgen_futures::spawn_local(async move {
-                    Self::init_connection(inner).await;
+                    Self::init_connection(service).await;
                 });
             }
 
             SignalMessage::Offer { sdp } => {
                 Logger::info(&"Received Offer from Server");
                 wasm_bindgen_futures::spawn_local(async move {
-                    Self::handle_remote_offer(inner, sdp).await;
+                    Self::handle_remote_offer(service, sdp).await;
                 });
             }
 
             SignalMessage::Answer { sdp } => {
                 Logger::info(&"Received Answer from Server");
                 wasm_bindgen_futures::spawn_local(async move {
-                    if let Some(pc) = inner.borrow().pc.clone() {
+                    if let Some(pc) = service.borrow().pc.clone() {
                         let desc =
                             web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
                         desc.set_sdp(&sdp);
@@ -71,13 +71,15 @@ where
                 sdp_mid,
                 sdp_m_line_index,
             } => {
-                if let Some(pc) = inner.borrow().pc.clone() {
+                if let Some(pc) = service.borrow().pc.clone() {
                     let (real_candidate, real_mid, real_idx) = if candidate.trim().starts_with('{')
                     {
-                        match serde_json::from_str::<InnerIce>(&candidate) {
-                            Ok(inner) => (inner.candidate, inner.sdp_mid, inner.sdp_m_line_index),
+                        match serde_json::from_str::<IcePayload>(&candidate) {
+                            Ok(payload) => {
+                                (payload.candidate, payload.sdp_mid, payload.sdp_m_line_index)
+                            }
                             Err(e) => {
-                                Logger::warn(&format!("Failed to parse inner ICE json: {}", e));
+                                Logger::warn(&format!("Failed to parse ICE payload json: {}", e));
                                 (candidate, sdp_mid, sdp_m_line_index)
                             }
                         }

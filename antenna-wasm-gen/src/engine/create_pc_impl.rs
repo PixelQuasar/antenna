@@ -10,7 +10,7 @@ use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::prelude::*;
 
 use crate::AntennaEngine;
-use crate::engine::EngineInner;
+use crate::engine::EngineService;
 
 impl<T, E> AntennaEngine<T, E>
 where
@@ -18,13 +18,13 @@ where
     E: Message + 'static,
 {
     pub(super) fn create_pc(
-        inner: &Rc<RefCell<EngineInner>>,
+        service: &Rc<RefCell<EngineService>>,
     ) -> Result<web_sys::RtcPeerConnection, JsValue> {
         let rtc_config = web_sys::RtcConfiguration::new();
         let ice_servers_arr = js_sys::Array::new();
 
-        let inner_ref = inner.borrow();
-        if let Some(servers) = &inner_ref.ice_servers {
+        let service_ref = service.borrow();
+        if let Some(servers) = &service_ref.ice_servers {
             for server_config in servers {
                 let rtc_ice_server = web_sys::RtcIceServer::new();
 
@@ -60,7 +60,7 @@ where
 
         let pc = web_sys::RtcPeerConnection::new_with_configuration(&rtc_config)?;
 
-        let inner_clone = inner.clone();
+        let service = service.clone();
         let onice = Closure::wrap(Box::new(move |ev: web_sys::RtcPeerConnectionIceEvent| {
             if let Some(candidate) = ev.candidate() {
                 let msg = SignalMessage::IceCandidate {
@@ -69,7 +69,7 @@ where
                     sdp_m_line_index: candidate.sdp_m_line_index(),
                 };
                 if let Ok(json) = serde_json::to_string(&msg) {
-                    if let Some(ws) = &inner_clone.borrow().ws {
+                    if let Some(ws) = &service.borrow().ws {
                         let _ = ws.send_with_str(&json);
                     }
                 }
