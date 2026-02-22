@@ -24,8 +24,6 @@ services:
     build:
       context: ../..
       dockerfile: examples/simple-group-chat/server/Dockerfile
-    ports:
-      - "3000:3000"
     environment:
       - TURN_URL=turn:coturn:3478
       - TURN_USERNAME=user
@@ -37,7 +35,15 @@ services:
     build:
       context: ../..
       dockerfile: examples/simple-group-chat/client/Dockerfile
-    ports:
-      - "5173:5173"
     depends_on:
+      - server
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - client
       - server

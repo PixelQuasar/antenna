@@ -5,7 +5,7 @@ import init, {ChatWrapper} from './generated/wasm';
 import type {ChatClientMsg} from "./generated/types/ChatClientMsg";
 import type {ChatServerMsg} from "./generated/types/ChatServerMsg";
 
-const SERVER_URL = "ws://127.0.0.1:3000/ws";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || `ws://${window.location.host}/ws`;
 const AUTH_TOKEN = "test-token-123";
 
 function App() {
