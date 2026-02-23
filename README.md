@@ -46,16 +46,6 @@ graph TD
 The signaling process in Antenna is designed to establish WebRTC connections between peers via a central server. It handles the exchange of SDP offers/answers and ICE candidates.
 
 #### Connection Flow
-
-1.  **WebSocket Connection**: The client connects to the server via WebSocket.
-2.  **Join Room**: The client sends a request to join a specific room.
-3.  **WebRTC Negotiation (SDP Exchange)**:
-    *   This process establishes the parameters for the media session (codecs, encryption, etc.).
-    *   The server (acting as an SFU) creates an **SDP Offer** and sends it to the client.
-    *   The client processes the offer and responds with an **SDP Answer**.
-4.  **ICE Candidate Exchange**: Both parties exchange ICE candidates (network paths) to establish connectivity.
-5.  **Media Exchange**: Once connected, media tracks (audio/video) are flowed through the server.
-
 ```mermaid
 sequenceDiagram
     participant A as Client A
@@ -144,16 +134,6 @@ graph TD
 ```
 
 #### Data Flow
-
-1.  **Signaling**: A `JoinRequest` is sent via WebSocket. `RoomManager` forwards it to the `Room`.
-2.  **Connection**: The `Room` creates a `ConnectionWrapper`, negotiates SDP, and establishes the WebRTC connection.
-3.  **Interaction**:
-    *   When a peer sends data, `ConnectionWrapper` fires a `TransportEvent::Message`.
-    *   The `Room` loop catches this event and calls `behavior.on_message(ctx, peer_id, data)`.
-    *   The behavior implementation uses `ctx.broadcast(data)` to relay the message to other peers.
-
-
-
 ```mermaid
 sequenceDiagram
     participant Client
@@ -180,7 +160,7 @@ This architecture ensures that business logic (`RoomBehavior`) is decoupled from
 
 ### Client Logic and Antenna Engine
 
-The client-side logic is primarily handled by the `antenna-wasm-gen` crate, which provides a Rust-based engine that compiles to WebAssembly. This engine manages the complexity of WebRTC and signaling, exposing a simplified API to the frontend (e.g., via TypeScript wrappers).
+The client-side logic is primarily handled by the `antenna-wasm-gen` crate, which provides an engine class that compiles to WebAssembly. 
 
 #### AntennaEngine
 
@@ -197,29 +177,41 @@ The `AntennaEngine<T, E>` struct is the core of the client implementation, where
         *   `Answer`: Processes an SDP answer from the server.
         *   `IceCandidate`: Adds remote ICE candidates to the peer connection.
 
-*   **WebRTC Management**:
-    *   `create_pc`: Creates and configures the `RTCPeerConnection`.
-    *   `init_connection`: Initiates the connection process (creating a data channel, creating an offer).
-    *   `handle_remote_offer`: Responds to a server-initiated offer (e.g., when a new peer joins).
-
 *   **Data Channel**:
     *   `setup_data_channel`: Configures the data channel for binary message exchange.
     *   `send(msg: T)`: Serializes and sends a message to the server via the data channel. If the channel is not open, messages are queued.
     *   `dispatch_event`: Deserializes incoming binary packets and invokes the registered JavaScript event handler.
+    *   
+#### Engine State Graph
 
-*   **Media Handling**:
-    *   `add_track`: Adds a local media track (audio/video) to the peer connection.
-    *   `set_track_handler`: Registers a callback to handle incoming remote tracks.
+```mermaid
+stateDiagram-v2
+direction LR
+    [*] --> Disconnected : new()
 
-#### Client Lifecycle
+    state Disconnected {
+        [*] --> Idle
+        Idle --> WS_Connecting : ws_setup()
+    }
 
-1.  **Setup**: The frontend creates an instance of `AntennaEngine`.
-2.  **Connect**: The engine connects to the WebSocket signaling server.
-3.  **Negotiation**:
-    *   Upon receiving a `Welcome` message, the client initiates the WebRTC handshake.
-    *   SDP offers and answers are exchanged via the WebSocket.
-    *   ICE candidates are gathered and exchanged.
-4.  **Active Session**:
-    *   **Data**: Messages are sent and received via the `chat` data channel.
-    *   **Media**: Tracks are added and received via the peer connection.
-5.  **Events**: The engine triggers callbacks for received messages and new media tracks, allowing the frontend to update the UI.
+    state Connecting {
+        [*] --> WS_Open
+        WS_Open --> Negotiating : handle_signal(Welcome) -> init_connection()
+        Negotiating --> Negotiating : handle_signal(Offer) -> handle_remote_offer()
+        Negotiating --> Negotiating : handle_signal(Answer)
+        Negotiating --> Negotiating : handle_signal(IceCandidate)
+    }
+
+    state Connected {
+        [*] --> Ready
+        Ready --> Ready : send()
+        Ready --> Ready : add_track()
+        Ready --> Ready : handle_signal(Offer) -> handle_remote_offer()
+    }
+
+    Disconnected --> Connecting : WebSocket Open
+    Connecting --> Connected : DataChannel Open
+    
+    Connected --> Disconnected : Error / Close
+    Connecting --> Disconnected : Error / Close
+```
