@@ -15,6 +15,8 @@ use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::TrackLocalWriter;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 
+pub type BehaviorFactory = Arc<dyn Fn() -> Box<dyn RoomBehavior> + Send + Sync>;
+
 pub struct Room {
     behavior: Box<dyn RoomBehavior>,
     peers_data: Arc<DashMap<PeerId, Arc<RTCDataChannel>>>,

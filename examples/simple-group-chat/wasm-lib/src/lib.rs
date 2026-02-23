@@ -1,10 +1,9 @@
-use antenna::client::{AntennaEngine, EngineConfig};
-use antenna_codegen::antenna_client;
+use antenna::client::{antenna_engine, AntennaEngine, EngineConfig};
 use shared::{ChatClientMsg, ChatServerMsg};
 use wasm_bindgen::prelude::*;
 use web_sys::js_sys;
 
-#[antenna_client(ChatClientMsg, ChatServerMsg)]
+#[antenna_engine(ChatClientMsg, ChatServerMsg)]
 #[wasm_bindgen]
 pub struct ChatWrapper {
     engine: AntennaEngine<ChatClientMsg, ChatServerMsg>,

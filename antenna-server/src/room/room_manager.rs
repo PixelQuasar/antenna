@@ -1,4 +1,5 @@
-use crate::room::{Room, RoomBehavior, RoomCommand};
+use crate::BehaviorFactory;
+use crate::room::{Room, RoomCommand};
 use crate::signaling::SignalingOutput;
 use dashmap::DashMap;
 use std::sync::Arc;
@@ -8,18 +9,18 @@ use tracing::info;
 #[derive(Clone)]
 pub struct RoomManager {
     rooms: Arc<DashMap<String, mpsc::Sender<RoomCommand>>>,
-    behavior_factory: Arc<dyn Fn() -> Box<dyn RoomBehavior> + Send + Sync>,
+    behavior_factory: BehaviorFactory,
     signaling: Arc<dyn SignalingOutput + Send + Sync>,
 }
 
 impl RoomManager {
-    pub fn new<F>(behavior_factory: F, signaling: Arc<dyn SignalingOutput + Send + Sync>) -> Self
-    where
-        F: Fn() -> Box<dyn RoomBehavior> + Send + Sync + 'static,
-    {
+    pub fn new(
+        behavior_factory: BehaviorFactory,
+        signaling: Arc<dyn SignalingOutput + Send + Sync>,
+    ) -> Self {
         Self {
             rooms: Arc::new(DashMap::new()),
-            behavior_factory: Arc::new(behavior_factory),
+            behavior_factory,
             signaling,
         }
     }

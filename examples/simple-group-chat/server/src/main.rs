@@ -1,21 +1,21 @@
-use async_trait::async_trait;
 use axum::{Router, routing::get};
 use bytes::Bytes;
-use postcard::{from_bytes, to_allocvec};
+use postcard::to_allocvec;
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{Level, info};
 
-use antenna::server::{AppState, RoomBehavior, RoomContext, RoomManager, SignalingService, ws_handler};
-use antenna::utils::{IceServerConfig, Packet, PeerId};
+use antenna::server::{AntennaServer, RoomBehavior, RoomContext, ws_handler, antenna_room, antenna_handlers};
+use antenna::utils::{Packet, PeerId};
 use shared::{ChatClientMsg, ChatServerMsg};
 use std::env;
-use std::sync::Arc;
 
+#[antenna_room]
+#[derive(Default)]
 struct ChatRoom;
 
-#[async_trait]
-impl RoomBehavior for ChatRoom {
+#[antenna_handlers]
+impl ChatRoom {
     async fn on_join(&self, ctx: &RoomContext, user_id: PeerId) {
         info!(">>> User joined the chat: {:?}", user_id);
 
@@ -26,30 +26,20 @@ impl RoomBehavior for ChatRoom {
         ctx.broadcast(Bytes::from(announcement)).await;
     }
 
-    async fn on_message(&self, ctx: &RoomContext, user_id: PeerId, data: Bytes) {
-        println!("{:#?}", ctx);
-        println!("{:#?}, {:#?}", user_id, data);
-        match from_bytes::<Packet<ChatClientMsg>>(&data) {
-            Ok(Packet::User(client_msg)) => {
-                println!("Got msg from {:?}: {:?}", user_id, client_msg.text);
+    #[msg(ChatClientMsg)]
+    async fn handle_chat(&self, ctx: &RoomContext, user_id: PeerId, msg: ChatClientMsg) {
+        info!("Got msg from {:?}: {:?}", user_id, msg.text);
 
-                let response = ChatServerMsg {
-                    author_id: user_id.to_string(),
-                    text: client_msg.text,
-                    timestamp: 123456789,
-                };
+        let response = ChatServerMsg {
+            author_id: user_id.to_string(),
+            text: msg.text,
+            timestamp: 123456789,
+        };
 
-                let response_packet = Packet::User(response);
+        let response_packet = Packet::User(response);
 
-                if let Ok(response_bytes) = to_allocvec(&response_packet) {
-                    ctx.broadcast(Bytes::from(response_bytes)).await;
-                }
-            }
-            Ok(Packet::System(_)) => {}
-            Err(e) => {
-                eprintln!("Failed to deserialize message: {}", e);
-            }
-            _ => {}
+        if let Ok(response_bytes) = to_allocvec(&response_packet) {
+            ctx.broadcast(Bytes::from(response_bytes)).await;
         }
     }
 
@@ -68,24 +58,9 @@ async fn main() {
     let turn_username = env::var("TURN_USERNAME").ok();
     let turn_credential = env::var("TURN_CREDENTIAL").ok();
 
-    let ice_servers = vec![IceServerConfig {
-        urls: vec![turn_url],
-        username: turn_username,
-        credential: turn_credential,
-    }];
-
-    let signaling = SignalingService::new(ice_servers);
-    let signaling_arc = Arc::new(signaling.clone());
-
-    let room_manager = RoomManager::new(
-        || Box::new(ChatRoom),
-        signaling_arc.clone(),
-    );
-
-    let state = Arc::new(AppState {
-        signaling: signaling.clone(),
-        room_manager,
-    });
+    let state = AntennaServer::new()
+        .with_ice_server(turn_url, turn_username, turn_credential)
+        .build::<ChatRoom>();
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
