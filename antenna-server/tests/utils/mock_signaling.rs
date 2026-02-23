@@ -1,14 +1,8 @@
-use antenna_core::PeerId;
-use antenna_server::SignalingOutput;
-use async_trait::async_trait;
+use antenna_core::{PeerId, SignalMessage};
+use antenna_server::SignalingService;
+use axum::extract::ws::Message;
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
-
-#[derive(Debug, Clone)]
-pub enum SignalMessage {
-    Answer { peer_id: PeerId, sdp: String },
-    Ice { peer_id: PeerId, candidate: String },
-}
 
 /// Mock SignalingOutput that captures all outgoing signals.
 #[derive(Clone)]
@@ -17,15 +11,20 @@ pub struct MockSignalingOutput {
     tx: mpsc::UnboundedSender<SignalMessage>,
     /// All captured signals (for verification).
     signals: Arc<Mutex<Vec<SignalMessage>>>,
+    /// The actual SignalingService instance
+    pub service: Arc<SignalingService>,
 }
 
 impl MockSignalingOutput {
     /// Create a new MockSignalingOutput and its receiver channel.
     pub fn new() -> (Self, mpsc::UnboundedReceiver<SignalMessage>) {
         let (tx, rx) = mpsc::unbounded_channel();
+        let service = Arc::new(SignalingService::new(vec![]));
+
         let signaling = Self {
             tx,
             signals: Arc::new(Mutex::new(Vec::new())),
+            service,
         };
         (signaling, rx)
     }
@@ -33,16 +32,39 @@ impl MockSignalingOutput {
     /// Create a MockSignalingOutput without a receiver (signals are only stored).
     pub fn new_stored_only() -> Self {
         let (tx, _rx) = mpsc::unbounded_channel();
+        let service = Arc::new(SignalingService::new(vec![]));
+
         Self {
             tx,
             signals: Arc::new(Mutex::new(Vec::new())),
+            service,
         }
+    }
+
+    /// Register a peer to capture its messages
+    pub fn register_peer(&self, peer_id: PeerId) {
+        let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
+        self.service.add_peer(peer_id.clone(), ws_tx);
+
+        let tx = self.tx.clone();
+        let signals = self.signals.clone();
+
+        tokio::spawn(async move {
+            while let Some(msg) = ws_rx.recv().await {
+                if let Message::Text(text) = msg {
+                    if let Ok(signal) = serde_json::from_str::<SignalMessage>(&text) {
+                        signals.lock().await.push(signal.clone());
+                        let _ = tx.send(signal);
+                    }
+                }
+            }
+        });
     }
 
     /// Get the SDP answer for a specific peer (if any).
     pub async fn get_answer_for(&self, peer_id: &PeerId) -> Option<String> {
         self.signals.lock().await.iter().find_map(|s| match s {
-            SignalMessage::Answer { peer_id: id, sdp } if id == peer_id => Some(sdp.clone()),
+            SignalMessage::Answer { sdp } => Some(sdp.clone()),
             _ => None,
         })
     }
@@ -54,10 +76,7 @@ impl MockSignalingOutput {
             .await
             .iter()
             .filter_map(|s| match s {
-                SignalMessage::Ice {
-                    peer_id: id,
-                    candidate,
-                } if id == peer_id => Some(candidate.clone()),
+                SignalMessage::IceCandidate { candidate } => Some(candidate.clone()),
                 _ => None,
             })
             .collect()
@@ -67,64 +86,5 @@ impl MockSignalingOutput {
 impl Default for MockSignalingOutput {
     fn default() -> Self {
         Self::new_stored_only()
-    }
-}
-
-#[async_trait]
-impl SignalingOutput for MockSignalingOutput {
-    async fn send_answer(&self, peer_id: PeerId, sdp: String) {
-        tracing::debug!("[MockSignaling] send_answer to {:?}", peer_id);
-
-        let msg = SignalMessage::Answer {
-            peer_id: peer_id.clone(),
-            sdp: sdp.clone(),
-        };
-
-        self.signals.lock().await.push(msg.clone());
-        let _ = self.tx.send(msg);
-    }
-
-    async fn send_ice(&self, peer_id: PeerId, candidate: String) {
-        tracing::debug!("[MockSignaling] send_ice to {:?}", peer_id);
-
-        let msg = SignalMessage::Ice {
-            peer_id: peer_id.clone(),
-            candidate: candidate.clone(),
-        };
-
-        self.signals.lock().await.push(msg.clone());
-        let _ = self.tx.send(msg);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_mock_signaling_captures_answer() {
-        let (signaling, mut rx) = MockSignalingOutput::new();
-        let peer_id = PeerId::new();
-        let sdp = "test-sdp".to_string();
-
-        signaling.send_answer(peer_id.clone(), sdp.clone()).await;
-
-        let msg = rx.recv().await.unwrap();
-        assert!(matches!(msg, SignalMessage::Answer { .. }));
-
-        let answer = signaling.get_answer_for(&peer_id).await;
-        assert_eq!(answer, Some(sdp));
-    }
-
-    #[tokio::test]
-    async fn test_mock_signaling_captures_ice() {
-        let signaling = MockSignalingOutput::new_stored_only();
-        let peer_id = PeerId::new();
-        let candidate = "candidate:123".to_string();
-
-        signaling.send_ice(peer_id.clone(), candidate.clone()).await;
-
-        let candidates = signaling.get_ice_candidates_for(&peer_id).await;
-        assert_eq!(candidates, vec![candidate]);
     }
 }

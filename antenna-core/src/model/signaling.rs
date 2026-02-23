@@ -9,7 +9,7 @@ pub struct IceServerConfig {
 }
 
 /// Set of possible types of signaling messages. Defines the signaling protocol of antenna SDK.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", content = "d")]
 pub enum SignalMessage {
     /// Contains STUN/TURN server urls and creds. Sent by the server to the client immediately after connection.

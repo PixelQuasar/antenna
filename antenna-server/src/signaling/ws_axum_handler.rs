@@ -10,7 +10,7 @@ use tracing::{error, info, warn};
 
 #[derive(Clone)]
 pub struct AppState {
-    pub signaling: SignalingService,
+    pub signaling_service: SignalingService,
     pub room_manager: RoomManager,
 }
 
@@ -25,17 +25,17 @@ pub async fn ws_axum_handler(
 }
 
 async fn handle_socket(socket: WebSocket, peer_id: PeerId, state: Arc<AppState>) {
-    let service = &state.signaling;
+    let signaling_service = &state.signaling_service;
     info!("New WebSocket connection: {:?}", peer_id);
 
     let (mut sender, mut receiver) = socket.split();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    service.add_peer(peer_id.clone(), tx);
+    signaling_service.add_peer(peer_id.clone(), tx);
 
-    let ice_servers = service.get_ice_servers();
+    let ice_servers = signaling_service.get_ice_servers();
     if !ice_servers.is_empty() {
-        service.send_signal(peer_id.clone(), SignalMessage::IceConfig { ice_servers });
+        signaling_service.send_signal(peer_id.clone(), SignalMessage::IceConfig { ice_servers });
     }
 
     let mut send_task = tokio::spawn(async move {
@@ -47,7 +47,7 @@ async fn handle_socket(socket: WebSocket, peer_id: PeerId, state: Arc<AppState>)
     });
 
     let mut recv_task = tokio::spawn({
-        let service = service.clone();
+        let signaling_service = signaling_service.clone();
         let peer_id = peer_id.clone();
         let state = state.clone();
 
@@ -62,7 +62,7 @@ async fn handle_socket(socket: WebSocket, peer_id: PeerId, state: Arc<AppState>)
                                 info!("Peer {:?} wants to join room '{}'", peer_id, room);
                                 current_room_tx = Some(state.room_manager.get_room_sender(&room));
 
-                                service.send_signal(
+                                signaling_service.send_signal(
                                     peer_id.clone(),
                                     SignalMessage::Welcome {
                                         peer_id: peer_id.clone(),
@@ -118,6 +118,6 @@ async fn handle_socket(socket: WebSocket, peer_id: PeerId, state: Arc<AppState>)
         _ = (&mut recv_task) => send_task.abort(),
     };
 
-    service.remove_peer(&peer_id);
+    signaling_service.remove_peer(&peer_id);
     info!("WebSocket disconnected: {:?}", peer_id);
 }

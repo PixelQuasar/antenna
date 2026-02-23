@@ -7,7 +7,9 @@ use crate::utils::{TestClient, TestClientConfig, perform_signaling, wait_for_cli
 async fn test_peer_leaves_others_stay() {
     init_tracing();
 
-    let (room_cmd_tx, mut signal_rx, behavior) = create_test_room();
+    let (room_cmd_tx, signaling, behavior) = create_test_room();
+    let mut signal_rx = signaling.1;
+    let signaling = signaling.0;
 
     let peer1_id = PeerId::new();
     let peer2_id = PeerId::new();
@@ -15,10 +17,12 @@ async fn test_peer_leaves_others_stay() {
     let client1 = TestClient::new(peer1_id.clone(), TestClientConfig::default())
         .await
         .expect("Failed to create client 1");
+    signaling.register_peer(peer1_id.clone());
 
     let client2 = TestClient::new(peer2_id.clone(), TestClientConfig::default())
         .await
         .expect("Failed to create client 2");
+    signaling.register_peer(peer2_id.clone());
 
     perform_signaling(&client1, &room_cmd_tx, &mut signal_rx)
         .await

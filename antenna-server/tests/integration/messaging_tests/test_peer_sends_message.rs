@@ -7,10 +7,13 @@ use crate::utils::{TestClient, TestClientConfig, perform_signaling, wait_for_cli
 async fn test_peer_sends_message() {
     init_tracing();
 
-    let (room_cmd_tx, mut signal_rx, behavior) = create_test_room();
+    let (room_cmd_tx, signaling, behavior) = create_test_room();
+    let mut signal_rx = signaling.1;
+    let signaling = signaling.0;
 
     // Create and connect client
     let peer_id = PeerId::new();
+    signaling.register_peer(peer_id.clone());
     let client = TestClient::new(peer_id.clone(), TestClientConfig::default())
         .await
         .expect("Failed to create test client");

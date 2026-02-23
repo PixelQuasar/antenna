@@ -4,8 +4,8 @@ use tokio::sync::mpsc;
 use antenna_core::PeerId;
 use antenna_server::RoomCommand;
 
-use super::mock_signaling::SignalMessage;
 use super::test_client::TestClient;
+use antenna_core::SignalMessage;
 
 /// Timeout for signal exchange operations (ms).
 pub const SIGNAL_TIMEOUT_MS: u64 = 5000;
@@ -72,10 +72,10 @@ async fn wait_for_answer(
             tokio::time::timeout(std::time::Duration::from_millis(100), signal_rx.recv());
 
         match recv_timeout.await {
-            Ok(Some(SignalMessage::Answer { peer_id: id, sdp })) if &id == peer_id => {
+            Ok(Some(SignalMessage::Answer { sdp })) => {
                 return Ok(sdp);
             }
-            Ok(Some(SignalMessage::Ice { .. })) => {
+            Ok(Some(SignalMessage::IceCandidate { .. })) => {
                 continue;
             }
             Ok(Some(_)) => continue,
@@ -121,10 +121,7 @@ async fn exchange_ice_candidates(
             tokio::time::timeout(std::time::Duration::from_millis(100), signal_rx.recv());
 
         match recv_timeout.await {
-            Ok(Some(SignalMessage::Ice {
-                peer_id: id,
-                candidate,
-            })) if id == peer_id => {
+            Ok(Some(SignalMessage::IceCandidate { candidate })) => {
                 if let Err(e) = client.add_ice_candidate(candidate).await {
                     tracing::warn!("[SignalHelper] Failed to add ICE candidate: {}", e);
                 }

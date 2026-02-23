@@ -28,14 +28,14 @@ impl AntennaServer {
     }
 
     pub fn build<R: RoomBehavior + Default>(self) -> Arc<AppState> {
-        let signaling = SignalingService::new(self.ice_servers);
-        let signaling_arc = Arc::new(signaling.clone());
+        let signaling_service = SignalingService::new(self.ice_servers);
+        let signaling_arc = Arc::new(signaling_service.clone());
 
         let factory: BehaviorFactory = Arc::new(|| Box::new(R::default()) as Box<dyn RoomBehavior>);
         let room_manager = RoomManager::new(factory, signaling_arc);
 
         Arc::new(AppState {
-            signaling,
+            signaling_service,
             room_manager,
         })
     }

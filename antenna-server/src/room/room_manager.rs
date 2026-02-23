@@ -1,6 +1,5 @@
-use crate::BehaviorFactory;
 use crate::room::{Room, RoomCommand};
-use crate::signaling::SignalingSender;
+use crate::{BehaviorFactory, SignalingService};
 use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -10,14 +9,11 @@ use tracing::info;
 pub struct RoomManager {
     rooms: Arc<DashMap<String, mpsc::Sender<RoomCommand>>>,
     behavior_factory: BehaviorFactory,
-    signaling_sender: Arc<dyn SignalingSender + Send + Sync>,
+    signaling_sender: Arc<SignalingService>,
 }
 
 impl RoomManager {
-    pub fn new(
-        behavior_factory: BehaviorFactory,
-        signaling_sender: Arc<dyn SignalingSender + Send + Sync>,
-    ) -> Self {
+    pub fn new(behavior_factory: BehaviorFactory, signaling_sender: Arc<SignalingService>) -> Self {
         Self {
             rooms: Arc::new(DashMap::new()),
             behavior_factory,

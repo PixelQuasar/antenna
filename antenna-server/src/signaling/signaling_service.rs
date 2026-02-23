@@ -1,6 +1,4 @@
-use crate::signaling::SignalingSender;
 use antenna_core::{IceServerConfig, PeerId, SignalMessage};
-use async_trait::async_trait;
 use axum::extract::ws::Message;
 use dashmap::DashMap;
 use std::sync::Arc;
@@ -55,18 +53,5 @@ impl SignalingService {
                 peer_id
             );
         }
-    }
-}
-
-#[async_trait]
-impl SignalingSender for SignalingService {
-    async fn send_answer(&self, peer_id: PeerId, sdp: String) {
-        let msg = SignalMessage::Answer { sdp };
-        self.send_signal(peer_id, msg);
-    }
-
-    async fn send_ice(&self, peer_id: PeerId, candidate: String) {
-        let msg = SignalMessage::IceCandidate { candidate };
-        self.send_signal(peer_id, msg);
     }
 }

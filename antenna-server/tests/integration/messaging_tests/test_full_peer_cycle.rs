@@ -12,9 +12,12 @@ use crate::utils::{
 async fn test_full_peer_lifecycle() {
     init_tracing();
 
-    let (room_cmd_tx, mut signal_rx, behavior) = create_test_room();
+    let (room_cmd_tx, signaling, behavior) = create_test_room();
+    let mut signal_rx = signaling.1;
+    let signaling = signaling.0;
 
     let peer_id = PeerId::new();
+    signaling.register_peer(peer_id.clone());
     let client = TestClient::new(peer_id.clone(), TestClientConfig::default())
         .await
         .expect("Failed to create test client");

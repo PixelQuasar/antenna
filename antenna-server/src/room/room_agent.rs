@@ -1,9 +1,9 @@
+use crate::SignalingService;
 use crate::room::context::RoomContext;
 use crate::room::room_behavior::RoomBehavior;
 use crate::room::room_command::RoomCommand;
-use crate::signaling::SignalingSender;
 use crate::transport::{ConnectionWrapper, TransportConfig, TransportEvent};
-use antenna_core::PeerId;
+use antenna_core::{PeerId, SignalMessage};
 use dashmap::DashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -39,7 +39,7 @@ pub struct Room {
     command_rx: mpsc::Receiver<RoomCommand>,
 
     /// Signaling sending service instance
-    signaling_sender: Arc<dyn SignalingSender>,
+    signaling_service: Arc<SignalingService>,
 
     /// Room <=> WebRTC transport channel receiver: used to process room network events
     transport_rx: mpsc::Receiver<TransportEvent>,
@@ -58,7 +58,7 @@ impl Room {
     pub fn new(
         behavior: Box<dyn RoomBehavior>,
         command_rx: mpsc::Receiver<RoomCommand>,
-        signaling_sender: Arc<dyn SignalingSender>,
+        signaling_service: Arc<SignalingService>,
     ) -> Self {
         let (transport_tx, transport_rx) = mpsc::channel(256);
 
@@ -69,7 +69,7 @@ impl Room {
             command_rx,
             transport_rx,
             transport_tx,
-            signaling_sender,
+            signaling_service,
             transport_config: TransportConfig::default(),
             track_senders: HashMap::new(),
         }
@@ -137,7 +137,7 @@ impl Room {
                                 sfu_sender.stream_id.clone(),
                             ));
 
-                            if let Ok(_) = transport.add_track(local_track.clone()).await {
+                            if transport.add_track(local_track.clone()).await.is_ok() {
                                 let mut rx = sfu_sender.tx.subscribe();
                                 tokio::spawn(async move {
                                     while let Ok(packet) = rx.recv().await {
@@ -150,7 +150,10 @@ impl Room {
                         match transport.create_answer().await {
                             Ok(answer_sdp) => {
                                 self.transports.insert(peer_id.clone(), transport);
-                                self.signaling_sender.send_answer(peer_id, answer_sdp).await;
+                                self.signaling_service.send_signal(
+                                    peer_id,
+                                    SignalMessage::Answer { sdp: answer_sdp },
+                                );
                             }
                             Err(e) => error!("Failed to create answer for {:?}: {:?}", peer_id, e),
                         }
@@ -194,9 +197,12 @@ impl Room {
             }
 
             TransportEvent::CandidateGenerated(peer_id, candidate_json) => {
-                self.signaling_sender
-                    .send_ice(peer_id, candidate_json)
-                    .await;
+                self.signaling_service.send_signal(
+                    peer_id,
+                    SignalMessage::IceCandidate {
+                        candidate: candidate_json,
+                    },
+                );
             }
 
             TransportEvent::Track(peer_id, track) => {
@@ -227,7 +233,7 @@ impl Room {
                             track.stream_id(),
                         ));
 
-                        if let Ok(_) = transport.add_track(local_track.clone()).await {
+                        if transport.add_track(local_track.clone()).await.is_ok() {
                             let mut rx = tx.subscribe();
                             tokio::spawn(async move {
                                 while let Ok(packet) = rx.recv().await {

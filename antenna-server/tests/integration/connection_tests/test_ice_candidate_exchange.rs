@@ -4,15 +4,19 @@ use antenna_core::PeerId;
 use antenna_server::RoomCommand;
 
 use crate::integration::{create_test_room, init_tracing};
-use crate::utils::{SignalMessage, TestClient, TestClientConfig, wait_for_client_ready};
+use crate::utils::{TestClient, TestClientConfig, wait_for_client_ready};
+use antenna_core::SignalMessage;
 
 #[tokio::test]
 async fn test_ice_candidate_exchange() {
     init_tracing();
 
-    let (room_cmd_tx, mut signal_rx, behavior) = create_test_room();
+    let (room_cmd_tx, signaling, behavior) = create_test_room();
+    let mut signal_rx = signaling.1;
+    let signaling = signaling.0;
 
     let peer_id = PeerId::new();
+    signaling.register_peer(peer_id.clone());
     let client = TestClient::new(peer_id.clone(), TestClientConfig::default())
         .await
         .expect("Failed to create test client");
@@ -59,17 +63,14 @@ async fn test_ice_candidate_exchange() {
             tokio::time::timeout(Duration::from_millis(100), signal_rx.recv()).await
         {
             match msg {
-                SignalMessage::Answer { peer_id: id, sdp } if id == peer_id => {
+                SignalMessage::Answer { sdp } => {
                     client
                         .set_remote_answer(sdp)
                         .await
                         .expect("Failed to set answer");
                     answer_received = true;
                 }
-                SignalMessage::Ice {
-                    peer_id: id,
-                    candidate,
-                } if id == peer_id => {
+                SignalMessage::IceCandidate { candidate } => {
                     let _ = client.add_ice_candidate(candidate).await;
                 }
                 _ => {}
