@@ -1,14 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub enum Channel {
+    #[default]
     Reliable,
     Unreliable,
     ReliableUnordered,
-}
-
-impl Default for Channel {
-    fn default() -> Self {
-        Self::Reliable
-    }
 }

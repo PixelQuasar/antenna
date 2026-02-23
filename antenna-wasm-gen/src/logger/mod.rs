@@ -13,7 +13,7 @@ impl Logger {
     }
 
     pub fn error(err: &JsValue) {
-        console::log_2(&format!("[ERROR]").into(), err);
+        console::log_2(&"[ERROR]".to_string().into(), err);
     }
 
     pub fn _debug(msg: &str) {

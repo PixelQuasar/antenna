@@ -61,7 +61,7 @@ pub async fn perform_signaling(
 /// Wait for an SDP answer for a specific peer.
 async fn wait_for_answer(
     signal_rx: &mut mpsc::UnboundedReceiver<SignalMessage>,
-    peer_id: &PeerId,
+    _peer_id: &PeerId,
     timeout_ms: u64,
 ) -> Result<String> {
     let start = std::time::Instant::now();

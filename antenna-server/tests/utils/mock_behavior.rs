@@ -17,11 +17,13 @@ pub enum RoomEvent {
 }
 
 /// A test implementation of RoomBehavior that records all events.
+type OnJoinCallback = Arc<dyn Fn(&RoomContext, PeerId) + Send + Sync>;
+
 #[derive(Clone)]
 pub struct TestRoomBehavior {
     events: Arc<Mutex<Vec<RoomEvent>>>,
     /// Optional callback to execute on join
-    on_join_callback: Option<Arc<dyn Fn(&RoomContext, PeerId) + Send + Sync>>,
+    on_join_callback: Option<OnJoinCallback>,
 }
 
 impl TestRoomBehavior {

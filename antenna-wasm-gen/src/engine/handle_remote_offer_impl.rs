@@ -52,7 +52,7 @@ where
             .await
             .unwrap();
 
-        Logger::info(&"Sending ANSWER to server...");
+        Logger::info("Sending ANSWER to server...");
         let msg = SignalMessage::Answer { sdp: answer_sdp };
         let json = serde_json::to_string(&msg).unwrap();
 

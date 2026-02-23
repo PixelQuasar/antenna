@@ -34,23 +34,24 @@ where
             }
 
             SignalMessage::Welcome { .. } => {
-                Logger::info(&"Received Welcome. Initiating connection...");
+                Logger::info("Received Welcome. Initiating connection...");
                 wasm_bindgen_futures::spawn_local(async move {
                     Self::init_connection(service).await;
                 });
             }
 
             SignalMessage::Offer { sdp } => {
-                Logger::info(&"Received Offer from Server");
+                Logger::info("Received Offer from Server");
                 wasm_bindgen_futures::spawn_local(async move {
                     Self::handle_remote_offer(service, sdp).await;
                 });
             }
 
             SignalMessage::Answer { sdp } => {
-                Logger::info(&"Received Answer from Server");
+                Logger::info("Received Answer from Server");
                 wasm_bindgen_futures::spawn_local(async move {
-                    if let Some(pc) = service.borrow().pc.clone() {
+                    let pc = service.borrow().pc.clone();
+                    if let Some(pc) = pc {
                         let desc =
                             web_sys::RtcSessionDescriptionInit::new(web_sys::RtcSdpType::Answer);
                         desc.set_sdp(&sdp);
@@ -60,7 +61,7 @@ where
                         {
                             Logger::error(&e);
                         } else {
-                            Logger::info(&"Remote description set (Answer)");
+                            Logger::info("Remote description set (Answer)");
                         }
                     }
                 });

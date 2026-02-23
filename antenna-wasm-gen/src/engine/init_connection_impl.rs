@@ -32,7 +32,7 @@ where
             .await
             .unwrap();
 
-        Logger::info(&"Sending OFFER to server...");
+        Logger::info("Sending OFFER to server...");
         let msg = SignalMessage::Offer { sdp: offer_sdp };
         let json = serde_json::to_string(&msg).unwrap();
 

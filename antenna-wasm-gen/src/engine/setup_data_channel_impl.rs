@@ -42,7 +42,7 @@ where
         let on_open = {
             let inner = inner.clone();
             Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_| {
-                Logger::info(&"DataChannel OPEN");
+                Logger::info("DataChannel OPEN");
 
                 let (dc, messages) = {
                     let mut inner_mut = inner.borrow_mut();

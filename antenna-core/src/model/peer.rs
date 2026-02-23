@@ -11,6 +11,12 @@ impl PeerId {
     }
 }
 
+impl Default for PeerId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl From<&str> for PeerId {
     fn from(s: &str) -> Self {
         Self(Uuid::parse_str(s).unwrap())

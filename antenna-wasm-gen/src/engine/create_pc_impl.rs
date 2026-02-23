@@ -54,10 +54,10 @@ where
                 let msg = SignalMessage::IceCandidate {
                     candidate: candidate.candidate(),
                 };
-                if let Ok(json) = serde_json::to_string(&msg) {
-                    if let Some(ws) = &service_for_ice.borrow().ws {
-                        let _ = ws.send_with_str(&json);
-                    }
+                if let Ok(json) = serde_json::to_string(&msg)
+                    && let Some(ws) = &service_for_ice.borrow().ws
+                {
+                    let _ = ws.send_with_str(&json);
                 }
             }
         })
@@ -129,10 +129,10 @@ where
                     }
                 };
 
-                if let Some(ws) = &service.borrow().ws {
-                    if let Err(e) = ws.send_with_str(&json) {
-                        Logger::error(&e);
-                    }
+                if let Some(ws) = &service.borrow().ws
+                    && let Err(e) = ws.send_with_str(&json)
+                {
+                    Logger::error(&e);
                 }
             });
         }) as Box<dyn FnMut()>);

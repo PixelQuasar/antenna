@@ -19,7 +19,7 @@ where
             let service = self.service.clone();
             let room_id = config.room_id.clone();
             Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_| {
-                Logger::info(&"WS Open");
+                Logger::info("WS Open");
 
                 let join_msg = SignalMessage::Join {
                     room: room_id.clone(),

@@ -16,18 +16,10 @@ use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use antenna_core::PeerId;
 
 /// Configuration for TestClient.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct TestClientConfig {
     /// ICE servers to use (default: none for local testing).
     pub ice_servers: Vec<String>,
-}
-
-impl Default for TestClientConfig {
-    fn default() -> Self {
-        Self {
-            ice_servers: vec![],
-        }
-    }
 }
 
 pub struct TestClient {
@@ -99,14 +91,13 @@ impl TestClient {
             let ice_tx = ice_tx_clone.clone();
             let ice_candidates = Arc::clone(&ice_candidates_clone);
             Box::pin(async move {
-                if let Some(c) = candidate {
-                    if let Ok(json) = c.to_json() {
-                        if let Ok(s) = serde_json::to_string(&json) {
-                            tracing::debug!("[TestClient] ICE candidate generated");
-                            ice_candidates.lock().await.push(s.clone());
-                            let _ = ice_tx.send(s);
-                        }
-                    }
+                if let Some(c) = candidate
+                    && let Ok(json) = c.to_json()
+                    && let Ok(s) = serde_json::to_string(&json)
+                {
+                    tracing::debug!("[TestClient] ICE candidate generated");
+                    ice_candidates.lock().await.push(s.clone());
+                    let _ = ice_tx.send(s);
                 }
             })
         }));

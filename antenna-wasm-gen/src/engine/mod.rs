@@ -81,15 +81,11 @@ where
     }
 
     fn dispatch_event(service: &Rc<RefCell<EngineService>>, packet: Packet<E>) {
-        if let Some(cb) = &service.borrow().js_callback {
-            match packet {
-                Packet::User(event) => {
-                    if let Ok(js_val) = serde_wasm_bindgen::to_value(&event) {
-                        let _ = cb.call1(&JsValue::NULL, &js_val);
-                    }
-                }
-                _ => {}
-            }
+        if let Some(cb) = &service.borrow().js_callback
+            && let Packet::User(event) = packet
+            && let Ok(js_val) = serde_wasm_bindgen::to_value(&event)
+        {
+            let _ = cb.call1(&JsValue::NULL, &js_val);
         }
     }
 
@@ -97,11 +93,11 @@ where
         let mut service = self.service.borrow_mut();
         let packet = Packet::User(msg);
         let bytes = to_allocvec(&packet).unwrap();
-        if let Some(dc) = &service.dc {
-            if dc.ready_state() == web_sys::RtcDataChannelState::Open {
-                let _ = dc.send_with_u8_array(&bytes);
-                return;
-            }
+        if let Some(dc) = &service.dc
+            && dc.ready_state() == web_sys::RtcDataChannelState::Open
+        {
+            let _ = dc.send_with_u8_array(&bytes);
+            return;
         }
         service.message_queue.push(bytes);
     }

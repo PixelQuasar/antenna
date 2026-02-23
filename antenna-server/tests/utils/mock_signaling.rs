@@ -51,18 +51,19 @@ impl MockSignalingOutput {
 
         tokio::spawn(async move {
             while let Some(msg) = ws_rx.recv().await {
-                if let Message::Text(text) = msg {
-                    if let Ok(signal) = serde_json::from_str::<SignalMessage>(&text) {
-                        signals.lock().await.push(signal.clone());
-                        let _ = tx.send(signal);
-                    }
+                if let Message::Text(text) = msg
+                    && let Ok(signal) = serde_json::from_str::<SignalMessage>(&text)
+                {
+                    signals.lock().await.push(signal.clone());
+                    let _ = tx.send(signal);
                 }
             }
         });
     }
 
     /// Get the SDP answer for a specific peer (if any).
-    pub async fn get_answer_for(&self, peer_id: &PeerId) -> Option<String> {
+    #[allow(dead_code)]
+    pub async fn get_answer_for(&self, _peer_id: &PeerId) -> Option<String> {
         self.signals.lock().await.iter().find_map(|s| match s {
             SignalMessage::Answer { sdp } => Some(sdp.clone()),
             _ => None,
@@ -70,7 +71,8 @@ impl MockSignalingOutput {
     }
 
     /// Get all ICE candidates for a specific peer.
-    pub async fn get_ice_candidates_for(&self, peer_id: &PeerId) -> Vec<String> {
+    #[allow(dead_code)]
+    pub async fn get_ice_candidates_for(&self, _peer_id: &PeerId) -> Vec<String> {
         self.signals
             .lock()
             .await
