@@ -42,7 +42,7 @@ struct EngineService {
     pc: Option<web_sys::RtcPeerConnection>,
     dc: Option<web_sys::RtcDataChannel>,
     message_queue: Vec<Vec<u8>>,
-    js_callback: Option<js_sys::Function>,
+    event_handler: Option<js_sys::Function>,
     track_callback: Option<js_sys::Function>,
     ice_servers: Option<Vec<IceServerConfig>>,
 }
@@ -55,8 +55,8 @@ pub struct AntennaEngine<T, E> {
 
 impl<T, E> AntennaEngine<T, E>
 where
-    T: Message + 'static,
-    E: Message + 'static,
+    T: Message,
+    E: Message,
 {
     pub fn new(config: EngineConfig) -> Result<Self, JsValue> {
         let service = Rc::new(RefCell::new(EngineService {
@@ -65,7 +65,7 @@ where
             pc: None,
             dc: None,
             message_queue: Vec::new(),
-            js_callback: None,
+            event_handler: None,
             track_callback: None,
             ice_servers: config.ice_servers.clone(),
         }));
@@ -81,7 +81,7 @@ where
     }
 
     fn dispatch_event(service: &Rc<RefCell<EngineService>>, packet: Packet<E>) {
-        if let Some(cb) = &service.borrow().js_callback
+        if let Some(cb) = &service.borrow().event_handler
             && let Packet::User(event) = packet
             && let Ok(js_val) = serde_wasm_bindgen::to_value(&event)
         {
@@ -102,8 +102,8 @@ where
         service.message_queue.push(bytes);
     }
 
-    pub fn set_event_handler(&self, callback: js_sys::Function) {
-        self.service.borrow_mut().js_callback = Some(callback);
+    pub fn set_event_handler(&self, event_handler: js_sys::Function) {
+        self.service.borrow_mut().event_handler = Some(event_handler);
     }
 
     pub fn set_track_handler(&self, callback: js_sys::Function) {

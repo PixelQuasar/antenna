@@ -57,11 +57,8 @@ function App() {
                         const audio = new Audio();
                         audio.srcObject = stream;
                         audio.autoplay = true;
-                        audio.controls = false; // Hidden audio element
-                        // Store it to prevent garbage collection and potentially manage it later
+                        audio.controls = false; 
                         audioElements.current.set(stream.id, audio);
-                        
-                        // Cleanup when track ends
                         event.track.onended = () => {
                             audioElements.current.delete(stream.id);
                         };
