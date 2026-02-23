@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{Level, info};
 
-use antenna::server::{AntennaServer, RoomBehavior, RoomContext, ws_handler, antenna_room, antenna_handlers};
+use antenna::server::{AntennaServer, RoomBehavior, RoomContext, ws_handler, antenna_room, antenna_logic};
 use antenna::utils::{Packet, PeerId};
 use shared::{ChatClientMsg, ChatServerMsg};
 use std::env;
@@ -14,7 +14,7 @@ use std::env;
 #[derive(Default)]
 struct ChatRoom;
 
-#[antenna_handlers]
+#[antenna_logic]
 impl ChatRoom {
     async fn on_join(&self, ctx: &RoomContext, user_id: PeerId) {
         info!(">>> User joined the chat: {:?}", user_id);

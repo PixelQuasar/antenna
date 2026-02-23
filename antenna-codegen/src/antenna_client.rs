@@ -4,7 +4,7 @@ use syn::parse::{Parse, ParseStream};
 use syn::{Ident, Token, parse2};
 
 struct AntennaClientArgs {
-    client_msg: Ident,
+    _client_msg: Ident,
     server_msg: Ident,
 }
 
@@ -14,7 +14,7 @@ impl Parse for AntennaClientArgs {
         input.parse::<Token![,]>()?;
         let server_msg: Ident = input.parse()?;
         Ok(AntennaClientArgs {
-            client_msg,
+            _client_msg: client_msg,
             server_msg,
         })
     }
@@ -22,7 +22,7 @@ impl Parse for AntennaClientArgs {
 
 pub fn antenna_client_impl(args: TokenStream, input: TokenStream) -> TokenStream {
     let AntennaClientArgs {
-        client_msg: _,
+        _client_msg,
         server_msg,
     } = match parse2::<AntennaClientArgs>(args) {
         Ok(a) => a,

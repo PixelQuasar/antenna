@@ -4,7 +4,7 @@ pub mod utils {
 
 #[cfg(feature = "server")]
 pub mod server {
-    pub use antenna_codegen::{antenna_handlers, antenna_room};
+    pub use antenna_codegen::{antenna_logic, antenna_room};
     pub use antenna_server::*;
 }
 

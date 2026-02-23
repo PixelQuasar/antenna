@@ -45,7 +45,7 @@ function App() {
 
                 const client = new ChatWrapper(url, roomId);
 
-                client.on_event((event: ChatServerMsg) => {
+                client.on_event(event => {
                     console.log("Received:", event);
                     setMessages((prev) => [...prev, event]);
                 });
