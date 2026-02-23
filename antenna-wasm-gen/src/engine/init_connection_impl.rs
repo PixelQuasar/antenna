@@ -8,8 +8,8 @@ use std::rc::Rc;
 
 impl<T, E> AntennaEngine<T, E>
 where
-    T: Message + Clone + 'static,
-    E: Message + 'static,
+    T: Message,
+    E: Message,
 {
     pub(super) async fn init_connection(service: Rc<RefCell<EngineService>>) {
         let pc = Self::create_pc(&service).expect("Failed to create PC");

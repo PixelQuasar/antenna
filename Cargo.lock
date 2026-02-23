@@ -121,7 +121,9 @@ dependencies = [
 name = "antenna-codegen"
 version = "0.1.0"
 dependencies = [
- "antenna-core",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

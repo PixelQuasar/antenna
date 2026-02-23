@@ -33,7 +33,6 @@ async fn handle_socket(socket: WebSocket, peer_id: PeerId, state: Arc<AppState>)
 
     service.add_peer(peer_id.clone(), tx);
 
-    // Send ICE configuration immediately
     let ice_servers = service.get_ice_servers();
     if !ice_servers.is_empty() {
         service.send_signal(peer_id.clone(), SignalMessage::IceConfig { ice_servers });
@@ -41,7 +40,6 @@ async fn handle_socket(socket: WebSocket, peer_id: PeerId, state: Arc<AppState>)
 
     let mut send_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
-            // println!("MSG {:?}", msg);
             if sender.send(msg).await.is_err() {
                 break;
             }

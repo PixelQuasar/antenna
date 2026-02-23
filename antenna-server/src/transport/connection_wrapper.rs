@@ -18,6 +18,10 @@ use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::rtp_transceiver::RTCRtpTransceiver;
+use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
+use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
+use webrtc::track::track_remote::TrackRemote;
 
 pub struct ConnectionWrapper {
     pub peer_id: PeerId,
@@ -136,10 +140,34 @@ impl ConnectionWrapper {
             })
         }));
 
+        let track_tx = event_tx.clone();
+        let uid_track = peer_id.clone();
+        peer_connection.on_track(Box::new(
+            move |track: Arc<TrackRemote>,
+                  _receiver: Arc<RTCRtpReceiver>,
+                  _transceiver: Arc<RTCRtpTransceiver>| {
+                let tx = track_tx.clone();
+                let uid = uid_track.clone();
+                Box::pin(async move {
+                    info!("Track received from user {:?}", uid);
+                    let _ = tx.send(TransportEvent::Track(uid, track)).await;
+                })
+            },
+        ));
+
         Ok(Self {
             peer_id,
             peer_connection,
         })
+    }
+
+    pub async fn add_track(&self, track: Arc<TrackLocalStaticRTP>) -> Result<()> {
+        self.peer_connection
+            .add_track(
+                Arc::clone(&track) as Arc<dyn webrtc::track::track_local::TrackLocal + Send + Sync>
+            )
+            .await?;
+        Ok(())
     }
 
     pub async fn set_remote_description(&self, sdp: String) -> Result<()> {

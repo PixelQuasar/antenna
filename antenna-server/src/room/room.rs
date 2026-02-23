@@ -7,9 +7,13 @@ use antenna_core::PeerId;
 use dashmap::DashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info, warn};
 use webrtc::data_channel::RTCDataChannel;
+use webrtc::rtp::packet::Packet;
+use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+use webrtc::track::track_local::TrackLocalWriter;
+use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 
 pub struct Room {
     behavior: Box<dyn RoomBehavior>,
@@ -20,6 +24,7 @@ pub struct Room {
     transport_tx: mpsc::Sender<TransportEvent>,
     signaling: Arc<dyn SignalingOutput>,
     transport_config: TransportConfig,
+    track_senders: HashMap<String, (broadcast::Sender<Packet>, RTCRtpCodecCapability, String)>,
 }
 
 impl Room {
@@ -39,6 +44,7 @@ impl Room {
             transport_tx,
             signaling,
             transport_config: TransportConfig::default(),
+            track_senders: HashMap::new(),
         }
     }
 
@@ -97,6 +103,23 @@ impl Room {
                             return;
                         }
 
+                        for (track_id, (tx, codec, stream_id)) in &self.track_senders {
+                            let local_track = Arc::new(TrackLocalStaticRTP::new(
+                                codec.clone(),
+                                track_id.clone(),
+                                stream_id.clone(),
+                            ));
+
+                            if let Ok(_) = transport.add_track(local_track.clone()).await {
+                                let mut rx = tx.subscribe();
+                                tokio::spawn(async move {
+                                    while let Ok(packet) = rx.recv().await {
+                                        let _ = local_track.write_rtp(&packet).await;
+                                    }
+                                });
+                            }
+                        }
+
                         match transport.create_answer().await {
                             Ok(answer_sdp) => {
                                 self.transports.insert(peer_id.clone(), transport);
@@ -130,9 +153,7 @@ impl Room {
         match event {
             TransportEvent::DataChannelReady(peer_id, channel) => {
                 info!("User {:?} fully joined (DataChannel ready).", peer_id);
-
                 self.peers_data.insert(peer_id.clone(), channel);
-
                 self.behavior.on_join(ctx, peer_id).await;
             }
 
@@ -147,6 +168,46 @@ impl Room {
 
             TransportEvent::CandidateGenerated(peer_id, candidate_json) => {
                 self.signaling.send_ice(peer_id, candidate_json).await;
+            }
+
+            TransportEvent::Track(peer_id, track) => {
+                info!("Track received from {:?}: id={}", peer_id, track.id());
+                let (tx, _) = broadcast::channel(100);
+                self.track_senders.insert(
+                    track.id().to_string(),
+                    (
+                        tx.clone(),
+                        track.codec().capability.clone(),
+                        track.stream_id().to_string(),
+                    ),
+                );
+
+                let track_clone = track.clone();
+                let tx_clone = tx.clone();
+                tokio::spawn(async move {
+                    while let Ok((packet, _)) = track_clone.read_rtp().await {
+                        let _ = tx_clone.send(packet);
+                    }
+                });
+
+                for (other_peer_id, transport) in &self.transports {
+                    if *other_peer_id != peer_id {
+                        let local_track = Arc::new(TrackLocalStaticRTP::new(
+                            track.codec().capability.clone(),
+                            track.id(),
+                            track.stream_id(),
+                        ));
+
+                        if let Ok(_) = transport.add_track(local_track.clone()).await {
+                            let mut rx = tx.subscribe();
+                            tokio::spawn(async move {
+                                while let Ok(packet) = rx.recv().await {
+                                    let _ = local_track.write_rtp(&packet).await;
+                                }
+                            });
+                        }
+                    }
+                }
             }
         }
     }

@@ -12,8 +12,8 @@ use crate::logger::Logger;
 
 impl<T, E> AntennaEngine<T, E>
 where
-    T: Message + Clone + 'static,
-    E: Message + 'static,
+    T: Message,
+    E: Message,
 {
     pub(super) fn create_pc(
         service: &Rc<RefCell<EngineService>>,
@@ -53,8 +53,6 @@ where
             if let Some(candidate) = ev.candidate() {
                 let msg = SignalMessage::IceCandidate {
                     candidate: candidate.candidate(),
-                    sdp_mid: candidate.sdp_mid(),
-                    sdp_m_line_index: candidate.sdp_m_line_index(),
                 };
                 if let Ok(json) = serde_json::to_string(&msg) {
                     if let Some(ws) = &service_for_ice.borrow().ws {
@@ -152,6 +150,16 @@ where
 
         pc.set_onconnectionstatechange(Some(onconnectionstatechange.as_ref().unchecked_ref()));
         onconnectionstatechange.forget();
+
+        let service_clone = service.clone();
+        let ontrack = Closure::wrap(Box::new(move |ev: web_sys::RtcTrackEvent| {
+            if let Some(cb) = &service_clone.borrow().track_callback {
+                let _ = cb.call1(&JsValue::NULL, &ev);
+            }
+        }) as Box<dyn FnMut(web_sys::RtcTrackEvent)>);
+
+        pc.set_ontrack(Some(ontrack.as_ref().unchecked_ref()));
+        ontrack.forget();
 
         Ok(pc)
     }

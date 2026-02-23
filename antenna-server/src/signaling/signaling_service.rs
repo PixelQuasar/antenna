@@ -66,11 +66,7 @@ impl SignalingOutput for SignalingService {
     }
 
     async fn send_ice(&self, peer_id: PeerId, candidate: String) {
-        let msg = SignalMessage::IceCandidate {
-            candidate,
-            sdp_mid: None,
-            sdp_m_line_index: None,
-        };
+        let msg = SignalMessage::IceCandidate { candidate };
         self.send_signal(peer_id, msg);
     }
 }

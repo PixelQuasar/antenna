@@ -8,8 +8,8 @@ use crate::{ConnectionState, EngineConfig, logger::Logger};
 
 impl<T, E> AntennaEngine<T, E>
 where
-    T: Message + Clone + 'static,
-    E: Message + 'static,
+    T: Message,
+    E: Message,
 {
     pub(crate) fn ws_setup(&self, config: EngineConfig) -> Result<(), JsValue> {
         let ws: WebSocket = web_sys::WebSocket::new(&config.url)?;
@@ -17,14 +17,12 @@ where
 
         let onopen_callback = {
             let service = self.service.clone();
-            let token = config.auth_token.clone();
             let room_id = config.room_id.clone();
             Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_| {
                 Logger::info(&"WS Open");
 
                 let join_msg = SignalMessage::Join {
                     room: room_id.clone(),
-                    token: Some(token.clone()),
                 };
 
                 let json = serde_json::to_string(&join_msg).unwrap();

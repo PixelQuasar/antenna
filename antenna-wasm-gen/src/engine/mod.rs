@@ -17,7 +17,6 @@ mod ws_setup_impl;
 #[derive(Clone)]
 pub struct EngineConfig {
     pub url: String,
-    pub auth_token: String,
     pub room_id: String,
     pub ice_servers: Option<Vec<IceServerConfig>>,
 }
@@ -44,6 +43,7 @@ struct EngineService {
     dc: Option<web_sys::RtcDataChannel>,
     message_queue: Vec<Vec<u8>>,
     js_callback: Option<js_sys::Function>,
+    track_callback: Option<js_sys::Function>,
     ice_servers: Option<Vec<IceServerConfig>>,
 }
 
@@ -55,7 +55,7 @@ pub struct AntennaEngine<T, E> {
 
 impl<T, E> AntennaEngine<T, E>
 where
-    T: Message + Clone + 'static,
+    T: Message + 'static,
     E: Message + 'static,
 {
     pub fn new(config: EngineConfig) -> Result<Self, JsValue> {
@@ -66,6 +66,7 @@ where
             dc: None,
             message_queue: Vec::new(),
             js_callback: None,
+            track_callback: None,
             ice_servers: config.ice_servers.clone(),
         }));
 
@@ -107,5 +108,20 @@ where
 
     pub fn set_event_handler(&self, callback: js_sys::Function) {
         self.service.borrow_mut().js_callback = Some(callback);
+    }
+
+    pub fn set_track_handler(&self, callback: js_sys::Function) {
+        self.service.borrow_mut().track_callback = Some(callback);
+    }
+
+    pub fn add_track(
+        &self,
+        track: web_sys::MediaStreamTrack,
+        stream: web_sys::MediaStream,
+    ) -> Result<(), JsValue> {
+        if let Some(pc) = &self.service.borrow().pc {
+            pc.add_track_0(&track, &stream);
+        }
+        Ok(())
     }
 }

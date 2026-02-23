@@ -6,7 +6,7 @@ use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{Level, info};
 
-use antenna::server::{RoomBehavior, RoomContext, RoomManager, SignalingService, ws_handler};
+use antenna::server::{AppState, RoomBehavior, RoomContext, RoomManager, SignalingService, ws_handler};
 use antenna::utils::{IceServerConfig, Packet, PeerId};
 use shared::{ChatClientMsg, ChatServerMsg};
 use std::env;
@@ -82,7 +82,7 @@ async fn main() {
         signaling_arc.clone(),
     );
 
-    let state = Arc::new(antenna::server::AppState {
+    let state = Arc::new(AppState {
         signaling: signaling.clone(),
         room_manager,
     });
@@ -98,7 +98,7 @@ async fn main() {
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
-    info!("Signaling server listening on http://{}", addr);
+    info!("Server listening on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();

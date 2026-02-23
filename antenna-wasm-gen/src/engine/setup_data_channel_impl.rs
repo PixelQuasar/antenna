@@ -13,8 +13,8 @@ use wasm_bindgen::prelude::*;
 
 impl<T, E> AntennaEngine<T, E>
 where
-    T: Message + Clone + 'static,
-    E: Message + 'static,
+    T: Message,
+    E: Message,
 {
     pub(super) fn setup_data_channel(
         inner: &Rc<RefCell<EngineService>>,

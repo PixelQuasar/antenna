@@ -9,8 +9,8 @@ use crate::logger::Logger;
 
 impl<T, E> AntennaEngine<T, E>
 where
-    T: Message + Clone + 'static,
-    E: Message + 'static,
+    T: Message,
+    E: Message,
 {
     pub(super) fn handle_signal(service: &Rc<RefCell<EngineService>>, text: String) {
         let msg: SignalMessage = match serde_json::from_str(&text) {
@@ -66,11 +66,7 @@ where
                 });
             }
 
-            SignalMessage::IceCandidate {
-                candidate,
-                sdp_mid,
-                sdp_m_line_index,
-            } => {
+            SignalMessage::IceCandidate { candidate } => {
                 if let Some(pc) = service.borrow().pc.clone() {
                     let (real_candidate, real_mid, real_idx) = if candidate.trim().starts_with('{')
                     {
@@ -80,11 +76,11 @@ where
                             }
                             Err(e) => {
                                 Logger::warn(&format!("Failed to parse ICE payload json: {}", e));
-                                (candidate, sdp_mid, sdp_m_line_index)
+                                (candidate, None, Some(0))
                             }
                         }
                     } else {
-                        (candidate, sdp_mid, sdp_m_line_index)
+                        (candidate, None, Some(0))
                     };
 
                     let init = web_sys::RtcIceCandidateInit::new(&real_candidate);

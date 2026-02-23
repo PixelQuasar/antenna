@@ -7,7 +7,6 @@ import type {ChatServerMsg} from "./generated/types/ChatServerMsg";
 
 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || `${protocol}//${window.location.host}/ws`;
-const AUTH_TOKEN = "test-token-123";
 
 function App() {
     const [isReady, setIsReady] = useState(false);
@@ -17,9 +16,11 @@ function App() {
     const [roomInput, setRoomInput] = useState("");
 
     const [messages, setMessages] = useState<ChatServerMsg[]>([]);
+    const [isInCall, setIsInCall] = useState(false);
 
     const chatRef = useRef<ChatWrapper | null>(null);
     const runOnce = useRef(false);
+    const audioElements = useRef<Map<string, HTMLAudioElement>>(new Map());
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -42,11 +43,29 @@ function App() {
 
                 console.log(`Connecting to ${url} in room ${roomId}...`);
 
-                const client = new ChatWrapper(url, AUTH_TOKEN, roomId);
+                const client = new ChatWrapper(url, roomId);
 
                 client.on_event((event: ChatServerMsg) => {
                     console.log("Received:", event);
                     setMessages((prev) => [...prev, event]);
+                });
+
+                client.on_track((event: RTCTrackEvent) => {
+                    console.log("Received track:", event);
+                    const stream = event.streams[0];
+                    if (stream) {
+                        const audio = new Audio();
+                        audio.srcObject = stream;
+                        audio.autoplay = true;
+                        audio.controls = false; // Hidden audio element
+                        // Store it to prevent garbage collection and potentially manage it later
+                        audioElements.current.set(stream.id, audio);
+                        
+                        // Cleanup when track ends
+                        event.track.onended = () => {
+                            audioElements.current.delete(stream.id);
+                        };
+                    }
                 });
 
                 chatRef.current = client;
@@ -121,6 +140,24 @@ function App() {
         if (e.key === 'Enter') handleSend();
     };
 
+    const handleJoinVoice = async () => {
+        if (!chatRef.current) return;
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            const track = stream.getAudioTracks()[0];
+            
+            if (track) {
+                chatRef.current.add_track(track, stream);
+                setIsInCall(true);
+                console.log("Added local audio track");
+            }
+        } catch (e) {
+            console.error("Error accessing microphone:", e);
+            alert("Could not access microphone. Please check permissions.");
+        }
+    };
+
     if (error) {
         return <div className="error">Error: {error}</div>;
     }
@@ -184,6 +221,28 @@ function App() {
                 >
                     Send
                 </button>
+            </div>
+
+            <div style={{marginTop: '20px', textAlign: 'center'}}>
+                {!isInCall ? (
+                    <button
+                        onClick={handleJoinVoice}
+                        style={{
+                            padding: '10px 20px',
+                            cursor: 'pointer',
+                            background: '#28a745',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '4px'
+                        }}
+                    >
+                        🎤 Join Voice Call
+                    </button>
+                ) : (
+                    <div style={{color: '#28a745', fontWeight: 'bold'}}>
+                        🎤 In Voice Call
+                    </div>
+                )}
             </div>
         </div>
     );
