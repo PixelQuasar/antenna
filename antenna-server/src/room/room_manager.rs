@@ -1,6 +1,6 @@
 use crate::BehaviorFactory;
 use crate::room::{Room, RoomCommand};
-use crate::signaling::SignalingOutput;
+use crate::signaling::SignalingSender;
 use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -10,18 +10,18 @@ use tracing::info;
 pub struct RoomManager {
     rooms: Arc<DashMap<String, mpsc::Sender<RoomCommand>>>,
     behavior_factory: BehaviorFactory,
-    signaling: Arc<dyn SignalingOutput + Send + Sync>,
+    signaling_sender: Arc<dyn SignalingSender + Send + Sync>,
 }
 
 impl RoomManager {
     pub fn new(
         behavior_factory: BehaviorFactory,
-        signaling: Arc<dyn SignalingOutput + Send + Sync>,
+        signaling_sender: Arc<dyn SignalingSender + Send + Sync>,
     ) -> Self {
         Self {
             rooms: Arc::new(DashMap::new()),
             behavior_factory,
-            signaling,
+            signaling_sender,
         }
     }
 
@@ -31,10 +31,10 @@ impl RoomManager {
         }
 
         info!("Creating new room: {}", room_id);
-        let (tx, rx) = mpsc::channel(100);
+        let (tx, rx) = mpsc::channel(256);
         let behavior = (self.behavior_factory)();
 
-        let room = Room::new(behavior, rx, self.signaling.clone());
+        let room = Room::new(behavior, rx, self.signaling_sender.clone());
         tokio::spawn(room.run());
 
         self.rooms.insert(room_id.to_string(), tx.clone());

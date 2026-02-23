@@ -1,4 +1,4 @@
-use crate::signaling::SignalingOutput;
+use crate::signaling::SignalingSender;
 use antenna_core::{IceServerConfig, PeerId, SignalMessage};
 use async_trait::async_trait;
 use axum::extract::ws::Message;
@@ -59,7 +59,7 @@ impl SignalingService {
 }
 
 #[async_trait]
-impl SignalingOutput for SignalingService {
+impl SignalingSender for SignalingService {
     async fn send_answer(&self, peer_id: PeerId, sdp: String) {
         let msg = SignalMessage::Answer { sdp };
         self.send_signal(peer_id, msg);

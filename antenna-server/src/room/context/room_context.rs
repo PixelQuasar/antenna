@@ -8,6 +8,7 @@ use webrtc::data_channel::RTCDataChannel;
 
 #[derive(Clone)]
 pub struct RoomContext {
+    /// Map of available peers data channels in room
     peers: Arc<DashMap<PeerId, Arc<RTCDataChannel>>>,
 }
 

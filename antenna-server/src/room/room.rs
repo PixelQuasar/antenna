@@ -1,7 +1,7 @@
 use crate::room::context::RoomContext;
 use crate::room::room_behavior::RoomBehavior;
 use crate::room::room_command::RoomCommand;
-use crate::signaling::SignalingOutput;
+use crate::signaling::SignalingSender;
 use crate::transport::{ConnectionWrapper, TransportConfig, TransportEvent};
 use antenna_core::PeerId;
 use dashmap::DashMap;
@@ -17,23 +17,48 @@ use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 
 pub type BehaviorFactory = Arc<dyn Fn() -> Box<dyn RoomBehavior> + Send + Sync>;
 
+/// Track handling sender to provide SFU
+struct SFUTrackSender {
+    tx: broadcast::Sender<Packet>,
+    codec: RTCRtpCodecCapability,
+    stream_id: String,
+}
+
+/// Central actor unit of antenna state. Handles specific group of peer connections and all logic around them.
 pub struct Room {
+    /// User-implemented room logic
     behavior: Box<dyn RoomBehavior>,
+
+    /// Map of active room data channels, passed to room context in room loop
     peers_data: Arc<DashMap<PeerId, Arc<RTCDataChannel>>>,
+
+    /// Map of active webrtc connections of room participants
     transports: HashMap<PeerId, ConnectionWrapper>,
+
+    /// Room control signaling command receiver: or can be said, room central input
     command_rx: mpsc::Receiver<RoomCommand>,
+
+    /// Signaling sending service instance
+    signaling_sender: Arc<dyn SignalingSender>,
+
+    /// Room <=> WebRTC transport channel receiver: used to process room network events
     transport_rx: mpsc::Receiver<TransportEvent>,
+
+    /// Room <=> WebRTC transport channel sender: used to send network events
     transport_tx: mpsc::Sender<TransportEvent>,
-    signaling: Arc<dyn SignalingOutput>,
+
+    /// Config to create WebRTC connections, contains settings like ICE servers
     transport_config: TransportConfig,
-    track_senders: HashMap<String, (broadcast::Sender<Packet>, RTCRtpCodecCapability, String)>,
+
+    /// map of track senders to provide SFU mechanism for media tracks
+    track_senders: HashMap<String, SFUTrackSender>,
 }
 
 impl Room {
     pub fn new(
         behavior: Box<dyn RoomBehavior>,
         command_rx: mpsc::Receiver<RoomCommand>,
-        signaling: Arc<dyn SignalingOutput>,
+        signaling_sender: Arc<dyn SignalingSender>,
     ) -> Self {
         let (transport_tx, transport_rx) = mpsc::channel(256);
 
@@ -44,7 +69,7 @@ impl Room {
             command_rx,
             transport_rx,
             transport_tx,
-            signaling,
+            signaling_sender,
             transport_config: TransportConfig::default(),
             track_senders: HashMap::new(),
         }
@@ -105,15 +130,15 @@ impl Room {
                             return;
                         }
 
-                        for (track_id, (tx, codec, stream_id)) in &self.track_senders {
+                        for (track_id, sfu_sender) in &self.track_senders {
                             let local_track = Arc::new(TrackLocalStaticRTP::new(
-                                codec.clone(),
+                                sfu_sender.codec.clone(),
                                 track_id.clone(),
-                                stream_id.clone(),
+                                sfu_sender.stream_id.clone(),
                             ));
 
                             if let Ok(_) = transport.add_track(local_track.clone()).await {
-                                let mut rx = tx.subscribe();
+                                let mut rx = sfu_sender.tx.subscribe();
                                 tokio::spawn(async move {
                                     while let Ok(packet) = rx.recv().await {
                                         let _ = local_track.write_rtp(&packet).await;
@@ -125,7 +150,7 @@ impl Room {
                         match transport.create_answer().await {
                             Ok(answer_sdp) => {
                                 self.transports.insert(peer_id.clone(), transport);
-                                self.signaling.send_answer(peer_id, answer_sdp).await;
+                                self.signaling_sender.send_answer(peer_id, answer_sdp).await;
                             }
                             Err(e) => error!("Failed to create answer for {:?}: {:?}", peer_id, e),
                         }
@@ -169,7 +194,9 @@ impl Room {
             }
 
             TransportEvent::CandidateGenerated(peer_id, candidate_json) => {
-                self.signaling.send_ice(peer_id, candidate_json).await;
+                self.signaling_sender
+                    .send_ice(peer_id, candidate_json)
+                    .await;
             }
 
             TransportEvent::Track(peer_id, track) => {
@@ -177,11 +204,11 @@ impl Room {
                 let (tx, _) = broadcast::channel(100);
                 self.track_senders.insert(
                     track.id().to_string(),
-                    (
-                        tx.clone(),
-                        track.codec().capability.clone(),
-                        track.stream_id().to_string(),
-                    ),
+                    SFUTrackSender {
+                        tx: tx.clone(),
+                        codec: track.codec().capability.clone(),
+                        stream_id: track.stream_id().to_string(),
+                    },
                 );
 
                 let track_clone = track.clone();
