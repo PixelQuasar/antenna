@@ -3,7 +3,6 @@ use quote::quote;
 use syn::{ImplItem, ItemImpl, Type, parse2};
 
 pub fn antenna_room_impl(_args: TokenStream, input: TokenStream) -> TokenStream {
-    // Just passes through the struct for now.
     input
 }
 
@@ -21,6 +20,7 @@ pub fn antenna_logic_impl(_args: TokenStream, input: TokenStream) -> TokenStream
     for item in item_impl.items.drain(..) {
         if let ImplItem::Fn(mut method) = item {
             let mut msg_type = None;
+            let mut is_system_msg = false;
             let mut new_attrs = Vec::new();
 
             for attr in method.attrs.drain(..) {
@@ -29,6 +29,13 @@ pub fn antenna_logic_impl(_args: TokenStream, input: TokenStream) -> TokenStream
                         attr.parse_args::<Type>()
                             .expect("Expected type in #[msg(...)]"),
                     );
+                } else if attr.path().is_ident("handle_user_message") {
+                    msg_type = Some(
+                        attr.parse_args::<Type>()
+                            .expect("Expected type in #[handle_user_message(...)]"),
+                    );
+                } else if attr.path().is_ident("handle_system_message") {
+                    is_system_msg = true;
                 } else {
                     new_attrs.push(attr);
                 }
@@ -39,6 +46,15 @@ pub fn antenna_logic_impl(_args: TokenStream, input: TokenStream) -> TokenStream
                 let method_name = &method.sig.ident;
                 handlers.push(quote! {
                     if let Ok(Packet::User(msg)) = postcard::from_bytes::<Packet<#msg_ty>>(&data) {
+                        self.#method_name(ctx, peer_id, msg).await;
+                        return;
+                    }
+                });
+                other_items.push(ImplItem::Fn(method));
+            } else if is_system_msg {
+                let method_name = &method.sig.ident;
+                handlers.push(quote! {
+                    if let Ok(Packet::System(msg)) = postcard::from_bytes::<Packet<()>>(&data) {
                         self.#method_name(ctx, peer_id, msg).await;
                         return;
                     }

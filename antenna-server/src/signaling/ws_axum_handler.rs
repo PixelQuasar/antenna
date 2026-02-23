@@ -14,7 +14,7 @@ pub struct AppState {
     pub room_manager: RoomManager,
 }
 
-pub async fn ws_handler(
+pub async fn ws_axum_handler(
     ws: WebSocketUpgrade,
     Path(peer_id): Path<String>,
     State(state): State<Arc<AppState>>,
