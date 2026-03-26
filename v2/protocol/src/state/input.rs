@@ -1,6 +1,7 @@
 use crate::state::transport::input::TransportInput;
 
 /// Common event that client FSM receives
+#[derive(Debug, PartialEq, Eq)]
 pub enum Input<T> {
     /// Transport event
     Transport(TransportInput),

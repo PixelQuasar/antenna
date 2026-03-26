@@ -2,7 +2,7 @@ pub mod input;
 pub mod output;
 
 /// Transport-level state of the client transport FSM.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TransportState {
     /// Client created but SDP negotiation hasn't started yet
     Idle,

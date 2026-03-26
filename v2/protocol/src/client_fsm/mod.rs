@@ -1,7 +1,8 @@
-pub mod app;
-pub mod transport;
+mod test;
+mod transport;
 
-use crate::client_fsm::transport::TransportFSM;
+pub use crate::client_fsm::transport::{Host, Joiner, TransportFSM};
+
 use crate::state::{Input, Output, TransportState};
 
 pub struct ClientFSM<T: TransportFSM> {
