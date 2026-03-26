@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Antenna v2 — P2P Chat</title>
+</head>
+<body>
+  <h3>Antenna v2 — Serverless P2P Chat</h3>
+  <p>Status: <strong id="status">Choose role</strong></p>
+
+  <div id="role-select">
+    <label>Nickname: <input id="nick" type="text" value="anon" /></label><br><br>
+    <button id="btn-master">Create Room</button>
+    <button id="btn-joiner">Join Room</button>
+  </div>
+
+  <div id="master-panel" hidden>
+    <button id="btn-gen-invite">Generate Invite</button><br>
+    <textarea id="invite-out" rows="3" cols="80" readonly placeholder="Invite appears here…"></textarea><br>
+    <button id="btn-copy-invite">Copy Invite</button>
+    <hr>
+    <textarea id="answer-in" rows="3" cols="80" placeholder="Paste joiner's answer…"></textarea><br>
+    <button id="btn-accept-answer">Accept Answer</button>
+  </div>
+
+  <div id="joiner-panel" hidden>
+    <textarea id="invite-in" rows="3" cols="80" placeholder="Paste master's invite…"></textarea><br>
+    <button id="btn-accept-invite">Accept Invite</button>
+    <hr>
+    <textarea id="answer-out" rows="3" cols="80" readonly placeholder="Answer appears here…"></textarea><br>
+    <button id="btn-copy-answer">Copy Answer</button>
+  </div>
+
+  <hr>
+  <div id="typing"></div>
+  <div id="log"></div>
+  <input id="input" type="text" placeholder="Message…" disabled />
+  <button id="send" disabled>Send</button>
+
+  <script type="module">
+    import init, { ChatWrapper } from './pkg/chat_app.js';
+
+    const $ = (s) => document.getElementById(s);
+    let app;
+
+    function renderMessage(msg) {
+      const log = $('log');
+      log.innerHTML += `<div><b>${msg.author}</b>: ${msg.text}</div>`;
+    }
+
+    async function main() {
+      await init();
+
+      $('btn-master').onclick = () => {
+        $('role-select').hidden = true;
+        $('master-panel').hidden = false;
+        app = new ChatWrapper();
+        wireBootstrap('master');
+        app.onMessage(renderMessage);
+        $('input').disabled = $('send').disabled = false;
+      };
+
+      $('btn-joiner').onclick = () => {
+        $('role-select').hidden = true;
+        $('joiner-panel').hidden = false;
+        app = ChatWrapper.join();
+        wireBootstrap('joiner');
+        app.onMessage(renderMessage);
+        $('input').disabled = $('send').disabled = false;
+      };
+
+      $('send').onclick = send;
+      $('input').onkeydown = (e) => {
+        if (e.key === 'Enter') { send(); return; }
+      };
+    }
+
+    function wireBootstrap(role) {
+      if (role === 'master') {
+        app.onInviteReady((j) => { $('invite-out').value = btoa(j); $('status').textContent = 'Invite ready — share it'; });
+        $('btn-gen-invite').onclick = () => app.generateInvite();
+        $('btn-copy-invite').onclick = () => navigator.clipboard.writeText($('invite-out').value);
+        $('btn-accept-answer').onclick = () => {
+          try { app.acceptAnswer(atob($('answer-in').value.trim())); }
+          catch(e) { alert(e); }
+        };
+      } else {
+        app.onAnswerReady((j) => { $('answer-out').value = btoa(j); $('status').textContent = 'Answer ready — send it back'; });
+        $('btn-accept-invite').onclick = () => {
+          try { app.acceptInvite(atob($('invite-in').value.trim())); }
+          catch(e) { alert(e); }
+        };
+        $('btn-copy-answer').onclick = () => navigator.clipboard.writeText($('answer-out').value);
+      }
+    }
+
+    function send() {
+      const t = $('input').value.trim(); if (!t) return;
+      app.sendMessage(t);
+      renderMessage({ author: "anon", text: t, timestamp: 0 });
+      $('input').value = '';
+    }
+
+    main().catch(console.error);
+  </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+use crate::{
+    client_fsm::transport::TransportFSM,
+    state::{TransportInput, TransportOutput, TransportState},
+};
+
+/// Host-side transport FSM
+pub struct Host {
+    state: TransportState,
+}
+
+impl TransportFSM for Host {
+    fn new() -> Self {
+        Self {
+            state: TransportState::Idle,
+        }
+    }
+
+    fn state(&self) -> &TransportState {
+        &self.state
+    }
+
+    fn process(&mut self, input: TransportInput) -> Option<TransportOutput> {
+        match (&self.state, input) {
+            (TransportState::Idle, TransportInput::InitNegotiation) => {
+                self.state = TransportState::WaitingForAnswer;
+                Some(TransportOutput::InitSDPOffer)
+            }
+            (TransportState::WaitingForAnswer, TransportInput::SDPAnswerReceived { sdp }) => {
+                self.state = TransportState::WaitingForDataChannel;
+                Some(TransportOutput::AcceptSDPAnswer { sdp })
+            }
+            (TransportState::WaitingForDataChannel, TransportInput::DataChannelOpen) => {
+                self.state = TransportState::Connected;
+                None
+            }
+            (_, TransportInput::Disconnected) => {
+                self.state = TransportState::Closed;
+                Some(TransportOutput::Close)
+            }
+            _ => None,
+        }
+    }
+}

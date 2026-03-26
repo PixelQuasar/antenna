@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = [
+    "antenna",
+    "protocol",
+    "native",
+    "web"
+]
+
+[workspace.package]
+rust-version = "1.89.0"
+
+[workspace.dependencies.antenna-protocol]
+path = "protocol"
+
+[workspace.dependencies.antenna-web]
+path = "web"
+
+[workspace.dependencies.antenna-native]
+path = "native"
+
+[workspace.dependencies.anyhow]
+version = "1.0.101"
+
+[workspace.dependencies.serde]
+version = "1.0.228"
+features = ["derive"]
+
+[workspace.dependencies.serde_json]
+version = "1.0.149"

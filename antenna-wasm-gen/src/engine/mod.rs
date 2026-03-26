@@ -85,7 +85,7 @@ where
             && let Packet::User(event) = packet
             && let Ok(js_val) = serde_wasm_bindgen::to_value(&event)
         {
-            let _ = cb.call1(&JsValue::NULL, &js_val);
+            let err = cb.call1(&JsValue::NULL, &js_val);
         }
     }
 
@@ -96,7 +96,7 @@ where
         if let Some(dc) = &service.dc
             && dc.ready_state() == web_sys::RtcDataChannelState::Open
         {
-            let _ = dc.send_with_u8_array(&bytes);
+            let err = dc.send_with_u8_array(&bytes);
             return;
         }
         service.message_queue.push(bytes);

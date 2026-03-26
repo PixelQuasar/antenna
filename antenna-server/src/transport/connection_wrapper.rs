@@ -97,10 +97,10 @@ impl ConnectionWrapper {
             })
         }));
 
-        let dc_tx = event_tx.clone();
+        let event_tx = event_tx.clone();
         let uid_dc = peer_id.clone();
         peer_connection.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
-            let tx = dc_tx.clone();
+            let tx = event_tx.clone();
             let uid = uid_dc.clone();
 
             Box::pin(async move {
@@ -133,14 +133,13 @@ impl ConnectionWrapper {
                     let tx = tx_msg.clone();
                     let uid = uid_msg.clone();
                     Box::pin(async move {
-                        let bytes = Bytes::from(msg.data.to_vec());
-                        let _ = tx.send(TransportEvent::Message(uid, bytes)).await;
+                        let _ = tx.send(TransportEvent::Message(uid, msg.data)).await;
                     })
                 }));
             })
         }));
 
-        let track_tx = event_tx.clone();
+        let event_tx = event_tx.clone();
         let uid_track = peer_id.clone();
         peer_connection.on_track(Box::new(
             move |track: Arc<TrackRemote>,

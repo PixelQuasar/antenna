@@ -117,6 +117,7 @@ features = [
     "RtcIceCandidate",
     "RtcIceCandidateInit",
     "RtcIceConnectionState",
+    "RtcIceGatheringState",
     "RtcIceServer",
     "RtcOfferOptions",
     "RtcPeerConnection",
@@ -146,3 +147,6 @@ version = "3.1.1"
 
 [workspace.dependencies.dialoguer]
 version = "0.12"
+
+[workspace.dependencies.console_error_panic_hook]
+version = "0.1.7"

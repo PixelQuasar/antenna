@@ -3,10 +3,17 @@ use shared::{ChatClientMsg, ChatServerMsg};
 use wasm_bindgen::prelude::*;
 use web_sys::js_sys;
 
-#[antenna_client(ChatClientMsg, ChatServerMsg)]
+
+struct ChatMsg {
+    author: u64;
+    text: String;
+    timestamp: u64;
+}
+
+#[antenna_client(ChatClientMsg)]
 #[wasm_bindgen]
 pub struct ChatWrapper {
-    engine: AntennaEngine<ChatClientMsg, ChatServerMsg>,
+    engine: AntennaEngine<ChatClientMsg>,
 }
 
 #[wasm_bindgen]

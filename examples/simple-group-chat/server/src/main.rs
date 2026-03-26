@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{Level, info};
 
-use antenna::server::{AntennaServer, RoomBehavior, RoomContext, signaling::ws_axum_handler, antenna_room, antenna_logic};
+use antenna::server::{AntennaServer, RoomContext, signaling::ws_axum_handler, antenna_room, antenna_logic};
 use antenna::utils::{Packet, PeerId};
 use shared::{ChatClientMsg, ChatServerMsg};
 use std::env;
