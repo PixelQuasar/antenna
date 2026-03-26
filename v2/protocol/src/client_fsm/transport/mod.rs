@@ -2,9 +2,9 @@ mod host;
 mod joiner;
 mod test;
 
-pub use crate::client_fsm::transport::host::Host;
-pub use crate::client_fsm::transport::joiner::Joiner;
 use crate::state::{TransportInput, TransportOutput, TransportState};
+pub use host::Host;
+pub use joiner::Joiner;
 
 /// Trait that is implemented by transport-side module of client FSM
 pub trait TransportFSM {

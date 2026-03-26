@@ -1,7 +1,17 @@
 [package]
-name = "web"
+name = "antenna-web"
 version = "0.1.0"
 edition = "2024"
 rust-version.workspace = true
 
 [dependencies]
+antenna-protocol.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
+serde-wasm-bindgen.workspace = true
+web-sys.workspace = true
+anyhow.workspace = true
+futures.workspace = true

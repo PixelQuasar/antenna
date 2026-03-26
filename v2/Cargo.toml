@@ -28,3 +28,38 @@ features = ["derive"]
 
 [workspace.dependencies.serde_json]
 version = "1.0.149"
+
+[workspace.dependencies.futures]
+version = "0.3.32"
+
+# WASM dependencies
+[workspace.dependencies.wasm-bindgen]
+version = "0.2"
+
+[workspace.dependencies.wasm-bindgen-futures]
+version = "0.4"
+
+[workspace.dependencies.js-sys]
+version = "0.3"
+
+[workspace.dependencies.serde-wasm-bindgen]
+version = "0.6"
+
+[workspace.dependencies.web-sys]
+version = "0.3"
+features = [
+    "RtcPeerConnection",
+    "RtcConfiguration",
+    "RtcDataChannel",
+    "RtcDataChannelInit",
+    "RtcDataChannelType",
+    "RtcSdpType",
+    "RtcSessionDescription",
+    "RtcSessionDescriptionInit",
+    "RtcIceServer",
+    "RtcIceConnectionState",
+    "RtcIceGatheringState",
+    "MessageEvent",
+    "ErrorEvent",
+    "console",
+]

@@ -10,7 +10,7 @@ pub enum TransportInput {
     /// Input event containing sdp answer from other peer (from joiner)
     SDPAnswerReceived { sdp: String },
 
-    ///  Input event signalizing about opening of data channel with peer
+    /// Input event signalizing about opening of data channel with peer
     DataChannelOpen,
 
     /// Input event signalizing about connection end
