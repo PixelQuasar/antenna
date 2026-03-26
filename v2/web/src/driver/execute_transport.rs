@@ -8,7 +8,7 @@ use crate::{
 };
 
 impl<T: TransportFSM + 'static> Driver<T> {
-    pub async fn execute<Msg>(&mut self, output: TransportOutput) -> Result<()> {
+    pub(crate) async fn execute_transport<Msg>(&mut self, output: TransportOutput) -> Result<()> {
         match output {
             TransportOutput::InitSDPOffer => self.execute_init_offer::<Msg>().await,
             TransportOutput::InitSDPAnswer { offer_sdp } => {
@@ -30,10 +30,9 @@ impl<T: TransportFSM + 'static> Driver<T> {
         pc_manager.set_local_description(&offer_sdp, true).await?;
         let full_sdp = pc_manager.wait_for_ice_gathering_complete().await?;
 
-        let _ = self
-            .on_offer_ready
-            .borrow()
-            .call1(&JsValue::NULL, &JsValue::from_str(&full_sdp));
+        if let Some(on_offer_ready) = self.on_offer_ready {
+            on_offer_ready(full_sdp)
+        }
 
         let _ = self
             .init_data_channel::<Msg>(pc_manager.peer_connection())
@@ -54,10 +53,9 @@ impl<T: TransportFSM + 'static> Driver<T> {
         pc_manager.set_local_description(&answer_sdp, false).await?;
 
         let full_sdp = pc_manager.wait_for_ice_gathering_complete().await?;
-        let _ = self
-            .on_answer_ready
-            .borrow()
-            .call1(&JsValue::NULL, &JsValue::from_str(&full_sdp));
+        if let Some(on_answer_ready) = self.on_answer_ready {
+            on_answer_ready(full_sdp);
+        }
 
         let _ = self
             .init_data_channel::<Msg>(pc_manager.peer_connection())
@@ -100,37 +98,42 @@ impl<T: TransportFSM + 'static> Driver<T> {
 
         {
             let fsm = self.fsm.clone();
-            let on_connected = self.on_connected.clone();
+            let on_connected = self.on_connected;
             dc_manager.setup_on_open(move || {
                 fsm.borrow_mut()
                     .process(Input::<Msg>::Transport(TransportInput::DataChannelOpen));
-                if fsm.borrow().is_connected() {
-                    let _ = on_connected.borrow().call0(&JsValue::NULL);
+                //if fsm.borrow().is_connected() {
+                if let Some(on_connected) = on_connected {
+                    on_connected();
                 }
+                //}
             });
         }
 
         {
             let fsm = self.fsm.clone();
-            let on_message = self.on_message.clone();
+            let on_message = self.on_message;
             dc_manager.setup_on_message(move |data| {
                 let output = fsm
                     .borrow_mut()
                     .process(Input::MessageReceived { peer_from: 0, data });
                 if let Some(Output::ReceiveMessage { data, .. }) = output {
-                    let array = js_sys::Uint8Array::from(&data[..]);
-                    let _ = on_message.borrow().call1(&JsValue::NULL, &array);
+                    if let Some(on_message) = on_message {
+                        on_message(data);
+                    }
                 }
             });
         }
 
         {
             let fsm = self.fsm.clone();
-            let on_disconnected = self.on_disconnected.clone();
+            let on_disconnected = self.on_disconnected;
             dc_manager.setup_on_close(move || {
                 fsm.borrow_mut()
                     .process(Input::<Msg>::Transport(TransportInput::Disconnected));
-                let _ = on_disconnected.borrow().call0(&JsValue::NULL);
+                if let Some(on_disconnected) = on_disconnected {
+                    on_disconnected();
+                }
             });
         }
 

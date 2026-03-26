@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        client_fsm::transport::{Host, Joiner, TransportFSM, host},
+        client_fsm::transport::{Host, Joiner, TransportFSM},
         state::{TransportInput, TransportOutput, TransportState},
     };
 
