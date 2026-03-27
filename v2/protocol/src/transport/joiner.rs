@@ -1,7 +1,4 @@
-use crate::{
-    client_fsm::transport::TransportFSM,
-    state::{TransportInput, TransportOutput, TransportState},
-};
+use crate::transport::{TransportFSM, TransportInput, TransportOutput, TransportState};
 
 /// Joiner-side transport FSM
 pub struct Joiner {

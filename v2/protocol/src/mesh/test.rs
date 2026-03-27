@@ -1,11 +1,12 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        client_fsm::{ClientFSM, Host},
-        state::{Input, Output, TransportInput},
+        mesh::MeshFSM,
+        state::{Input, Output},
+        transport::{Host, TransportInput},
     };
 
-    fn drive_host_to_connected(fsm: &mut ClientFSM<Host>) {
+    fn drive_host_to_connected(fsm: &mut MeshFSM<Host>) {
         fsm.process::<&str>(Input::Transport(TransportInput::InitNegotiation));
         fsm.process::<&str>(Input::Transport(TransportInput::SDPOfferCreated {
             sdp: "mock-offer".into(),
@@ -18,7 +19,7 @@ mod tests {
 
     #[test]
     fn message_delivery_only_when_connected() {
-        let mut fsm = ClientFSM::<Host>::new();
+        let mut fsm = MeshFSM::<Host>::new();
 
         let out = fsm.process(Input::MessageReceived {
             peer_from: 1,
@@ -43,7 +44,7 @@ mod tests {
 
     #[test]
     fn send_blocked_when_not_connected() {
-        let mut fsm = ClientFSM::<Host>::new();
+        let mut fsm = MeshFSM::<Host>::new();
 
         let out = fsm.process(Input::PeerSend {
             peer_to: 2,
@@ -74,7 +75,7 @@ mod tests {
 
     #[test]
     fn local_sdp_available_after_offer() {
-        let mut fsm = ClientFSM::<Host>::new();
+        let mut fsm = MeshFSM::<Host>::new();
 
         assert_eq!(fsm.local_sdp(), None);
 

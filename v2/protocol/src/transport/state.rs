@@ -1,6 +1,3 @@
-pub mod input;
-pub mod output;
-
 /// Transport-level state of the client transport FSM.
 #[derive(Debug, PartialEq, Eq)]
 pub enum TransportState {

@@ -1,15 +1,13 @@
 mod test;
-mod transport;
 
-pub use transport::{Host, Joiner, TransportFSM};
+use crate::state::{Input, Output};
+pub use crate::transport::{TransportFSM, TransportState};
 
-use crate::state::{Input, Output, TransportState};
-
-pub struct ClientFSM<T: TransportFSM> {
+pub struct MeshFSM<T: TransportFSM> {
     transport: T,
 }
 
-impl<T: TransportFSM> ClientFSM<T> {
+impl<T: TransportFSM> MeshFSM<T> {
     pub fn new() -> Self {
         Self {
             transport: T::new(),

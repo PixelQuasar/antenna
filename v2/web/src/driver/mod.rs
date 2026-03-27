@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use antenna_protocol::{ClientFSM, Input, Output, TransportFSM};
+use antenna_protocol::{Input, MeshFSM, Output, TransportFSM};
 use anyhow::{Context, Result};
 
 use crate::{
@@ -12,7 +12,7 @@ mod execute_transport;
 
 pub struct Driver<T: TransportFSM + 'static> {
     /// SansIO-based protocol finite state machine to handle main logic
-    fsm: Rc<RefCell<ClientFSM<T>>>,
+    fsm: Rc<RefCell<MeshFSM<T>>>,
 
     /// JS RTC peer connection wrapper
     pc_manager: Option<PeerConnectionManager>,
@@ -33,7 +33,7 @@ impl<T: TransportFSM + 'static> Driver<T> {
         callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
     ) -> Self {
         Self {
-            fsm: Rc::new(RefCell::new(ClientFSM::new())),
+            fsm: Rc::new(RefCell::new(MeshFSM::new())),
             pc_manager: None,
             dc_manager: Rc::new(RefCell::new(None)),
             ice_servers,

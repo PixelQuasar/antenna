@@ -1,5 +1,9 @@
-mod client_fsm;
+mod mesh;
 mod state;
+mod transport;
 
-pub use crate::client_fsm::{ClientFSM, Host, Joiner, TransportFSM};
-pub use crate::state::{Input, Output, TransportInput, TransportOutput, TransportState};
+pub use crate::mesh::MeshFSM;
+pub use crate::state::{Input, Output};
+pub use crate::transport::{
+    Host, Joiner, TransportFSM, TransportInput, TransportOutput, TransportState,
+};

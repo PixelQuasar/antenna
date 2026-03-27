@@ -3,7 +3,7 @@ use crate::{
     utils::{Dispatcher, Msg, RtcCallbacks, RtcEvent},
     webrtc::{DataChannelManager, PeerConnectionManager},
 };
-use antenna_protocol::{ClientFSM, Input, Output, TransportFSM, TransportInput, TransportOutput};
+use antenna_protocol::{Input, MeshFSM, Output, TransportFSM, TransportInput, TransportOutput};
 use anyhow::{Context, Result};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
@@ -109,7 +109,6 @@ impl<T: TransportFSM + 'static> Driver<T> {
             let dc_manager = DataChannelManager::from_existing(channel);
 
             Self::attach_data_channel_callbacks(fsm.clone(), callbacks.clone(), &dc_manager);
-
             *dc_storage.borrow_mut() = Some(dc_manager);
         }));
 
@@ -121,7 +120,7 @@ impl<T: TransportFSM + 'static> Driver<T> {
     /// Creates DataChannelManager object and binds its callbacks:
     /// on_open, on_message and on_close to current driver logic.
     fn attach_data_channel_callbacks(
-        fsm: Rc<RefCell<ClientFSM<T>>>,
+        fsm: Rc<RefCell<MeshFSM<T>>>,
         callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
         dc_manager: &DataChannelManager,
     ) {

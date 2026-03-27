@@ -1,4 +1,4 @@
-use crate::state::transport::input::TransportInput;
+use crate::transport::TransportInput;
 
 /// Common event that client FSM receives
 #[derive(Debug, PartialEq, Eq)]
