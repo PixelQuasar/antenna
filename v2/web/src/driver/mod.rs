@@ -18,12 +18,12 @@ pub struct Driver<T: TransportFSM + 'static> {
     pc_manager: Option<PeerConnectionManager>,
 
     /// JS RTC data channel wrapper
-    dc_manager: Option<DataChannelManager>,
+    dc_manager: Rc<RefCell<Option<DataChannelManager>>>,
 
     /// ICE servers configuration
     ice_servers: Vec<IceServerConfig>,
 
-    /// RTC callbacks set that are invoke in webRTC events
+    /// RTC callbacks set that are invoked on webRTC events
     callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
 }
 
@@ -35,7 +35,7 @@ impl<T: TransportFSM + 'static> Driver<T> {
         Self {
             fsm: Rc::new(RefCell::new(ClientFSM::new())),
             pc_manager: None,
-            dc_manager: None,
+            dc_manager: Rc::new(RefCell::new(None)),
             ice_servers,
             callbacks,
         }
@@ -54,7 +54,7 @@ impl<T: TransportFSM + 'static> Driver<T> {
         if let Some(output) = output {
             match output {
                 Output::Transport(transport_output) => {
-                    self.execute_transport::<Msg>(transport_output).await?;
+                    self.execute_transport(transport_output).await?;
                 }
                 Output::SendMessage { data, .. } | Output::Broadcast { data } => {
                     self.send(&data).await?;
@@ -68,11 +68,8 @@ impl<T: TransportFSM + 'static> Driver<T> {
     }
 
     pub async fn send(&self, data: &[u8]) -> Result<()> {
-        let dc_manager = self
-            .dc_manager
-            .as_ref()
-            .context("DataChannel not initialized")?;
-
+        let dc_manager = self.dc_manager.borrow();
+        let dc_manager = dc_manager.as_ref().context("DataChannel not initialized")?;
         dc_manager.send_data(data)?;
         Ok(())
     }

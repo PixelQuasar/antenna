@@ -1,15 +1,15 @@
-use antenna_protocol::{Input, Output, TransportFSM, TransportInput, TransportOutput};
-use anyhow::{Context, Result};
-use wasm_bindgen::prelude::*;
-
 use crate::{
     driver::Driver,
-    utils::{Dispatcher, RtcEvent},
+    utils::{Dispatcher, Msg, RtcCallbacks, RtcEvent},
     webrtc::{DataChannelManager, PeerConnectionManager},
 };
+use antenna_protocol::{ClientFSM, Input, Output, TransportFSM, TransportInput, TransportOutput};
+use anyhow::{Context, Result};
+use std::{cell::RefCell, rc::Rc};
+use wasm_bindgen::prelude::*;
 
 impl<T: TransportFSM + 'static> Driver<T> {
-    pub(crate) async fn execute_transport<Msg>(&mut self, output: TransportOutput) -> Result<()> {
+    pub(crate) async fn execute_transport(&mut self, output: TransportOutput) -> Result<()> {
         match output {
             TransportOutput::InitSDPOffer => self.execute_init_offer::<Msg>().await,
             TransportOutput::InitSDPAnswer { offer_sdp } => {
@@ -27,8 +27,7 @@ impl<T: TransportFSM + 'static> Driver<T> {
     async fn execute_init_offer<Msg>(&mut self) -> Result<()> {
         let pc_manager = PeerConnectionManager::from_ice_config(&self.ice_servers)?;
 
-        self.init_data_channel::<Msg>(pc_manager.peer_connection())
-            .await?;
+        self.setup_host_data_channel::<Msg>(pc_manager.peer_connection());
 
         let offer_sdp = pc_manager.create_offer().await?;
         pc_manager.set_local_description(&offer_sdp, true).await?;
@@ -52,8 +51,7 @@ impl<T: TransportFSM + 'static> Driver<T> {
     async fn execute_init_answer<Msg>(&mut self, offer_sdp: String) -> Result<()> {
         let pc_manager = PeerConnectionManager::from_ice_config(&self.ice_servers)?;
 
-        self.init_data_channel::<Msg>(pc_manager.peer_connection())
-            .await?;
+        self.setup_joiner_data_channel::<Msg>(pc_manager.peer_connection());
 
         pc_manager.set_remote_description(&offer_sdp, true).await?;
         let answer_sdp = pc_manager.create_answer().await?;
@@ -84,7 +82,8 @@ impl<T: TransportFSM + 'static> Driver<T> {
     }
 
     fn execute_close(&mut self) -> Result<()> {
-        if let Some(dc_manager) = &self.dc_manager {
+        let dc_manager = self.dc_manager.borrow();
+        if let Some(dc_manager) = dc_manager.as_ref() {
             dc_manager.close();
         }
         if let Some(pc_manager) = &self.pc_manager {
@@ -93,18 +92,41 @@ impl<T: TransportFSM + 'static> Driver<T> {
         Ok(())
     }
 
+    fn setup_host_data_channel<Msg>(&mut self, pc: &web_sys::RtcPeerConnection) {
+        let dc_manager = DataChannelManager::new(pc, "data"); // pc.createDataChannel()
+        Self::attach_data_channel_callbacks(self.fsm.clone(), self.callbacks.clone(), &dc_manager);
+        *self.dc_manager.borrow_mut() = Some(dc_manager);
+    }
+
+    fn setup_joiner_data_channel<Msg>(&self, pc: &web_sys::RtcPeerConnection) {
+        let fsm = self.fsm.clone();
+        let callbacks = self.callbacks.clone();
+        let dc_storage = self.dc_manager.clone(); // Rc<RefCell<Option<DataChannelManager>>>
+
+        let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |evt: JsValue| {
+            let event: web_sys::RtcDataChannelEvent = evt.unchecked_into();
+            let dc_manager = DataChannelManager::from_existing(event.channel());
+
+            Self::attach_data_channel_callbacks(fsm.clone(), callbacks.clone(), &dc_manager);
+
+            *dc_storage.borrow_mut() = Some(dc_manager);
+        }));
+
+        pc.set_ondatachannel(Some(cb.as_ref().unchecked_ref()));
+        cb.forget();
+    }
+
     /// Helper method to init data channel of current driver
     /// Creates DataChannelManager object and binds its callbacks:
     /// on_open, on_message and on_close to current driver logic.
-    async fn init_data_channel<Msg>(
-        &mut self,
-        peer_connection: &web_sys::RtcPeerConnection,
-    ) -> Result<()> {
-        let dc_manager = DataChannelManager::new(peer_connection, "data");
-
+    fn attach_data_channel_callbacks(
+        fsm: Rc<RefCell<ClientFSM<T>>>,
+        callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
+        dc_manager: &DataChannelManager,
+    ) {
         {
-            let fsm = self.fsm.clone();
-            let callbacks = self.callbacks.clone();
+            let fsm = fsm.clone();
+            let callbacks = callbacks.clone();
             dc_manager.setup_on_open(move || {
                 fsm.borrow_mut()
                     .process(Input::<Msg>::Transport(TransportInput::DataChannelOpen));
@@ -113,8 +135,8 @@ impl<T: TransportFSM + 'static> Driver<T> {
         }
 
         {
-            let fsm = self.fsm.clone();
-            let callbacks = self.callbacks.clone();
+            let fsm = fsm.clone();
+            let callbacks = callbacks.clone();
             dc_manager.setup_on_message(move |data| {
                 let output = fsm
                     .borrow_mut()
@@ -126,16 +148,13 @@ impl<T: TransportFSM + 'static> Driver<T> {
         }
 
         {
-            let fsm = self.fsm.clone();
-            let callbacks = self.callbacks.clone();
+            let fsm = fsm.clone();
+            let callbacks = callbacks.clone();
             dc_manager.setup_on_close(move || {
                 fsm.borrow_mut()
                     .process(Input::<Msg>::Transport(TransportInput::Disconnected));
                 callbacks.borrow().emit(RtcEvent::Disconnected);
             });
         }
-
-        self.dc_manager = Some(dc_manager);
-        Ok(())
     }
 }

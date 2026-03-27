@@ -16,6 +16,11 @@ impl DataChannelManager {
         Self { data_channel }
     }
 
+    pub fn from_existing(dc: web_sys::RtcDataChannel) -> Self {
+        dc.set_binary_type(web_sys::RtcDataChannelType::Arraybuffer);
+        Self { data_channel: dc }
+    }
+
     pub fn setup_on_open<F: Fn() + 'static>(&self, on_open: F) {
         let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_evt: JsValue| {
             on_open();
@@ -28,7 +33,6 @@ impl DataChannelManager {
     pub fn setup_on_message<F: Fn(Vec<u8>) + 'static>(&self, on_message: F) {
         let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |evt: JsValue| {
             let event: web_sys::MessageEvent = evt.unchecked_into();
-
             if let Ok(ab) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
                 let bytes = js_sys::Uint8Array::new(&ab).to_vec();
                 on_message(bytes);

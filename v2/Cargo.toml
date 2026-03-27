@@ -55,6 +55,7 @@ features = [
     "RtcPeerConnection",
     "RtcConfiguration",
     "RtcDataChannel",
+    "RtcDataChannelEvent",
     "RtcDataChannelInit",
     "RtcDataChannelType",
     "RtcSdpType",
