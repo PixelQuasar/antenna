@@ -24,6 +24,15 @@ impl PeerConnectionManager {
     }
 
     pub async fn wait_for_ice_gathering_complete(&self) -> Result<String> {
+        // Early return if already complete
+        if self.peer_connection.ice_gathering_state()
+            == web_sys::RtcIceGatheringState::Complete
+        {
+            if let Some(desc) = self.peer_connection.local_description() {
+                return Ok(desc.sdp());
+            }
+        }
+
         async_callback(|mut resolve| {
             let cb_peer_connection = self.peer_connection.clone();
             let cb = Closure::wrap(Box::new(move |_evt: JsValue| {
@@ -50,10 +59,11 @@ impl PeerConnectionManager {
             .await
             .map_err(|e| anyhow!("Failed to create offer: {:?}", e))?;
 
-        js_sys::Reflect::get(&offer, &"sdp".into())
+        let sdp = js_sys::Reflect::get(&offer, &"sdp".into())
             .ok()
             .and_then(|v| v.as_string())
-            .ok_or_else(|| anyhow!("Offer has no SDP"))
+            .ok_or_else(|| anyhow!("Offer has no SDP"))?;
+        Ok(sdp)
     }
 
     pub async fn create_answer(&self) -> Result<String> {
@@ -61,10 +71,11 @@ impl PeerConnectionManager {
             .await
             .map_err(|e| anyhow!("Failed to create answer: {:?}", e))?;
 
-        js_sys::Reflect::get(&answer, &"sdp".into())
+        let sdp = js_sys::Reflect::get(&answer, &"sdp".into())
             .ok()
             .and_then(|v| v.as_string())
-            .ok_or_else(|| anyhow!("Answer has no SDP"))
+            .ok_or_else(|| anyhow!("Answer has no SDP"))?;
+        Ok(sdp)
     }
 
     pub async fn set_local_description(&self, sdp: &str, is_offer: bool) -> Result<()> {

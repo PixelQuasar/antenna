@@ -1,4 +1,4 @@
-use antenna::web::Client;
+use antenna::web::{Client, IceServerConfig};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -12,7 +12,16 @@ impl ChatApp {
     pub fn new() -> Result<ChatApp, JsValue> {
         console_error_panic_hook::set_once();
 
-        let mut client = Client::new();
+        let ice_servers = vec![
+            IceServerConfig::new(vec!["stun:stun.l.google.com:19302".into()]),
+            IceServerConfig::with_credentials(
+                vec!["turn:demo-voicechat.quasarity.com:3478".into()],
+                "user".into(),
+                "password".into(),
+            ),
+        ];
+
+        let mut client = Client::with_ice_servers(ice_servers);
         client.set_on_message(Self::on_message);
 
         Ok(ChatApp { client })

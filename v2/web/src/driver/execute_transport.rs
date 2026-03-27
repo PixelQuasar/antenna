@@ -105,7 +105,8 @@ impl<T: TransportFSM + 'static> Driver<T> {
 
         let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |evt: JsValue| {
             let event: web_sys::RtcDataChannelEvent = evt.unchecked_into();
-            let dc_manager = DataChannelManager::from_existing(event.channel());
+            let channel = event.channel();
+            let dc_manager = DataChannelManager::from_existing(channel);
 
             Self::attach_data_channel_callbacks(fsm.clone(), callbacks.clone(), &dc_manager);
 

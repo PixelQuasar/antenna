@@ -12,7 +12,6 @@ use crate::{
 use antenna_protocol::{Host, Input, Joiner, TransportInput};
 use anyhow::Result;
 use connection::Connection;
-use wasm_bindgen::JsValue;
 
 pub struct Client {
     connection: Connection,
