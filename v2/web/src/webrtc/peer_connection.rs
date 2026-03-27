@@ -42,7 +42,7 @@ impl PeerConnectionManager {
             cb.forget();
         })
         .await
-        .ok_or_else(|| anyhow!("CB failed"))
+        .ok_or_else(|| anyhow!("ICE gathering callback failed"))
     }
 
     pub async fn create_offer(&self) -> Result<String> {

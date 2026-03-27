@@ -38,8 +38,6 @@ impl Client {
         };
         let mut driver = Driver::<Host>::new(ice_servers, self.callbacks.clone());
 
-        web_sys::console::log_1(&JsValue::from_str("Generating offer..."));
-
         driver
             .process_input(Input::Transport(TransportInput::InitNegotiation))
             .await?;

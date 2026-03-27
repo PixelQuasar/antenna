@@ -1,5 +1,6 @@
 use antenna_protocol::{Input, Output, TransportFSM, TransportInput, TransportOutput};
 use anyhow::{Context, Result};
+use wasm_bindgen::prelude::*;
 
 use crate::{
     driver::Driver,
@@ -25,8 +26,13 @@ impl<T: TransportFSM + 'static> Driver<T> {
     /// and then set up DataChannelManager with its callbacks, bounding them to driver callbacks
     async fn execute_init_offer<Msg>(&mut self) -> Result<()> {
         let pc_manager = PeerConnectionManager::from_ice_config(&self.ice_servers)?;
+
+        self.init_data_channel::<Msg>(pc_manager.peer_connection())
+            .await?;
+
         let offer_sdp = pc_manager.create_offer().await?;
         pc_manager.set_local_description(&offer_sdp, true).await?;
+
         let full_sdp = pc_manager.wait_for_ice_gathering_complete().await?;
 
         self.fsm
@@ -35,8 +41,6 @@ impl<T: TransportFSM + 'static> Driver<T> {
                 sdp: full_sdp,
             }));
 
-        self.init_data_channel::<Msg>(pc_manager.peer_connection())
-            .await?;
         self.pc_manager = Some(pc_manager);
         Ok(())
     }
@@ -47,6 +51,10 @@ impl<T: TransportFSM + 'static> Driver<T> {
     /// and then set up DataChannelManager with its callbacks, bounding them to driver callbacks
     async fn execute_init_answer<Msg>(&mut self, offer_sdp: String) -> Result<()> {
         let pc_manager = PeerConnectionManager::from_ice_config(&self.ice_servers)?;
+
+        self.init_data_channel::<Msg>(pc_manager.peer_connection())
+            .await?;
+
         pc_manager.set_remote_description(&offer_sdp, true).await?;
         let answer_sdp = pc_manager.create_answer().await?;
         pc_manager.set_local_description(&answer_sdp, false).await?;
@@ -58,8 +66,6 @@ impl<T: TransportFSM + 'static> Driver<T> {
                 sdp: full_sdp,
             }));
 
-        self.init_data_channel::<Msg>(pc_manager.peer_connection())
-            .await?;
         self.pc_manager = Some(pc_manager);
         Ok(())
     }
