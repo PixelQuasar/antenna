@@ -1,3 +1,6 @@
+mod client;
 mod driver;
 mod utils;
-pub mod webrtc;
+mod webrtc;
+
+pub use client::Client;

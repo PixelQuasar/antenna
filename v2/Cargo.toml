@@ -4,7 +4,8 @@ members = [
     "antenna",
     "protocol",
     "native",
-    "web"
+    "web", 
+    "example/*",
 ]
 
 [workspace.package]
@@ -15,6 +16,9 @@ path = "protocol"
 
 [workspace.dependencies.antenna-web]
 path = "web"
+
+[workspace.dependencies.antenna]
+path = "antenna"
 
 [workspace.dependencies.antenna-native]
 path = "native"

@@ -1,0 +1,19 @@
+[package]
+name = "minimal-chat-example"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+antenna = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+web-sys = { workspace = true }
+console_error_panic_hook = "0.1"
+
+[profile.release]
+opt-level = "z"
+lto = true

@@ -22,14 +22,21 @@ impl TransportFSM for Host {
     fn process(&mut self, input: TransportInput) -> Option<TransportOutput> {
         match (&self.state, input) {
             (TransportState::Idle, TransportInput::InitNegotiation) => {
-                self.state = TransportState::WaitingForAnswer;
+                self.state = TransportState::CreatingOffer;
                 Some(TransportOutput::InitSDPOffer)
             }
-            (TransportState::WaitingForAnswer, TransportInput::SDPAnswerReceived { sdp }) => {
-                self.state = TransportState::WaitingForDataChannel;
+            (TransportState::CreatingOffer, TransportInput::SDPOfferCreated { sdp }) => {
+                self.state = TransportState::WaitingForAnswer { local_sdp: sdp };
+                None
+            }
+            (
+                TransportState::WaitingForAnswer { .. },
+                TransportInput::SDPAnswerReceived { sdp },
+            ) => {
+                self.state = TransportState::WaitingForDataChannel { local_sdp: None };
                 Some(TransportOutput::AcceptSDPAnswer { sdp })
             }
-            (TransportState::WaitingForDataChannel, TransportInput::DataChannelOpen) => {
+            (TransportState::WaitingForDataChannel { .. }, TransportInput::DataChannelOpen) => {
                 self.state = TransportState::Connected;
                 None
             }

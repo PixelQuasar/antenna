@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antenna P2P Chat</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+        .container { max-width: 560px; width: 100%; }
+        h1 { margin-bottom: 24px; font-size: 22px; }
+        .section { margin-bottom: 20px; }
+        label {
+            display: block; font-size: 13px; color: #888;
+            margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        textarea, input {
+            width: 100%; padding: 10px; border: 1px solid #333; border-radius: 6px;
+            background: #16213e; color: #eee; font-family: monospace; font-size: 13px;
+        }
+        textarea { resize: vertical; min-height: 80px; }
+        textarea:focus, input:focus { outline: none; border-color: #e94560; }
+        button {
+            padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer;
+            font-size: 14px; font-weight: 500; color: #fff; background: #e94560;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.85; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-row { display: flex; gap: 8px; }
+        .status {
+            padding: 10px; background: #16213e; border-radius: 6px;
+            font-size: 14px; border-left: 3px solid #e94560;
+        }
+        .log {
+            background: #0f3460; border-radius: 6px; padding: 12px; height: 180px;
+            overflow-y: auto; font-family: monospace; font-size: 13px; white-space: pre-wrap;
+        }
+        .chat-input { display: flex; gap: 8px; margin-top: 8px; }
+        .chat-input input { flex: 1; }
+        .hidden { display: none !important; }
+        .mt { margin-top: 8px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🛰️ Antenna P2P Chat</h1>
+
+    <!-- Step 1: Role -->
+    <div class="section" id="step-role">
+        <label>Choose role</label>
+        <div class="btn-row">
+            <button onclick="chooseHost()">Host</button>
+            <button onclick="chooseJoiner()">Joiner</button>
+        </div>
+    </div>
+
+    <!-- Host flow -->
+    <div id="host-flow" class="hidden">
+        <div class="section">
+            <label>Your offer (copy → send to peer)</label>
+            <textarea id="offer-out" readonly></textarea>
+        </div>
+        <div class="section">
+            <label>Paste answer from peer</label>
+            <textarea id="answer-in"></textarea>
+            <button class="mt" onclick="hostAcceptAnswer()">Connect</button>
+        </div>
+    </div>
+
+    <!-- Joiner flow -->
+    <div id="joiner-flow" class="hidden">
+        <div class="section">
+            <label>Paste offer from host</label>
+            <textarea id="offer-in"></textarea>
+            <button class="mt" onclick="joinerAcceptOffer()">Accept &amp; generate answer</button>
+        </div>
+        <div class="section">
+            <label>Your answer (copy → send to host)</label>
+            <textarea id="answer-out" readonly></textarea>
+        </div>
+    </div>
+
+    <!-- Status -->
+    <div class="section">
+        <div class="status" id="status">Pick a role to start</div>
+    </div>
+
+    <!-- Chat -->
+    <div class="section">
+        <label>Messages</label>
+        <div class="log" id="log"></div>
+        <div class="chat-input">
+            <input id="msg" placeholder="Type a message…" disabled />
+            <button id="send-btn" onclick="sendMsg()" disabled>Send</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+import init, { ChatApp } from './pkg/minimal_chat_example.js';
+
+let app;
+await init();
+app = new ChatApp();
+
+// ---- Subscribe to events from Rust ----
+app.onConnected(() => {
+    status('🟢 Connected!');
+    log('--- connected ---');
+    $('msg').disabled = false;
+    $('send-btn').disabled = false;
+});
+
+app.onMessage(data => {
+    const text = new TextDecoder().decode(data);
+    log('Peer: ' + text);
+});
+
+app.onDisconnected(() => {
+    status('🔴 Disconnected');
+    log('--- disconnected ---');
+    $('msg').disabled = true;
+    $('send-btn').disabled = true;
+});
+
+// ---- Helpers ----
+const $ = id => document.getElementById(id);
+function status(t) { $('status').textContent = t; }
+function log(t) {
+    const el = $('log');
+    el.textContent += (el.textContent ? '\n' : '') + t;
+    el.scrollTop = el.scrollHeight;
+}
+
+// ---- Role selection ----
+window.chooseHost = async function() {
+    $('step-role').classList.add('hidden');
+    $('host-flow').classList.remove('hidden');
+    status('Generating offer…');
+    try {
+        const offer = await app.start_as_host();
+        $('offer-out').value = offer;
+        status('Offer ready — copy and send to peer');
+    } catch (e) { status('Error: ' + e); }
+};
+
+window.chooseJoiner = function() {
+    $('step-role').classList.add('hidden');
+    $('joiner-flow').classList.remove('hidden');
+    status('Paste the offer from host');
+};
+
+// ---- Host: accept answer ----
+window.hostAcceptAnswer = async function() {
+    const answer = $('answer-in').value.trim();
+    if (!answer) return alert('Paste the answer first');
+    status('Connecting…');
+    try {
+        await app.accept_answer(answer);
+    } catch (e) { status('Error: ' + e); }
+};
+
+// ---- Joiner: accept offer ----
+window.joinerAcceptOffer = async function() {
+    const offer = $('offer-in').value.trim();
+    if (!offer) return alert('Paste the offer first');
+    status('Generating answer…');
+    try {
+        const answer = await app.accept_offer(offer);
+        $('answer-out').value = answer;
+        status('Answer ready — copy and send to host');
+    } catch (e) { status('Error: ' + e); }
+};
+
+// ---- Send message ----
+window.sendMsg = async function() {
+    const input = $('msg');
+    const text = input.value.trim();
+    if (!text) return;
+    try {
+        await app.send(text);
+        log('You: ' + text);
+        input.value = '';
+    } catch (e) { status('Send error: ' + e); }
+};
+
+$('msg').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendMsg();
+});
+
+log('Ready');
+</script>
+</body>
+</html>

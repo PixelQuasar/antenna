@@ -1,18 +1,11 @@
 mod async_callback;
+mod callbacks;
 mod config;
 
 pub use async_callback::async_callback;
+pub use callbacks::{
+    ConnectedCallback, DisconnectedCallback, Dispatcher, MessageCallback, RtcCallbacks, RtcEvent,
+};
 pub use config::IceServerConfig;
 
-use anyhow::Error;
-use wasm_bindgen::prelude::*;
-
-pub fn to_js_error(err: Error) -> JsValue {
-    JsValue::from_str(&format!("{:#}", err))
-}
-
-pub fn noop() -> js_sys::Function {
-    Closure::<dyn Fn()>::new(|| {})
-        .into_js_value()
-        .unchecked_into()
-}
+pub type Msg = Vec<u8>; // TODO REMOVE LATER! hardcode

@@ -22,10 +22,16 @@ impl TransportFSM for Joiner {
     fn process(&mut self, input: TransportInput) -> Option<TransportOutput> {
         match (&self.state, input) {
             (TransportState::Idle, TransportInput::SDPOfferReceived { sdp }) => {
-                self.state = TransportState::WaitingForDataChannel;
+                self.state = TransportState::CreatingAnswer;
                 Some(TransportOutput::InitSDPAnswer { offer_sdp: sdp })
             }
-            (TransportState::WaitingForDataChannel, TransportInput::DataChannelOpen) => {
+            (TransportState::CreatingAnswer, TransportInput::SDPAnswerCreated { sdp }) => {
+                self.state = TransportState::WaitingForDataChannel {
+                    local_sdp: Some(sdp),
+                };
+                None
+            }
+            (TransportState::WaitingForDataChannel { .. }, TransportInput::DataChannelOpen) => {
                 self.state = TransportState::Connected;
                 None
             }

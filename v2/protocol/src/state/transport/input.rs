@@ -4,6 +4,12 @@ pub enum TransportInput {
     /// Input event signalizing that we started SDP negotiation
     InitNegotiation,
 
+    ///
+    SDPOfferCreated { sdp: String },
+
+    ///
+    SDPAnswerCreated { sdp: String },
+
     /// Input event containing sdp offer from other peer (from host)
     SDPOfferReceived { sdp: String },
 

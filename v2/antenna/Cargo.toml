@@ -5,3 +5,4 @@ edition = "2024"
 rust-version.workspace = true
 
 [dependencies]
+antenna-web.workspace = true

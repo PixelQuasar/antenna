@@ -24,6 +24,14 @@ impl<T: TransportFSM> ClientFSM<T> {
         *self.state() == TransportState::Connected
     }
 
+    pub fn local_sdp(&self) -> Option<String> {
+        match &self.state() {
+            TransportState::WaitingForAnswer { local_sdp } => Some(local_sdp.to_string()),
+            TransportState::WaitingForDataChannel { local_sdp } => local_sdp.clone(),
+            _ => None,
+        }
+    }
+
     pub fn process<Msg>(&mut self, input: Input<Msg>) -> Option<Output<Msg>> {
         match input {
             Input::Transport(event) => self.transport.process(event).map(Output::Transport),
