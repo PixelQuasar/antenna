@@ -1,8 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::transport::{
-        Host, Joiner, TransportFSM, TransportInput, TransportOutput, TransportState,
-    };
+    use crate::transport::{Host, Joiner, TransportInput, TransportOutput, TransportState};
 
     #[test]
     fn host_smoke() {

@@ -12,13 +12,25 @@ pub use output::TransportOutput;
 pub use state::TransportState;
 
 /// Trait that is implemented by transport-side module of client FSM
-pub trait TransportFSM {
-    /// Create new transport
-    fn new() -> Self;
+pub enum TransportFSM {
+    Host(Host),
+    Joiner(Joiner),
+}
 
-    /// Get current transport state
-    fn state(&self) -> &TransportState;
+impl TransportFSM {
+    /// Get current transport stat
+    pub fn state(&self) -> &TransportState {
+        match self {
+            Self::Host(host) => host.state(),
+            Self::Joiner(joiner) => joiner.state(),
+        }
+    }
 
     /// Process transport input and generate transport output
-    fn process(&mut self, input: TransportInput) -> Option<TransportOutput>;
+    pub fn process(&mut self, input: TransportInput) -> Option<TransportOutput> {
+        match self {
+            Self::Host(host) => host.process(input),
+            Self::Joiner(joiner) => joiner.process(input),
+        }
+    }
 }

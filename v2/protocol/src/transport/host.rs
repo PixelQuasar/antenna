@@ -1,22 +1,22 @@
-use crate::transport::{TransportFSM, TransportInput, TransportOutput, TransportState};
+use crate::transport::{TransportInput, TransportOutput, TransportState};
 
 /// Host-side transport FSM
 pub struct Host {
     state: TransportState,
 }
 
-impl TransportFSM for Host {
-    fn new() -> Self {
+impl Host {
+    pub fn new() -> Self {
         Self {
             state: TransportState::Idle,
         }
     }
 
-    fn state(&self) -> &TransportState {
+    pub fn state(&self) -> &TransportState {
         &self.state
     }
 
-    fn process(&mut self, input: TransportInput) -> Option<TransportOutput> {
+    pub fn process(&mut self, input: TransportInput) -> Option<TransportOutput> {
         match (&self.state, input) {
             (TransportState::Idle, TransportInput::InitNegotiation) => {
                 self.state = TransportState::CreatingOffer;

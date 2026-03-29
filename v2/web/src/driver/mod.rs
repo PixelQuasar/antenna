@@ -10,9 +10,9 @@ use crate::{
 
 mod execute_transport;
 
-pub struct Driver<T: TransportFSM + 'static> {
+pub struct Driver {
     /// SansIO-based protocol finite state machine to handle main logic
-    fsm: Rc<RefCell<MeshFSM<T>>>,
+    fsm: Rc<RefCell<MeshFSM>>,
 
     /// JS RTC peer connection wrapper
     pc_manager: Option<PeerConnectionManager>,
@@ -27,7 +27,7 @@ pub struct Driver<T: TransportFSM + 'static> {
     callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
 }
 
-impl<T: TransportFSM + 'static> Driver<T> {
+impl Driver {
     pub fn new(
         ice_servers: Vec<IceServerConfig>,
         callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,

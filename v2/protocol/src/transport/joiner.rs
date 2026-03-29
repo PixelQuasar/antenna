@@ -1,22 +1,22 @@
-use crate::transport::{TransportFSM, TransportInput, TransportOutput, TransportState};
+use crate::transport::{TransportInput, TransportOutput, TransportState};
 
 /// Joiner-side transport FSM
 pub struct Joiner {
     state: TransportState,
 }
 
-impl TransportFSM for Joiner {
-    fn new() -> Self {
+impl Joiner {
+    pub fn new() -> Self {
         Self {
             state: TransportState::Idle,
         }
     }
 
-    fn state(&self) -> &TransportState {
+    pub fn state(&self) -> &TransportState {
         &self.state
     }
 
-    fn process(&mut self, input: TransportInput) -> Option<TransportOutput> {
+    pub fn process(&mut self, input: TransportInput) -> Option<TransportOutput> {
         match (&self.state, input) {
             (TransportState::Idle, TransportInput::SDPOfferReceived { sdp }) => {
                 self.state = TransportState::CreatingAnswer;
