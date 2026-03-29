@@ -2,8 +2,8 @@ mod mesh;
 mod state;
 mod transport;
 
-pub use crate::mesh::MeshFSM;
-pub use crate::state::{Input, Output};
+pub use crate::mesh::{MeshFSM, PeerID};
+pub use crate::state::{Input, Output, RelayPayload};
 pub use crate::transport::{
-    Host, Joiner, TransportFSM, TransportInput, TransportOutput, TransportState,
+    Host, Joiner, TransportContext, TransportFSM, TransportInput, TransportOutput, TransportState,
 };

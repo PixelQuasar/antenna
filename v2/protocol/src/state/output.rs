@@ -1,7 +1,7 @@
 use crate::{mesh::PeerID, state::RelayPayload, transport::TransportOutput};
 
 /// Common event that client FSM sends
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Output<T> {
     /// Transport event
     Transport {

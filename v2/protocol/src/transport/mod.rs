@@ -11,6 +11,8 @@ pub use joiner::Joiner;
 pub use output::TransportOutput;
 pub use state::TransportState;
 
+use crate::mesh::PeerID;
+
 /// Trait that is implemented by transport-side module of client FSM
 pub enum TransportFSM {
     Host(Host),
@@ -33,4 +35,12 @@ impl TransportFSM {
             Self::Joiner(joiner) => joiner.process(input),
         }
     }
+}
+
+pub struct TransportContext {
+    /// Peer ID from through we are handshaking. If none, handshake is direct
+    pub via: Option<PeerID>,
+
+    /// Handshake state machine
+    pub transport: TransportFSM,
 }

@@ -1,16 +1,17 @@
 use crate::{TransportInput, mesh::PeerID};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RelayPayload {
-    /// Event notifying that new peer joined
-    PeerJoined { peer: PeerID },
-
     /// Event notifying that peer left the mesh
     PeerLeft { peer: PeerID },
 
+    ///
+    ConnectionRequest { peer: PeerID },
+
     /// Forwarded transport event for a peer you're not directly connected to yet
     TransportForward {
-        target: PeerID,
+        src: PeerID,
+        dst: PeerID,
         event: TransportInput,
     },
 }

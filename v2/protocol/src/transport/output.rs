@@ -1,5 +1,5 @@
 /// Commands emitted by the transport FSM for the driver to execute.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TransportOutput {
     /// Initiate creating, applying and sending SDP offer to other peer (to joiner)
     InitSDPOffer,
