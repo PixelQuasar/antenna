@@ -42,7 +42,7 @@ impl Client {
         &mut self,
         peer_id: PeerID,
     ) -> Result<(String, Vec<RelayMessage>)> {
-        let outputs = self
+        let (outputs, sdp) = self
             .driver
             .process_input(Input::Transport {
                 peer: peer_id.clone(),
@@ -50,7 +50,7 @@ impl Client {
             })
             .await?;
 
-        let sdp = extract_local_sdp(&peer_id, &self.driver)?;
+        let sdp = sdp.ok_or_else(|| anyhow::anyhow!("No local SDP produced for offer"))?;
         let relays = extract_relays(&outputs);
 
         Ok((sdp, relays))
@@ -61,7 +61,7 @@ impl Client {
         peer_id: PeerID,
         offer_sdp: String,
     ) -> Result<(String, Vec<RelayMessage>)> {
-        let outputs = self
+        let (outputs, sdp) = self
             .driver
             .process_input(Input::Transport {
                 peer: peer_id.clone(),
@@ -69,7 +69,7 @@ impl Client {
             })
             .await?;
 
-        let sdp = extract_local_sdp(&peer_id, &self.driver)?;
+        let sdp = sdp.ok_or_else(|| anyhow::anyhow!("No local SDP produced for answer"))?;
         let relays = extract_relays(&outputs);
 
         Ok((sdp, relays))
@@ -80,7 +80,7 @@ impl Client {
         peer_id: PeerID,
         answer_sdp: String,
     ) -> Result<Vec<RelayMessage>> {
-        let outputs = self
+        let (outputs, _) = self
             .driver
             .process_input(Input::Transport {
                 peer: peer_id,
@@ -96,7 +96,7 @@ impl Client {
         from: PeerID,
         payload: RelayPayload,
     ) -> Result<Vec<RelayMessage>> {
-        let outputs = self
+        let (outputs, _) = self
             .driver
             .process_input(Input::RelayReceived { from, payload })
             .await?;
@@ -181,6 +181,3 @@ fn extract_relays(outputs: &[Output<Msg>]) -> Vec<RelayMessage> {
         .collect()
 }
 
-fn extract_local_sdp(peer: &PeerID, driver: &Driver) -> Result<String> {
-    Err(anyhow::anyhow!("local_sdp extraction not implemented yet"))
-}

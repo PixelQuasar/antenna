@@ -4,17 +4,17 @@ pub enum TransportState {
     /// Client created but SDP negotiation hasn't started yet
     Idle,
 
-    ///
+    /// Host is creating SDP offer
     CreatingOffer,
 
     /// Host sent SDP offer to joiner and is waiting for other peer answer
-    WaitingForAnswer { local_sdp: String },
+    WaitingForAnswer,
 
-    ///
+    /// Joiner is creating SDP answer
     CreatingAnswer,
 
     /// Joiner sent SDP answer and waiting to establish data channel with host
-    WaitingForDataChannel { local_sdp: Option<String> },
+    WaitingForDataChannel,
 
     /// Client has established connection with other peer
     Connected,

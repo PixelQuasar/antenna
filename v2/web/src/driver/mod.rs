@@ -11,9 +11,6 @@ use crate::{
 mod execute_transport;
 
 pub struct Driver {
-    /// current peer id
-    id: PeerID,
-
     /// SansIO-based protocol finite state machine to handle main logic
     fsm: Rc<RefCell<MeshFSM>>,
 
@@ -37,7 +34,6 @@ impl Driver {
         callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
     ) -> Self {
         Self {
-            id: id.clone(),
             fsm: Rc::new(RefCell::new(MeshFSM::new(id))),
             pc_managers: HashMap::new(),
             dc_managers: HashMap::new(),
@@ -59,15 +55,22 @@ impl Driver {
             .collect()
     }
 
-    pub async fn process_input(&mut self, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
+    pub async fn process_input(
+        &mut self,
+        input: Input<Msg>,
+    ) -> Result<(Vec<Output<Msg>>, Option<String>)> {
+        let was_connected = !self.fsm.borrow().connected_peers().is_empty();
         let outputs = self.fsm.borrow_mut().process(input);
 
         let mut unhandled = Vec::new();
+        let mut sdp = None;
 
         for output in outputs {
             match output {
                 Output::Transport { peer, event } => {
-                    self.execute_transport(&peer, event).await?;
+                    if let Some(local_sdp) = self.execute_transport(&peer, event).await? {
+                        sdp = Some(local_sdp);
+                    }
                 }
                 Output::SendMessage { peer_to, data } => {
                     self.send(&peer_to, &data).await?;
@@ -93,7 +96,14 @@ impl Driver {
             }
         }
 
-        Ok(unhandled)
+        let is_connected = !self.fsm.borrow().connected_peers().is_empty();
+        if !was_connected && is_connected {
+            self.callbacks.borrow().emit(RtcEvent::Connected);
+        } else if was_connected && !is_connected {
+            self.callbacks.borrow().emit(RtcEvent::Disconnected);
+        }
+
+        Ok((unhandled, sdp))
     }
 
     async fn send(&self, peer: &PeerID, data: &[u8]) -> Result<()> {
@@ -111,9 +121,5 @@ impl Driver {
             }
         }
         Ok(())
-    }
-
-    async fn local_sdp(&self, peer: &PeerID) -> Option<String> {
-        self.fsm.borrow().local_sdp(peer)
     }
 }

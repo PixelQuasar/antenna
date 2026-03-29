@@ -15,18 +15,24 @@ impl Driver {
         &mut self,
         peer: &PeerID,
         output: TransportOutput,
-    ) -> Result<()> {
+    ) -> Result<Option<String>> {
         match output {
             TransportOutput::InitSDPOffer => self.execute_init_offer(peer).await,
             TransportOutput::InitSDPAnswer { offer_sdp } => {
                 self.execute_init_answer(peer, offer_sdp).await
             }
-            TransportOutput::AcceptSDPAnswer { sdp } => self.execute_accept_answer(peer, sdp).await,
-            TransportOutput::Close => self.execute_close(peer),
+            TransportOutput::AcceptSDPAnswer { sdp } => {
+                self.execute_accept_answer(peer, sdp).await?;
+                Ok(None)
+            }
+            TransportOutput::Close => {
+                self.execute_close(peer)?;
+                Ok(None)
+            }
         }
     }
 
-    async fn execute_init_offer(&mut self, peer: &PeerID) -> Result<()> {
+    async fn execute_init_offer(&mut self, peer: &PeerID) -> Result<Option<String>> {
         let pc_manager = PeerConnectionManager::from_ice_config(&self.ice_servers)?;
 
         self.setup_host_data_channel(peer, pc_manager.peer_connection());
@@ -38,14 +44,20 @@ impl Driver {
 
         self.fsm.borrow_mut().process(Input::<Msg>::Transport {
             peer: peer.clone(),
-            event: TransportInput::SDPOfferCreated { sdp: full_sdp },
+            event: TransportInput::SDPOfferCreated {
+                sdp: full_sdp.clone(),
+            },
         });
 
         self.pc_managers.insert(peer.clone(), pc_manager);
-        Ok(())
+        Ok(Some(full_sdp))
     }
 
-    async fn execute_init_answer(&mut self, peer: &PeerID, offer_sdp: String) -> Result<()> {
+    async fn execute_init_answer(
+        &mut self,
+        peer: &PeerID,
+        offer_sdp: String,
+    ) -> Result<Option<String>> {
         let pc_manager = PeerConnectionManager::from_ice_config(&self.ice_servers)?;
 
         self.setup_joiner_data_channel(peer, pc_manager.peer_connection());
@@ -57,11 +69,13 @@ impl Driver {
 
         self.fsm.borrow_mut().process(Input::<Msg>::Transport {
             peer: peer.clone(),
-            event: TransportInput::SDPAnswerCreated { sdp: full_sdp },
+            event: TransportInput::SDPAnswerCreated {
+                sdp: full_sdp.clone(),
+            },
         });
 
         self.pc_managers.insert(peer.clone(), pc_manager);
-        Ok(())
+        Ok(Some(full_sdp))
     }
 
     async fn execute_accept_answer(&mut self, peer: &PeerID, sdp: String) -> Result<()> {
@@ -136,10 +150,16 @@ impl Driver {
             let fsm = fsm.clone();
             let callbacks = callbacks.clone();
             dc_manager.setup_on_open(move || {
+                let was_empty = fsm.borrow().connected_peers().is_empty();
+
                 fsm.borrow_mut().process(Input::<Msg>::Transport {
                     peer: peer.clone(),
                     event: TransportInput::DataChannelOpen,
                 });
+
+                if was_empty {
+                    callbacks.borrow().emit(RtcEvent::Connected);
+                }
                 callbacks
                     .borrow()
                     .emit(RtcEvent::PeerConnected(peer.clone()));
@@ -175,9 +195,14 @@ impl Driver {
                     peer: peer.clone(),
                     event: TransportInput::Disconnected,
                 });
+
                 callbacks
                     .borrow()
                     .emit(RtcEvent::PeerDisconnected(peer.clone()));
+
+                if fsm.borrow().connected_peers().is_empty() {
+                    callbacks.borrow().emit(RtcEvent::Disconnected);
+                }
             });
         }
     }

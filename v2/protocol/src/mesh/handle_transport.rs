@@ -25,13 +25,19 @@ impl MeshFSM {
             );
         }
 
+        let input_sdp = match &event {
+            TransportInput::SDPOfferCreated { sdp } => Some(sdp.clone()),
+            TransportInput::SDPAnswerCreated { sdp } => Some(sdp.clone()),
+            _ => None,
+        };
+
         let handshake_ctx = self.handshakes.get_mut(&peer).unwrap();
         let transport_out = handshake_ctx.transport.process(event.clone());
         let state = handshake_ctx.transport.state();
         let relay_via = handshake_ctx.via.clone();
 
         match state {
-            TransportState::WaitingForAnswer { local_sdp } => {
+            TransportState::WaitingForAnswer => {
                 let mut out = vec![];
                 if let Some(event) = transport_out {
                     out.push(Output::Transport {
@@ -39,15 +45,13 @@ impl MeshFSM {
                         event,
                     });
                 }
-                if let Some(via) = relay_via {
+                if let (Some(via), Some(sdp)) = (relay_via, &input_sdp) {
                     out.push(Output::Relay {
                         via,
                         payload: RelayPayload::TransportForward {
                             src: self.id.clone(),
                             dst: peer,
-                            event: TransportInput::SDPOfferReceived {
-                                sdp: local_sdp.clone(),
-                            },
+                            event: TransportInput::SDPOfferReceived { sdp: sdp.clone() },
                         },
                     });
                 }
@@ -58,9 +62,9 @@ impl MeshFSM {
                 self.connected.insert(peer.clone());
                 let mut out = vec![Output::PeerConnected { peer: peer.clone() }];
                 for existing in &self.connected {
+                    // TODO solve problem: currently "full mesh connection" is not atomic, so new peer can start broadcasting before he is
+                    // connected to anyone in mesh, that would cause race condition.
                     if existing != &peer {
-                        // TODO solve problem: currently "full mesh connection" is not atomic, so new peer can start broadcasting before he is
-                        // connected to anyone in mesh, that would cause race condition.
                         out.push(Output::Relay {
                             via: peer.clone(),
                             payload: RelayPayload::ConnectionRequest {
@@ -74,7 +78,7 @@ impl MeshFSM {
                 }
                 out
             }
-            TransportState::WaitingForDataChannel { local_sdp } => {
+            TransportState::WaitingForDataChannel => {
                 let mut out = Vec::new();
                 if let Some(event) = transport_out {
                     out.push(Output::Transport {
@@ -82,7 +86,7 @@ impl MeshFSM {
                         event,
                     });
                 }
-                if let (Some(via), Some(sdp)) = (relay_via, local_sdp) {
+                if let (Some(via), Some(sdp)) = (relay_via, &input_sdp) {
                     out.push(Output::Relay {
                         via,
                         payload: RelayPayload::TransportForward {

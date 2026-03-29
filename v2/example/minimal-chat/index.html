@@ -54,11 +54,15 @@
 </head>
 <body>
 <div class="container">
-    <h1>🛰️ Antenna P2P Chat</h1>
+    <h1>Antenna P2P Chat</h1>
 
     <!-- Step 0: Peer IDs -->
     <div class="section" id="step-ids">
         <label>Peer IDs</label>
+         <div class="id-row">
+            <input id="turn" placeholder="TURN addr" />
+           
+        </div>
         <div class="id-row">
             <input id="my-id" placeholder="Your ID (e.g., alice)" />
             <input id="remote-id" placeholder="Remote ID (e.g., bob)" />
@@ -152,6 +156,8 @@ function decodeBase64(str) {
 window.setIds = function() {
     myId = $('my-id').value.trim();
     remoteId = $('remote-id').value.trim();
+    //turn = $('turn').value.trim() ?? 'turn:demo-voicechat.quasarity.com:3478';
+    let turn = 'turn:demo-voicechat.quasarity.com:3478';
     
     if (!myId || !remoteId) {
         return alert('Please enter both IDs');
@@ -162,22 +168,22 @@ window.setIds = function() {
     }
     
     try {
-        app = new ChatApp(myId);
+        app = new ChatApp(myId, turn);
         
         app.onConnected(() => {
-            status('🟢 Connected to ' + remoteId);
+            status('Connected to ' + remoteId);
             log('--- connected ---');
             $('msg').disabled = false;
             $('send-btn').disabled = false;
         });
         
-        app.onMessage(data => {
+        app.onMessage((peer, data) => {
             const text = new TextDecoder().decode(data);
-            log(remoteId + ': ' + text);
+            log(peer + ': ' + text);
         });
         
         app.onDisconnected(() => {
-            status('🔴 Disconnected');
+            status('Disconnected');
             log('--- disconnected ---');
             $('msg').disabled = true;
             $('send-btn').disabled = true;
@@ -200,6 +206,7 @@ window.chooseHost = async function() {
     try {
         const offer = await app.start_as_host(remoteId);
         // Кодируем в base64 для отображения
+        console.log(offer);
         const encoded = encodeBase64(offer);
         $('offer-out').value = encoded;
         status('Offer ready (base64) — copy and send to ' + remoteId);
@@ -235,6 +242,7 @@ window.joinerAcceptOffer = async function() {
         const offer = decodeBase64(offerBase64);
         const answer = await app.accept_offer(remoteId, offer);
         // Кодируем answer в base64
+        console.log(answer);
         const encoded = encodeBase64(answer);
         $('answer-out').value = encoded;
         status('Answer ready (base64) — copy and send to ' + remoteId);

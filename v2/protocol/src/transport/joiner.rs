@@ -22,13 +22,11 @@ impl Joiner {
                 self.state = TransportState::CreatingAnswer;
                 Some(TransportOutput::InitSDPAnswer { offer_sdp: sdp })
             }
-            (TransportState::CreatingAnswer, TransportInput::SDPAnswerCreated { sdp }) => {
-                self.state = TransportState::WaitingForDataChannel {
-                    local_sdp: Some(sdp),
-                };
+            (TransportState::CreatingAnswer, TransportInput::SDPAnswerCreated { .. }) => {
+                self.state = TransportState::WaitingForDataChannel;
                 None
             }
-            (TransportState::WaitingForDataChannel { .. }, TransportInput::DataChannelOpen) => {
+            (TransportState::WaitingForDataChannel, TransportInput::DataChannelOpen) => {
                 self.state = TransportState::Connected;
                 None
             }

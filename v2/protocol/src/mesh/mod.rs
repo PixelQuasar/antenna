@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 
 pub use peer_id::PeerID;
 
-use crate::{Input, Output, TransportContext, TransportState};
+use crate::{Input, Output, TransportContext};
 
 /// Core FSM of antenna client, handles SDP negotiation handshakes (but not signaling!!)
 /// and abstract mesh logic
@@ -100,13 +100,4 @@ impl MeshFSM {
         out
     }
 
-    pub fn local_sdp(&self, peer: &PeerID) -> Option<String> {
-        self.handshakes.get(peer).and_then(|handshake_info| {
-            match handshake_info.transport.state() {
-                TransportState::WaitingForAnswer { local_sdp } => Some(local_sdp.clone()),
-                TransportState::WaitingForDataChannel { local_sdp } => local_sdp.clone(),
-                _ => None,
-            }
-        })
-    }
 }

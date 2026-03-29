@@ -22,18 +22,15 @@ impl Host {
                 self.state = TransportState::CreatingOffer;
                 Some(TransportOutput::InitSDPOffer)
             }
-            (TransportState::CreatingOffer, TransportInput::SDPOfferCreated { sdp }) => {
-                self.state = TransportState::WaitingForAnswer { local_sdp: sdp };
+            (TransportState::CreatingOffer, TransportInput::SDPOfferCreated { .. }) => {
+                self.state = TransportState::WaitingForAnswer;
                 None
             }
-            (
-                TransportState::WaitingForAnswer { .. },
-                TransportInput::SDPAnswerReceived { sdp },
-            ) => {
-                self.state = TransportState::WaitingForDataChannel { local_sdp: None };
+            (TransportState::WaitingForAnswer, TransportInput::SDPAnswerReceived { sdp }) => {
+                self.state = TransportState::WaitingForDataChannel;
                 Some(TransportOutput::AcceptSDPAnswer { sdp })
             }
-            (TransportState::WaitingForDataChannel { .. }, TransportInput::DataChannelOpen) => {
+            (TransportState::WaitingForDataChannel, TransportInput::DataChannelOpen) => {
                 self.state = TransportState::Connected;
                 None
             }

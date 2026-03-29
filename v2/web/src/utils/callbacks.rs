@@ -5,13 +5,13 @@ use wasm_bindgen::prelude::*;
 pub enum RtcEvent<T> {
     Connected,
 
-    Message(impl Into<String>, T),
+    Message(PeerID, T),
 
     Disconnected,
 
-    PeerConnected(impl Into<String>),
+    PeerConnected(PeerID),
 
-    PeerDisconnected(impl Into<String>),
+    PeerDisconnected(PeerID),
 }
 
 pub trait Dispatcher<T> {

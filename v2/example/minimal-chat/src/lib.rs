@@ -12,19 +12,23 @@ pub struct ChatApp {
 #[wasm_bindgen]
 impl ChatApp {
     #[wasm_bindgen(constructor)]
-    pub fn new(id: String) -> Result<ChatApp, JsValue> {
+    pub fn new(id: String, turn_url: String) -> Result<ChatApp, JsValue> {
         console_error_panic_hook::set_once();
 
         dotenv().ok();
 
-        let ice_servers = vec![
-            IceServerConfig::new(vec!["stun:stun.l.google.com:19302".into()]),
-            IceServerConfig::with_credentials(
-                vec![env::var("TURN_URL").unwrap()],
-                env::var("TURN_USER").unwrap(),
-                env::var("TURN_PASSWORD").unwrap(),
-            ),
-        ];
+        let mut ice_servers = vec![IceServerConfig::new(vec![
+            "stun:stun.l.google.com:19302".into(),
+        ])];
+
+        let user = "user";
+        let pass = "password";
+
+        ice_servers.push(IceServerConfig::with_credentials(
+            vec![turn_url],
+            user.into(),
+            pass.into(),
+        ));
 
         let mut client = Client::with_ice_servers(PeerID::new(id), ice_servers);
         client.set_on_message(Self::on_message);
@@ -52,7 +56,7 @@ impl ChatApp {
         remote_id: String,
         offer_sdp: String,
     ) -> Result<String, JsValue> {
-        self.remote_peer_id = Some(remote_id.clone());
+        self.remote = Some(PeerID::new(remote_id.clone()));
 
         let (answer, _relays) = self
             .client
@@ -65,8 +69,8 @@ impl ChatApp {
 
     pub async fn accept_answer(&mut self, answer_sdp: String) -> Result<(), JsValue> {
         let remote_id = self
-            .remote_peer_id
-            .as_ref()
+            .remote
+            .clone()
             .ok_or_else(|| JsValue::from_str("Remote peer ID not set"))?;
 
         self.client
@@ -77,10 +81,10 @@ impl ChatApp {
         Ok(())
     }
 
-    pub async fn send(&self, text: String) -> Result<(), JsValue> {
+    pub async fn send(&mut self, text: String) -> Result<(), JsValue> {
         let remote_id = self
-            .remote_peer_id
-            .as_ref()
+            .remote
+            .clone()
             .ok_or_else(|| JsValue::from_str("Not connected"))?;
 
         self.client
@@ -90,8 +94,8 @@ impl ChatApp {
     }
 
     pub fn is_connected(&self) -> bool {
-        if let Some(remote_id) = &self.remote_peer_id {
-            self.client.is_connected_to(remote_id)
+        if let Some(remote_id) = &self.remote {
+            self.client.is_connected(remote_id.clone())
         } else {
             false
         }
