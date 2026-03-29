@@ -3,7 +3,7 @@ mod test {
     use std::collections::HashMap;
 
     use crate::{
-        Input, MeshFSM, Output, PeerID, TransportInput, TransportOutput,
+        MeshFSM, PeerID,
         mesh::test::{
             drive_bootstrap_handshake::drive_bootstrap_handshake,
             join_mesh::{assert_full_mesh_connectivity, join_mesh},

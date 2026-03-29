@@ -48,14 +48,26 @@
         .chat-input input { flex: 1; }
         .hidden { display: none !important; }
         .mt { margin-top: 8px; }
+        .id-row { display: flex; gap: 8px; }
+        .id-row input { flex: 1; }
     </style>
 </head>
 <body>
 <div class="container">
     <h1>🛰️ Antenna P2P Chat</h1>
 
+    <!-- Step 0: Peer IDs -->
+    <div class="section" id="step-ids">
+        <label>Peer IDs</label>
+        <div class="id-row">
+            <input id="my-id" placeholder="Your ID (e.g., alice)" />
+            <input id="remote-id" placeholder="Remote ID (e.g., bob)" />
+        </div>
+        <button class="mt" onclick="setIds()">Set IDs</button>
+    </div>
+
     <!-- Step 1: Role -->
-    <div class="section" id="step-role">
+    <div class="section hidden" id="step-role">
         <label>Choose role</label>
         <div class="btn-row">
             <button onclick="chooseHost()">Host</button>
@@ -91,7 +103,7 @@
 
     <!-- Status -->
     <div class="section">
-        <div class="status" id="status">Pick a role to start</div>
+        <div class="status" id="status">Enter peer IDs to start</div>
     </div>
 
     <!-- Chat -->
@@ -105,34 +117,16 @@
     </div>
 </div>
 
+<!-- v2/example/minimal-chat/index.html -->
+
 <script type="module">
 import init, { ChatApp } from './pkg/minimal_chat_example.js';
 
 let app;
+let myId, remoteId;
+
 await init();
-app = new ChatApp();
 
-// ---- Subscribe to events from Rust ----
-app.onConnected(() => {
-    status('🟢 Connected!');
-    log('--- connected ---');
-    $('msg').disabled = false;
-    $('send-btn').disabled = false;
-});
-
-app.onMessage(data => {
-    const text = new TextDecoder().decode(data);
-    log('Peer: ' + text);
-});
-
-app.onDisconnected(() => {
-    status('🔴 Disconnected');
-    log('--- disconnected ---');
-    $('msg').disabled = true;
-    $('send-btn').disabled = true;
-});
-
-// ---- Helpers ----
 const $ = id => document.getElementById(id);
 function status(t) { $('status').textContent = t; }
 function log(t) {
@@ -141,47 +135,115 @@ function log(t) {
     el.scrollTop = el.scrollHeight;
 }
 
-// ---- Role selection ----
+// ---- Base64 helpers ----
+function encodeBase64(str) {
+    return btoa(str);
+}
+
+function decodeBase64(str) {
+    try {
+        return atob(str);
+    } catch (e) {
+        throw new Error('Invalid base64 string');
+    }
+}
+
+// ---- Set IDs ----
+window.setIds = function() {
+    myId = $('my-id').value.trim();
+    remoteId = $('remote-id').value.trim();
+    
+    if (!myId || !remoteId) {
+        return alert('Please enter both IDs');
+    }
+    
+    if (myId === remoteId) {
+        return alert('IDs must be different');
+    }
+    
+    try {
+        app = new ChatApp(myId);
+        
+        app.onConnected(() => {
+            status('🟢 Connected to ' + remoteId);
+            log('--- connected ---');
+            $('msg').disabled = false;
+            $('send-btn').disabled = false;
+        });
+        
+        app.onMessage(data => {
+            const text = new TextDecoder().decode(data);
+            log(remoteId + ': ' + text);
+        });
+        
+        app.onDisconnected(() => {
+            status('🔴 Disconnected');
+            log('--- disconnected ---');
+            $('msg').disabled = true;
+            $('send-btn').disabled = true;
+        });
+        
+        $('step-ids').classList.add('hidden');
+        $('step-role').classList.remove('hidden');
+        status('IDs set: ' + myId + ' ↔ ' + remoteId);
+        log('My ID: ' + myId);
+        log('Remote ID: ' + remoteId);
+    } catch (e) {
+        status('Error: ' + e);
+    }
+};
+
 window.chooseHost = async function() {
     $('step-role').classList.add('hidden');
     $('host-flow').classList.remove('hidden');
     status('Generating offer…');
     try {
-        const offer = await app.start_as_host();
-        $('offer-out').value = offer;
-        status('Offer ready — copy and send to peer');
+        const offer = await app.start_as_host(remoteId);
+        // Кодируем в base64 для отображения
+        const encoded = encodeBase64(offer);
+        $('offer-out').value = encoded;
+        status('Offer ready (base64) — copy and send to ' + remoteId);
     } catch (e) { status('Error: ' + e); }
 };
 
 window.chooseJoiner = function() {
     $('step-role').classList.add('hidden');
     $('joiner-flow').classList.remove('hidden');
-    status('Paste the offer from host');
+    status('Paste the base64 offer from ' + remoteId);
 };
 
-// ---- Host: accept answer ----
 window.hostAcceptAnswer = async function() {
-    const answer = $('answer-in').value.trim();
-    if (!answer) return alert('Paste the answer first');
+    const answerBase64 = $('answer-in').value.trim();
+    if (!answerBase64) return alert('Paste the answer first');
     status('Connecting…');
     try {
+        // Декодируем из base64
+        const answer = decodeBase64(answerBase64);
         await app.accept_answer(answer);
-    } catch (e) { status('Error: ' + e); }
+    } catch (e) { 
+        status('Error: ' + e);
+        console.error(e);
+    }
 };
 
-// ---- Joiner: accept offer ----
 window.joinerAcceptOffer = async function() {
-    const offer = $('offer-in').value.trim();
-    if (!offer) return alert('Paste the offer first');
+    const offerBase64 = $('offer-in').value.trim();
+    if (!offerBase64) return alert('Paste the offer first');
     status('Generating answer…');
     try {
-        const answer = await app.accept_offer(offer);
-        $('answer-out').value = answer;
-        status('Answer ready — copy and send to host');
-    } catch (e) { status('Error: ' + e); }
+        // Декодируем из base64
+        const offer = decodeBase64(offerBase64);
+        const answer = await app.accept_offer(remoteId, offer);
+        // Кодируем answer в base64
+        const encoded = encodeBase64(answer);
+        $('answer-out').value = encoded;
+        status('Answer ready (base64) — copy and send to ' + remoteId);
+    } catch (e) { 
+        status('Error: ' + e);
+        console.error(e);
+    }
 };
 
-// ---- Send message ----
 window.sendMsg = async function() {
     const input = $('msg');
     const text = input.value.trim();
@@ -199,5 +261,6 @@ $('msg').addEventListener('keydown', e => {
 
 log('Ready');
 </script>
+
 </body>
 </html>

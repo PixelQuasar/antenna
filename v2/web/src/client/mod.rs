@@ -1,129 +1,186 @@
-mod connection;
+// v2/web/src/client/mod.rs
 
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     driver::Driver,
     utils::{
-        ConnectedCallback, DisconnectedCallback, IceServerConfig, MessageCallback, Msg,
+        IceServerConfig, MessageCallback, Msg, PeerConnectedCallback, PeerDisconnectedCallback,
         RtcCallbacks,
     },
 };
-use antenna_protocol::{Host, Input, Joiner, TransportInput};
+use antenna_protocol::{Input, Output, PeerID, RelayPayload, TransportInput};
 use anyhow::Result;
-use connection::Connection;
 
 pub struct Client {
-    connection: Connection,
+    my_id: PeerID,
+    driver: Driver,
     callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
 }
 
 impl Client {
-    pub fn new() -> Self {
-        Self::with_ice_servers(IceServerConfig::default_stun())
+    pub fn new(my_id: PeerID) -> Self {
+        Self::with_ice_servers(my_id, IceServerConfig::default_stun())
     }
 
-    pub fn with_ice_servers(ice_servers: Vec<IceServerConfig>) -> Self {
+    pub fn with_ice_servers(my_id: PeerID, ice_servers: Vec<IceServerConfig>) -> Self {
+        let callbacks = Rc::new(RefCell::new(RtcCallbacks::default()));
+        let driver = Driver::new(my_id.clone(), ice_servers, callbacks.clone());
+
         Self {
-            connection: Connection::Connecting { ice_servers },
-            callbacks: Rc::new(RefCell::new(RtcCallbacks::default())),
+            my_id,
+            driver,
+            callbacks,
         }
     }
 
-    pub async fn start(&mut self) -> Result<String> {
-        let ice_servers = match &self.connection {
-            Connection::Connecting { ice_servers } => ice_servers.clone(),
-            _ => return Err(anyhow::anyhow!("Connection already initialized")),
-        };
-        let mut driver = Driver::<Host>::new(ice_servers, self.callbacks.clone());
+    pub fn my_id(&self) -> &PeerID {
+        &self.my_id
+    }
 
-        driver
-            .process_input(Input::Transport(TransportInput::InitNegotiation))
+    pub async fn start_with_peer(
+        &mut self,
+        peer_id: PeerID,
+    ) -> Result<(String, Vec<RelayMessage>)> {
+        let outputs = self
+            .driver
+            .process_input(Input::Transport {
+                peer: peer_id.clone(),
+                event: TransportInput::InitNegotiation,
+            })
             .await?;
 
-        let sdp = driver
-            .local_sdp()
-            .ok_or_else(|| anyhow::anyhow!("No SDP generated"))?
-            .to_string();
+        let sdp = extract_local_sdp(&peer_id, &self.driver)?;
+        let relays = extract_relays(&outputs);
 
-        self.connection = Connection::Host(driver);
-        Ok(sdp)
+        Ok((sdp, relays))
     }
 
-    pub async fn receive_offer(&mut self, offer_sdp: String) -> Result<String> {
-        let ice_servers = match &self.connection {
-            Connection::Connecting { ice_servers } => ice_servers.clone(),
-            _ => return Err(anyhow::anyhow!("Connection already initialized")),
-        };
-        let mut driver = Driver::<Joiner>::new(ice_servers, self.callbacks.clone());
-        driver
-            .process_input(Input::Transport(TransportInput::SDPOfferReceived {
-                sdp: offer_sdp,
-            }))
+    pub async fn receive_offer(
+        &mut self,
+        peer_id: PeerID,
+        offer_sdp: String,
+    ) -> Result<(String, Vec<RelayMessage>)> {
+        let outputs = self
+            .driver
+            .process_input(Input::Transport {
+                peer: peer_id.clone(),
+                event: TransportInput::SDPOfferReceived { sdp: offer_sdp },
+            })
             .await?;
-        let sdp = driver
-            .local_sdp()
-            .ok_or_else(|| anyhow::anyhow!("No SDP generated"))?;
 
-        self.connection = Connection::Joiner(driver);
-        Ok(sdp)
+        let sdp = extract_local_sdp(&peer_id, &self.driver)?;
+        let relays = extract_relays(&outputs);
+
+        Ok((sdp, relays))
     }
 
-    pub async fn receive_answer(&mut self, answer_sdp: String) -> Result<()> {
-        match &mut self.connection {
-            Connection::Host(driver) => {
-                driver
-                    .process_input(Input::Transport(TransportInput::SDPAnswerReceived {
-                        sdp: answer_sdp,
-                    }))
-                    .await?;
-                Ok(())
-            }
-            _ => Err(anyhow::anyhow!(
-                "receive_answer can only be called on Host connection"
-            )),
-        }
+    pub async fn receive_answer(
+        &mut self,
+        peer_id: PeerID,
+        answer_sdp: String,
+    ) -> Result<Vec<RelayMessage>> {
+        let outputs = self
+            .driver
+            .process_input(Input::Transport {
+                peer: peer_id,
+                event: TransportInput::SDPAnswerReceived { sdp: answer_sdp },
+            })
+            .await?;
+
+        Ok(extract_relays(&outputs))
     }
 
-    pub async fn send(&self, data: &[u8]) -> Result<()> {
-        match &self.connection {
-            Connection::Host(driver) => driver.send(data).await,
-            Connection::Joiner(driver) => driver.send(data).await,
-            Connection::Connecting { .. } => {
-                Err(anyhow::anyhow!("Cannot send: connection not initialized"))
-            }
-        }
+    pub async fn process_relay(
+        &mut self,
+        from: PeerID,
+        payload: RelayPayload,
+    ) -> Result<Vec<RelayMessage>> {
+        let outputs = self
+            .driver
+            .process_input(Input::RelayReceived { from, payload })
+            .await?;
+
+        Ok(extract_relays(&outputs))
     }
 
-    pub fn is_connected(&self) -> bool {
-        match &self.connection {
-            Connection::Host(driver) => driver.is_connected(),
-            Connection::Joiner(driver) => driver.is_connected(),
-            Connection::Connecting { .. } => false,
-        }
+    pub async fn send_to(&mut self, peer_id: PeerID, data: Msg) -> Result<()> {
+        self.driver
+            .process_input(Input::PeerSend {
+                peer_to: peer_id,
+                data: data,
+            })
+            .await?;
+        Ok(())
     }
 
-    pub fn set_on_connected(&mut self, cb: ConnectedCallback) {
-        self.callbacks.borrow_mut().on_connected = Some(cb);
+    pub async fn broadcast(&mut self, data: Msg) -> Result<()> {
+        self.driver
+            .process_input(Input::PeerBroadcast {
+                data: data.to_vec(),
+            })
+            .await?;
+        Ok(())
+    }
+
+    pub fn is_connected(&self, peer_id: PeerID) -> bool {
+        self.driver.is_connected(&peer_id)
+    }
+
+    pub fn connected_peers(&self) -> Vec<String> {
+        self.driver
+            .connected_peers()
+            .into_iter()
+            .map(|p| p.to_string())
+            .collect()
     }
 
     pub fn set_on_message(&mut self, cb: MessageCallback<Msg>) {
         self.callbacks.borrow_mut().on_message = Some(cb);
     }
 
-    pub fn set_on_disconnected(&mut self, cb: DisconnectedCallback) {
-        self.callbacks.borrow_mut().on_disconnected = Some(cb);
+    pub fn set_on_peer_connected(&mut self, cb: PeerConnectedCallback) {
+        self.callbacks.borrow_mut().on_peer_connected = Some(cb);
     }
 
-    pub fn set_js_on_connected(&mut self, cb: js_sys::Function) {
-        self.callbacks.borrow_mut().js_on_connected = Some(cb)
+    pub fn set_on_peer_disconnected(&mut self, cb: PeerDisconnectedCallback) {
+        self.callbacks.borrow_mut().on_peer_disconnected = Some(cb);
     }
 
     pub fn set_js_on_message(&mut self, cb: js_sys::Function) {
         self.callbacks.borrow_mut().js_on_message = Some(cb)
     }
 
+    pub fn set_js_on_connected(&mut self, cb: js_sys::Function) {
+        self.callbacks.borrow_mut().js_on_connected = Some(cb)
+    }
+
     pub fn set_js_on_disconnected(&mut self, cb: js_sys::Function) {
         self.callbacks.borrow_mut().js_on_disconnected = Some(cb)
     }
+}
+
+// Helper types
+#[derive(Clone, Debug)]
+pub struct RelayMessage {
+    pub via: PeerID,
+    pub payload: RelayPayload,
+}
+
+// Helper functions
+fn extract_relays(outputs: &[Output<Msg>]) -> Vec<RelayMessage> {
+    outputs
+        .iter()
+        .filter_map(|o| match o {
+            Output::Relay { via, payload } => Some(RelayMessage {
+                via: via.clone(),
+                payload: payload.clone(),
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
+fn extract_local_sdp(peer: &PeerID, driver: &Driver) -> Result<String> {
+    Err(anyhow::anyhow!("local_sdp extraction not implemented yet"))
 }

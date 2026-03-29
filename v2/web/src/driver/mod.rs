@@ -1,6 +1,6 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use antenna_protocol::{Input, MeshFSM, Output, TransportFSM};
+use antenna_protocol::{Input, MeshFSM, Output, PeerID};
 use anyhow::{Context, Result};
 
 use crate::{
@@ -11,14 +11,17 @@ use crate::{
 mod execute_transport;
 
 pub struct Driver {
+    /// current peer id
+    id: PeerID,
+
     /// SansIO-based protocol finite state machine to handle main logic
     fsm: Rc<RefCell<MeshFSM>>,
 
-    /// JS RTC peer connection wrapper
-    pc_manager: Option<PeerConnectionManager>,
+    /// Map of JS RTC peer connection wrappers
+    pc_managers: HashMap<PeerID, PeerConnectionManager>,
 
-    /// JS RTC data channel wrapper
-    dc_manager: Rc<RefCell<Option<DataChannelManager>>>,
+    /// Map of JS RTC data channel wrappers
+    dc_managers: HashMap<PeerID, Rc<RefCell<Option<DataChannelManager>>>>,
 
     /// ICE servers configuration
     ice_servers: Vec<IceServerConfig>,
@@ -29,48 +32,88 @@ pub struct Driver {
 
 impl Driver {
     pub fn new(
+        id: PeerID,
         ice_servers: Vec<IceServerConfig>,
         callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
     ) -> Self {
         Self {
-            fsm: Rc::new(RefCell::new(MeshFSM::new())),
-            pc_manager: None,
-            dc_manager: Rc::new(RefCell::new(None)),
+            id: id.clone(),
+            fsm: Rc::new(RefCell::new(MeshFSM::new(id))),
+            pc_managers: HashMap::new(),
+            dc_managers: HashMap::new(),
             ice_servers,
             callbacks,
         }
     }
 
-    pub fn is_connected(&self) -> bool {
-        self.fsm.borrow().is_connected()
+    pub fn is_connected(&self, peer: &PeerID) -> bool {
+        self.fsm.borrow().is_connected(peer)
     }
 
-    pub fn local_sdp(&self) -> Option<String> {
-        self.fsm.borrow().local_sdp()
+    pub fn connected_peers(&self) -> Vec<PeerID> {
+        self.fsm
+            .borrow()
+            .connected_peers()
+            .iter()
+            .cloned()
+            .collect()
     }
 
-    pub async fn process_input(&mut self, input: Input<Msg>) -> Result<()> {
-        let output = self.fsm.borrow_mut().process(input);
-        if let Some(output) = output {
+    pub async fn process_input(&mut self, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
+        let outputs = self.fsm.borrow_mut().process(input);
+
+        let mut unhandled = Vec::new();
+
+        for output in outputs {
             match output {
-                Output::Transport(transport_output) => {
-                    self.execute_transport(transport_output).await?;
+                Output::Transport { peer, event } => {
+                    self.execute_transport(&peer, event).await?;
                 }
-                Output::SendMessage { data, .. } | Output::Broadcast { data } => {
-                    self.send(&data).await?;
+                Output::SendMessage { peer_to, data } => {
+                    self.send(&peer_to, &data).await?;
                 }
-                Output::ReceiveMessage { data, .. } => {
-                    self.callbacks.borrow().emit(RtcEvent::Message(data))
+                Output::Broadcast { data } => {
+                    self.broadcast(&data).await?;
                 }
+                Output::ReceiveMessage {
+                    peer_from, data, ..
+                } => self
+                    .callbacks
+                    .borrow()
+                    .emit(RtcEvent::Message(peer_from, data)),
+                Output::PeerConnected { peer } => {
+                    self.callbacks.borrow().emit(RtcEvent::PeerConnected(peer));
+                }
+                Output::PeerDisconnected { peer } => {
+                    self.callbacks
+                        .borrow()
+                        .emit(RtcEvent::PeerDisconnected(peer));
+                }
+                other => unhandled.push(other),
+            }
+        }
+
+        Ok(unhandled)
+    }
+
+    async fn send(&self, peer: &PeerID, data: &[u8]) -> Result<()> {
+        let dc = self.dc_managers.get(peer).context("Peer not found")?;
+        if let Some(dc) = dc.borrow().as_ref() {
+            dc.send_data(data)?;
+        }
+        Ok(())
+    }
+
+    async fn broadcast(&self, data: &[u8]) -> Result<()> {
+        for (_, dc) in &self.dc_managers {
+            if let Some(dc) = dc.borrow().as_ref() {
+                dc.send_data(data)?;
             }
         }
         Ok(())
     }
 
-    pub async fn send(&self, data: &[u8]) -> Result<()> {
-        let dc_manager = self.dc_manager.borrow();
-        let dc_manager = dc_manager.as_ref().context("DataChannel not initialized")?;
-        dc_manager.send_data(data)?;
-        Ok(())
+    async fn local_sdp(&self, peer: &PeerID) -> Option<String> {
+        self.fsm.borrow().local_sdp(peer)
     }
 }

@@ -1,12 +1,17 @@
 use crate::utils::Msg;
+use antenna_protocol::PeerID;
 use wasm_bindgen::prelude::*;
 
 pub enum RtcEvent<T> {
     Connected,
 
-    Message(T),
+    Message(impl Into<String>, T),
 
     Disconnected,
+
+    PeerConnected(impl Into<String>),
+
+    PeerDisconnected(impl Into<String>),
 }
 
 pub trait Dispatcher<T> {
@@ -15,9 +20,13 @@ pub trait Dispatcher<T> {
 
 pub type ConnectedCallback = fn();
 
-pub type MessageCallback<T> = fn(T);
+pub type MessageCallback<T> = fn(PeerID, T);
 
 pub type DisconnectedCallback = fn();
+
+pub type PeerConnectedCallback = fn(PeerID);
+
+pub type PeerDisconnectedCallback = fn(PeerID);
 
 #[derive(Clone, Default)]
 pub struct RtcCallbacks<Msg> {
@@ -32,6 +41,14 @@ pub struct RtcCallbacks<Msg> {
     pub on_disconnected: Option<DisconnectedCallback>,
 
     pub js_on_disconnected: Option<js_sys::Function>,
+
+    pub on_peer_connected: Option<PeerConnectedCallback>,
+
+    pub js_on_peer_connected: Option<js_sys::Function>,
+
+    pub on_peer_disconnected: Option<PeerDisconnectedCallback>,
+
+    pub js_on_peer_disconnected: Option<js_sys::Function>,
 }
 
 impl Dispatcher<Msg> for RtcCallbacks<Msg> {
@@ -45,13 +62,14 @@ impl Dispatcher<Msg> for RtcCallbacks<Msg> {
                     on_connected.call0(&JsValue::NULL).ok();
                 }
             }
-            RtcEvent::Message(data) => {
+            RtcEvent::Message(peer, data) => {
                 if let Some(on_message) = self.on_message {
-                    on_message(data.clone());
+                    on_message(peer.clone(), data.clone());
                 }
                 if let Some(on_message) = &self.js_on_message {
-                    let arr = js_sys::Uint8Array::from(&data[..]); // FAKE SERIALIZATION
-                    on_message.call1(&JsValue::NULL, &arr).ok();
+                    let arr = js_sys::Uint8Array::from(&data[..]); // FAKE SERIALIZATION! TODO REWRITE
+                    let peer = js_sys::JsString::from(peer.as_str());
+                    on_message.call2(&JsValue::NULL, &peer, &arr).ok();
                 }
             }
             RtcEvent::Disconnected => {
@@ -60,6 +78,24 @@ impl Dispatcher<Msg> for RtcCallbacks<Msg> {
                 }
                 if let Some(on_disconnected) = &self.js_on_disconnected {
                     on_disconnected.call0(&JsValue::NULL).ok();
+                }
+            }
+            RtcEvent::PeerConnected(peer) => {
+                if let Some(on_peer_connected) = self.on_peer_connected {
+                    on_peer_connected(peer.clone());
+                }
+                if let Some(on_peer_connected) = &self.js_on_peer_connected {
+                    let peer = js_sys::JsString::from(peer.as_str());
+                    on_peer_connected.call1(&JsValue::NULL, &peer).ok();
+                }
+            }
+            RtcEvent::PeerDisconnected(peer) => {
+                if let Some(on_peer_disconnected) = self.on_peer_disconnected {
+                    on_peer_disconnected(peer.clone());
+                }
+                if let Some(on_peer_disconnected) = &self.js_on_peer_disconnected {
+                    let peer = js_sys::JsString::from(peer.as_str());
+                    on_peer_disconnected.call1(&JsValue::NULL, &peer).ok();
                 }
             }
         }

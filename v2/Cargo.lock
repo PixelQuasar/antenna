@@ -6,6 +6,7 @@ version = 4
 name = "antenna"
 version = "0.1.0"
 dependencies = [
+ "antenna-protocol",
  "antenna-web",
 ]
 
@@ -56,6 +57,12 @@ dependencies = [
  "cfg-if",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "dotenvy"
+version = "0.15.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "futures"
@@ -173,6 +180,7 @@ version = "0.1.0"
 dependencies = [
  "antenna",
  "console_error_panic_hook",
+ "dotenvy",
  "js-sys",
  "wasm-bindgen",
  "wasm-bindgen-futures",

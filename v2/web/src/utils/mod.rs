@@ -4,7 +4,8 @@ mod config;
 
 pub use async_callback::async_callback;
 pub use callbacks::{
-    ConnectedCallback, DisconnectedCallback, Dispatcher, MessageCallback, RtcCallbacks, RtcEvent,
+    ConnectedCallback, DisconnectedCallback, Dispatcher, MessageCallback, PeerConnectedCallback,
+    PeerDisconnectedCallback, RtcCallbacks, RtcEvent,
 };
 pub use config::IceServerConfig;
 
