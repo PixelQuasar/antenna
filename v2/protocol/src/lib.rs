@@ -1,5 +1,6 @@
 mod mesh;
 mod state;
+mod test;
 mod transport;
 
 pub use crate::mesh::{MeshFSM, PeerID};

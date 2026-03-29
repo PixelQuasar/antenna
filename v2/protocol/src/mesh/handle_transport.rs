@@ -59,6 +59,8 @@ impl MeshFSM {
                 let mut out = vec![Output::PeerConnected { peer: peer.clone() }];
                 for existing in &self.connected {
                     if existing != &peer {
+                        // TODO solve problem: currently "full mesh connection" is not atomic, so new peer can start broadcasting before he is
+                        // connected to anyone in mesh, that would cause race condition.
                         out.push(Output::Relay {
                             via: peer.clone(),
                             payload: RelayPayload::ConnectionRequest {

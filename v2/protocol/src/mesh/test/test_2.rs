@@ -1,10 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{
-        mesh::{MeshFSM, PeerID},
-        state::{Input, Output},
-        transport::{TransportInput, TransportOutput},
-    };
+    use crate::{Input, MeshFSM, Output, PeerID, TransportInput, TransportOutput};
 
     fn alice() -> PeerID {
         PeerID::new("alice")
