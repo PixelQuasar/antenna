@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use antenna_protocol::{Input, MeshFSM, Output, PeerID};
+use antenna_protocol::{Input, MeshNodeFSM, Output, PeerID};
 use anyhow::{Context, Result};
 
 use crate::{
@@ -12,7 +12,7 @@ mod execute_handshake;
 
 pub struct Driver {
     /// SansIO-based protocol finite state machine to handle main logic
-    fsm: Rc<RefCell<MeshFSM>>,
+    fsm: Rc<RefCell<MeshNodeFSM>>,
 
     /// Map of JS RTC peer connection wrappers
     pc_managers: HashMap<PeerID, PeerConnectionManager>,
@@ -34,7 +34,7 @@ impl Driver {
         callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
     ) -> Self {
         Self {
-            fsm: Rc::new(RefCell::new(MeshFSM::new(id))),
+            fsm: Rc::new(RefCell::new(MeshNodeFSM::new(id))),
             pc_managers: HashMap::new(),
             dc_managers: HashMap::new(),
             ice_servers,

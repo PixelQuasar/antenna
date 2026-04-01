@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{Input, MeshFSM, Output, PeerID, HandshakeInput, HandshakeOutput};
+    use crate::{Input, MeshNodeFSM, Output, PeerID, HandshakeInput, HandshakeOutput};
 
     fn alice() -> PeerID {
         PeerID::new("alice")
@@ -9,7 +9,7 @@ mod test {
         PeerID::new("bob")
     }
 
-    fn drive_host_handshake(fsm: &mut MeshFSM, remote: &PeerID) {
+    fn drive_host_handshake(fsm: &mut MeshNodeFSM, remote: &PeerID) {
         let out = fsm.process::<&str>(Input::Handshake {
             from: remote.clone(),
             event: HandshakeInput::InitNegotiation,
@@ -56,14 +56,14 @@ mod test {
 
     #[test]
     fn host_handshake_full_flow() {
-        let mut mesh = MeshFSM::new(alice());
+        let mut mesh = MeshNodeFSM::new(alice());
         drive_host_handshake(&mut mesh, &bob());
         assert!(mesh.is_connected(&bob()));
     }
 
     #[test]
     fn joiner_handshake_full_flow() {
-        let mut mesh = MeshFSM::new(bob());
+        let mut mesh = MeshNodeFSM::new(bob());
 
         let out = mesh.process::<&str>(Input::Handshake {
             from: alice(),
@@ -100,7 +100,7 @@ mod test {
 
     #[test]
     fn message_only_when_connected() {
-        let mut mesh = MeshFSM::new(alice());
+        let mut mesh = MeshNodeFSM::new(alice());
 
         let out = mesh.process(Input::MessageReceived {
             peer_from: bob(),
@@ -123,7 +123,7 @@ mod test {
 
     #[test]
     fn send_only_when_connected() {
-        let mut mesh = MeshFSM::new(alice());
+        let mut mesh = MeshNodeFSM::new(alice());
 
         let out = mesh.process(Input::PeerSend {
             peer_to: bob(),
@@ -143,7 +143,7 @@ mod test {
 
     #[test]
     fn peer_leaving_cleans_up() {
-        let mut mesh = MeshFSM::new(alice());
+        let mut mesh = MeshNodeFSM::new(alice());
         drive_host_handshake(&mut mesh, &bob());
         assert!(mesh.is_connected(&bob()));
 
@@ -157,7 +157,7 @@ mod test {
 
     #[test]
     fn unknown_handshake_event_ignored() {
-        let mut mesh = MeshFSM::new(alice());
+        let mut mesh = MeshNodeFSM::new(alice());
 
         let out = mesh.process::<&str>(Input::Handshake {
             from: bob(),

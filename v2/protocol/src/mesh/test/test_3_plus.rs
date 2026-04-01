@@ -3,7 +3,7 @@ mod test {
     use std::collections::HashMap;
 
     use crate::{
-        MeshFSM, PeerID,
+        MeshNodeFSM, PeerID,
         mesh::test::{
             drive_bootstrap_handshake::drive_bootstrap_handshake,
             join_mesh::{assert_full_mesh_connectivity, join_mesh},
@@ -18,8 +18,8 @@ mod test {
 
         let mut peers = HashMap::new();
 
-        let mut alice = MeshFSM::new(alice_id.clone());
-        let mut bob = MeshFSM::new(bob_id.clone());
+        let mut alice = MeshNodeFSM::new(alice_id.clone());
+        let mut bob = MeshNodeFSM::new(bob_id.clone());
 
         drive_bootstrap_handshake::<()>(&mut alice, &mut bob);
 
@@ -29,7 +29,7 @@ mod test {
         assert_full_mesh_connectivity(&peers);
         assert_eq!(peers.len(), 2);
 
-        let charlie = MeshFSM::new(charlie_id.clone());
+        let charlie = MeshNodeFSM::new(charlie_id.clone());
         peers.insert(charlie_id.clone(), charlie);
 
         join_mesh(&charlie_id, &bob_id, &mut peers);
@@ -52,8 +52,8 @@ mod test {
 
         let mut peers = HashMap::new();
 
-        let mut alice = MeshFSM::new(alice_id.clone());
-        let mut bob = MeshFSM::new(bob_id.clone());
+        let mut alice = MeshNodeFSM::new(alice_id.clone());
+        let mut bob = MeshNodeFSM::new(bob_id.clone());
 
         drive_bootstrap_handshake::<()>(&mut alice, &mut bob);
 
@@ -63,7 +63,7 @@ mod test {
         assert_full_mesh_connectivity(&peers);
         assert_eq!(peers.len(), 2);
 
-        let charlie = MeshFSM::new(charlie_id.clone());
+        let charlie = MeshNodeFSM::new(charlie_id.clone());
         peers.insert(charlie_id.clone(), charlie);
 
         join_mesh(&charlie_id, &bob_id, &mut peers);
@@ -71,7 +71,7 @@ mod test {
         assert_full_mesh_connectivity(&peers);
         assert_eq!(peers.len(), 3);
 
-        let dave = MeshFSM::new(dave_id.clone());
+        let dave = MeshNodeFSM::new(dave_id.clone());
         peers.insert(dave_id.clone(), dave);
 
         join_mesh(&dave_id, &alice_id, &mut peers);
@@ -79,7 +79,7 @@ mod test {
         assert_full_mesh_connectivity(&peers);
         assert_eq!(peers.len(), 4);
 
-        let eve = MeshFSM::new(eve_id.clone());
+        let eve = MeshNodeFSM::new(eve_id.clone());
         peers.insert(eve_id.clone(), eve);
 
         join_mesh(&eve_id, &charlie_id, &mut peers);

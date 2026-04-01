@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    Input, MeshFSM, Output, PeerID, RelayPayload, HandshakeInput, HandshakeOutput,
+    Input, MeshNodeFSM, Output, PeerID, RelayPayload, HandshakeInput, HandshakeOutput,
     assert_handshake_event, extract_relay,
     mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake, relay_through,
 };
@@ -9,7 +9,7 @@ use crate::{
 pub(crate) fn join_mesh(
     new_peer_id: &PeerID,
     bootstrap_id: &PeerID,
-    all_peers: &mut HashMap<PeerID, MeshFSM>,
+    all_peers: &mut HashMap<PeerID, MeshNodeFSM>,
 ) {
     let connection_requests = {
         let mut bootstrap = all_peers.remove(bootstrap_id).unwrap();
@@ -38,7 +38,7 @@ pub(crate) fn join_mesh(
 }
 
 fn establish_relay_connection(
-    peers: &mut HashMap<PeerID, MeshFSM>,
+    peers: &mut HashMap<PeerID, MeshNodeFSM>,
     initiator_id: &PeerID,
     target_id: &PeerID,
     relay_id: &PeerID,
@@ -132,7 +132,7 @@ fn establish_relay_connection(
         });
 }
 
-pub(crate) fn assert_full_mesh_connectivity(peers: &HashMap<PeerID, MeshFSM>) {
+pub(crate) fn assert_full_mesh_connectivity(peers: &HashMap<PeerID, MeshNodeFSM>) {
     let n = peers.len();
 
     for (peer_id, mesh) in peers {

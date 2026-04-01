@@ -1,9 +1,9 @@
-use crate::{Input, MeshFSM, Output, HandshakeInput, HandshakeOutput};
+use crate::{HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, Output};
 
 /// Drives a complete bootstrap handshake between two peers.
 pub(crate) fn drive_bootstrap_handshake<Msg>(
-    host: &mut MeshFSM,
-    joiner: &mut MeshFSM,
+    host: &mut MeshNodeFSM,
+    joiner: &mut MeshNodeFSM,
 ) -> Vec<Output<Msg>> {
     let host_id = host.id().clone();
     let joiner_id = joiner.id().clone();

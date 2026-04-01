@@ -5,7 +5,7 @@ use crate::{
     utils::{Dispatcher, Msg, RtcCallbacks, RtcEvent},
     webrtc::{DataChannelManager, PeerConnectionManager},
 };
-use antenna_protocol::{HandshakeInput, HandshakeOutput, Input, MeshFSM, Output, PeerID};
+use antenna_protocol::{HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, Output, PeerID};
 use anyhow::{Context, Result};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
@@ -141,7 +141,7 @@ impl Driver {
 
     fn attach_data_channel_callbacks(
         peer: PeerID,
-        fsm: Rc<RefCell<MeshFSM>>,
+        fsm: Rc<RefCell<MeshNodeFSM>>,
         callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
         dc_manager: &DataChannelManager,
     ) {

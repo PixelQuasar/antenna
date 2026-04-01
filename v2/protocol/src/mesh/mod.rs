@@ -11,7 +11,7 @@ use crate::{HandshakeContext, Input, Output};
 
 /// Core FSM of antenna client, handles SDP negotiation handshakes (but not signaling!!)
 /// and abstract mesh logic
-pub struct MeshFSM {
+pub struct MeshNodeFSM {
     // ID of current peer, must be globally unique
     id: PeerID,
 
@@ -22,7 +22,7 @@ pub struct MeshFSM {
     connected: HashSet<PeerID>,
 }
 
-impl MeshFSM {
+impl MeshNodeFSM {
     pub fn new(id: PeerID) -> Self {
         Self {
             id,

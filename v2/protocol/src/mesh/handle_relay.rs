@@ -1,9 +1,9 @@
 use crate::{
-    HandshakeContext, HandshakeFSM, HandshakeInput, Host, Joiner, MeshFSM, Output, PeerID,
+    HandshakeContext, HandshakeFSM, HandshakeInput, Host, Joiner, MeshNodeFSM, Output, PeerID,
     RelayPayload,
 };
 
-impl MeshFSM {
+impl MeshNodeFSM {
     pub(crate) fn handle_relay<Msg>(
         &mut self,
         from: PeerID,
