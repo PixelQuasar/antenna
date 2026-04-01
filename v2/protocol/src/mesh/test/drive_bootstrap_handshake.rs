@@ -1,4 +1,4 @@
-use crate::{Input, MeshFSM, Output, TransportInput, TransportOutput};
+use crate::{Input, MeshFSM, Output, HandshakeInput, HandshakeOutput};
 
 /// Drives a complete bootstrap handshake between two peers.
 pub(crate) fn drive_bootstrap_handshake<Msg>(
@@ -8,68 +8,68 @@ pub(crate) fn drive_bootstrap_handshake<Msg>(
     let host_id = host.id().clone();
     let joiner_id = joiner.id().clone();
 
-    let out = host.process::<Msg>(Input::Transport {
-        peer: joiner_id.clone(),
-        event: TransportInput::InitNegotiation,
+    let out = host.process::<Msg>(Input::Handshake {
+        from: joiner_id.clone(),
+        event: HandshakeInput::InitNegotiation,
     });
     assert!(out.iter().any(|o| matches!(
         o,
-        Output::Transport {
-            event: TransportOutput::InitSDPOffer,
+        Output::Handshake {
+            event: HandshakeOutput::InitSDPOffer,
             ..
         }
     )));
 
-    host.process::<Msg>(Input::Transport {
-        peer: joiner_id.clone(),
-        event: TransportInput::SDPOfferCreated {
+    host.process::<Msg>(Input::Handshake {
+        from: joiner_id.clone(),
+        event: HandshakeInput::SDPOfferCreated {
             sdp: "offer".into(),
         },
     });
 
-    let out = joiner.process::<Msg>(Input::Transport {
-        peer: host_id.clone(),
-        event: TransportInput::SDPOfferReceived {
+    let out = joiner.process::<Msg>(Input::Handshake {
+        from: host_id.clone(),
+        event: HandshakeInput::SDPOfferReceived {
             sdp: "offer".into(),
         },
     });
     assert!(out.iter().any(|o| matches!(
         o,
-        Output::Transport {
-            event: TransportOutput::InitSDPAnswer { .. },
+        Output::Handshake {
+            event: HandshakeOutput::InitSDPAnswer { .. },
             ..
         }
     )));
 
-    joiner.process::<Msg>(Input::Transport {
-        peer: host_id.clone(),
-        event: TransportInput::SDPAnswerCreated {
+    joiner.process::<Msg>(Input::Handshake {
+        from: host_id.clone(),
+        event: HandshakeInput::SDPAnswerCreated {
             sdp: "answer".into(),
         },
     });
 
-    let out = host.process::<Msg>(Input::Transport {
-        peer: joiner_id.clone(),
-        event: TransportInput::SDPAnswerReceived {
+    let out = host.process::<Msg>(Input::Handshake {
+        from: joiner_id.clone(),
+        event: HandshakeInput::SDPAnswerReceived {
             sdp: "answer".into(),
         },
     });
     assert!(out.iter().any(|o| matches!(
         o,
-        Output::Transport {
-            event: TransportOutput::AcceptSDPAnswer { .. },
+        Output::Handshake {
+            event: HandshakeOutput::AcceptSDPAnswer { .. },
             ..
         }
     )));
 
-    joiner.process::<Msg>(Input::Transport {
-        peer: host_id.clone(),
-        event: TransportInput::DataChannelOpen,
+    joiner.process::<Msg>(Input::Handshake {
+        from: host_id.clone(),
+        event: HandshakeInput::DataChannelOpen,
     });
 
-    let outputs = host.process::<Msg>(Input::Transport {
-        peer: joiner_id.clone(),
-        event: TransportInput::DataChannelOpen,
+    let outputs = host.process::<Msg>(Input::Handshake {
+        from: joiner_id.clone(),
+        event: HandshakeInput::DataChannelOpen,
     });
 
     assert!(host.is_connected(&joiner_id));

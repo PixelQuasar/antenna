@@ -1,6 +1,6 @@
 use crate::{
-    Host, Joiner, MeshFSM, Output, PeerID, RelayPayload, TransportContext, TransportFSM,
-    TransportInput,
+    HandshakeContext, HandshakeFSM, HandshakeInput, Host, Joiner, MeshFSM, Output, PeerID,
+    RelayPayload,
 };
 
 impl MeshFSM {
@@ -14,50 +14,50 @@ impl MeshFSM {
                 if self.connected.contains(&peer) || self.handshakes.contains_key(&peer) {
                     return vec![];
                 }
-                let mut transport = TransportFSM::Host(Host::new());
+                let mut handshake = HandshakeFSM::Host(Host::new());
                 let mut out = vec![];
-                if let Some(event) = transport.process(TransportInput::InitNegotiation) {
-                    out.push(Output::Transport {
+                if let Some(event) = handshake.process(HandshakeInput::InitNegotiation) {
+                    out.push(Output::Handshake {
                         peer: peer.clone(),
                         event,
                     });
                 }
                 self.handshakes.insert(
                     peer,
-                    TransportContext {
-                        transport,
+                    HandshakeContext {
+                        handshake,
                         via: Some(from),
                     },
                 );
                 out
             }
-            RelayPayload::TransportForward { src, dst, event } => {
+            RelayPayload::HandshakeForward { src, dst, event } => {
                 if dst != self.id {
                     if self.connected.contains(&dst) {
                         vec![Output::Relay {
                             via: dst.clone(),
-                            payload: RelayPayload::TransportForward { src, dst, event },
+                            payload: RelayPayload::HandshakeForward { src, dst, event },
                         }]
                     } else {
                         vec![]
                     }
                 } else {
                     if !self.handshakes.contains_key(&src) {
-                        let transport = match &event {
-                            TransportInput::SDPOfferReceived { .. } => {
-                                TransportFSM::Joiner(Joiner::new())
+                        let handshake = match &event {
+                            HandshakeInput::SDPOfferReceived { .. } => {
+                                HandshakeFSM::Joiner(Joiner::new())
                             }
                             _ => return vec![],
                         };
                         self.handshakes.insert(
                             src.clone(),
-                            TransportContext {
-                                transport,
+                            HandshakeContext {
+                                handshake,
                                 via: Some(from),
                             },
                         );
                     }
-                    self.handle_transport(src, event)
+                    self.handle_handshake(src, event)
                 }
             }
             RelayPayload::PeerLeft { peer } => self.handle_peer_leaving(peer),

@@ -1,9 +1,8 @@
-
 use std::collections::HashMap;
 
 use crate::{
-    Input, MeshFSM, Output, PeerID, RelayPayload, TransportInput, TransportOutput,
-    assert_transport_event, extract_relay,
+    Input, MeshFSM, Output, PeerID, RelayPayload, HandshakeInput, HandshakeOutput,
+    assert_handshake_event, extract_relay,
     mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake, relay_through,
 };
 
@@ -47,25 +46,25 @@ fn establish_relay_connection(
     let outputs = peers
         .get_mut(initiator_id)
         .unwrap()
-        .process::<()>(Input::RelayReceived {
+        .process::<()>(Input::Relay {
             from: relay_id.clone(),
             payload: RelayPayload::ConnectionRequest {
                 peer: target_id.clone(),
             },
         });
 
-    assert_transport_event!(
+    assert_handshake_event!(
         outputs,
         peer: target_id.clone(),
-        event: TransportOutput::InitSDPOffer
+        event: HandshakeOutput::InitSDPOffer
     );
 
     let outputs = peers
         .get_mut(initiator_id)
         .unwrap()
-        .process::<()>(Input::Transport {
-            peer: target_id.clone(),
-            event: TransportInput::SDPOfferCreated {
+        .process::<()>(Input::Handshake {
+            from: target_id.clone(),
+            event: HandshakeInput::SDPOfferCreated {
                 sdp: "offer".into(),
             },
         });
@@ -85,18 +84,18 @@ fn establish_relay_connection(
         payload: relay_to_target
     );
 
-    assert_transport_event!(
+    assert_handshake_event!(
         outputs,
         peer: initiator_id.clone(),
-        event: TransportOutput::InitSDPAnswer { .. }
+        event: HandshakeOutput::InitSDPAnswer { .. }
     );
 
     let outputs = peers
         .get_mut(target_id)
         .unwrap()
-        .process::<()>(Input::Transport {
-            peer: initiator_id.clone(),
-            event: TransportInput::SDPAnswerCreated {
+        .process::<()>(Input::Handshake {
+            from: initiator_id.clone(),
+            event: HandshakeInput::SDPAnswerCreated {
                 sdp: "answer".into(),
             },
         });
@@ -119,17 +118,17 @@ fn establish_relay_connection(
     peers
         .get_mut(initiator_id)
         .unwrap()
-        .process::<()>(Input::Transport {
-            peer: target_id.clone(),
-            event: TransportInput::DataChannelOpen,
+        .process::<()>(Input::Handshake {
+            from: target_id.clone(),
+            event: HandshakeInput::DataChannelOpen,
         });
 
     peers
         .get_mut(target_id)
         .unwrap()
-        .process::<()>(Input::Transport {
-            peer: initiator_id.clone(),
-            event: TransportInput::DataChannelOpen,
+        .process::<()>(Input::Handshake {
+            from: initiator_id.clone(),
+            event: HandshakeInput::DataChannelOpen,
         });
 }
 

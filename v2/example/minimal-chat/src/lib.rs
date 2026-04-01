@@ -1,6 +1,4 @@
 use antenna::web::{Client, IceServerConfig, PeerID};
-use dotenvy::dotenv;
-use std::env;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -14,8 +12,6 @@ impl ChatApp {
     #[wasm_bindgen(constructor)]
     pub fn new(id: String, turn_url: String) -> Result<ChatApp, JsValue> {
         console_error_panic_hook::set_once();
-
-        dotenv().ok();
 
         let mut ice_servers = vec![IceServerConfig::new(vec![
             "stun:stun.l.google.com:19302".into(),
@@ -103,7 +99,10 @@ impl ChatApp {
 
     fn on_message(peer: PeerID, data: Vec<u8>) {
         let text = String::from_utf8_lossy(&data).to_string();
-        web_sys::console::log_1(&JsValue::from_str(&text));
+        web_sys::console::log_2(
+            &JsValue::from_str(&peer.as_str()),
+            &JsValue::from_str(&text),
+        );
     }
 
     #[wasm_bindgen(js_name = onMessage)]

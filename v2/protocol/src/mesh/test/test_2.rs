@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{Input, MeshFSM, Output, PeerID, TransportInput, TransportOutput};
+    use crate::{Input, MeshFSM, Output, PeerID, HandshakeInput, HandshakeOutput};
 
     fn alice() -> PeerID {
         PeerID::new("alice")
@@ -10,43 +10,43 @@ mod test {
     }
 
     fn drive_host_handshake(fsm: &mut MeshFSM, remote: &PeerID) {
-        let out = fsm.process::<&str>(Input::Transport {
-            peer: remote.clone(),
-            event: TransportInput::InitNegotiation,
+        let out = fsm.process::<&str>(Input::Handshake {
+            from: remote.clone(),
+            event: HandshakeInput::InitNegotiation,
         });
         assert!(out.iter().any(|o| matches!(
             o,
-            Output::Transport {
-                event: TransportOutput::InitSDPOffer,
+            Output::Handshake {
+                event: HandshakeOutput::InitSDPOffer,
                 ..
             }
         )));
 
-        let out = fsm.process::<&str>(Input::Transport {
-            peer: remote.clone(),
-            event: TransportInput::SDPOfferCreated {
+        let out = fsm.process::<&str>(Input::Handshake {
+            from: remote.clone(),
+            event: HandshakeInput::SDPOfferCreated {
                 sdp: "offer".into(),
             },
         });
         assert!(out.is_empty());
 
-        let out = fsm.process::<&str>(Input::Transport {
-            peer: remote.clone(),
-            event: TransportInput::SDPAnswerReceived {
+        let out = fsm.process::<&str>(Input::Handshake {
+            from: remote.clone(),
+            event: HandshakeInput::SDPAnswerReceived {
                 sdp: "answer".into(),
             },
         });
         assert!(out.iter().any(|o| matches!(
             o,
-            Output::Transport {
-                event: TransportOutput::AcceptSDPAnswer { .. },
+            Output::Handshake {
+                event: HandshakeOutput::AcceptSDPAnswer { .. },
                 ..
             }
         )));
 
-        let out = fsm.process::<&str>(Input::Transport {
-            peer: remote.clone(),
-            event: TransportInput::DataChannelOpen,
+        let out = fsm.process::<&str>(Input::Handshake {
+            from: remote.clone(),
+            event: HandshakeInput::DataChannelOpen,
         });
         assert!(
             out.iter()
@@ -65,31 +65,31 @@ mod test {
     fn joiner_handshake_full_flow() {
         let mut mesh = MeshFSM::new(bob());
 
-        let out = mesh.process::<&str>(Input::Transport {
-            peer: alice(),
-            event: TransportInput::SDPOfferReceived {
+        let out = mesh.process::<&str>(Input::Handshake {
+            from: alice(),
+            event: HandshakeInput::SDPOfferReceived {
                 sdp: "offer".into(),
             },
         });
         assert!(out.iter().any(|o| matches!(
             o,
-            Output::Transport {
-                event: TransportOutput::InitSDPAnswer { .. },
+            Output::Handshake {
+                event: HandshakeOutput::InitSDPAnswer { .. },
                 ..
             }
         )));
 
-        let out = mesh.process::<&str>(Input::Transport {
-            peer: alice(),
-            event: TransportInput::SDPAnswerCreated {
+        let out = mesh.process::<&str>(Input::Handshake {
+            from: alice(),
+            event: HandshakeInput::SDPAnswerCreated {
                 sdp: "answer".into(),
             },
         });
         assert!(out.is_empty());
 
-        let out = mesh.process::<&str>(Input::Transport {
-            peer: alice(),
-            event: TransportInput::DataChannelOpen,
+        let out = mesh.process::<&str>(Input::Handshake {
+            from: alice(),
+            event: HandshakeInput::DataChannelOpen,
         });
         assert!(
             out.iter()
@@ -156,12 +156,12 @@ mod test {
     }
 
     #[test]
-    fn unknown_transport_event_ignored() {
+    fn unknown_handshake_event_ignored() {
         let mut mesh = MeshFSM::new(alice());
 
-        let out = mesh.process::<&str>(Input::Transport {
-            peer: bob(),
-            event: TransportInput::DataChannelOpen,
+        let out = mesh.process::<&str>(Input::Handshake {
+            from: bob(),
+            event: HandshakeInput::DataChannelOpen,
         });
         assert!(out.is_empty());
     }

@@ -9,7 +9,7 @@ use crate::{
         RtcCallbacks,
     },
 };
-use antenna_protocol::{Input, Output, PeerID, RelayPayload, TransportInput};
+use antenna_protocol::{HandshakeInput, Input, Output, PeerID, RelayPayload};
 use anyhow::Result;
 
 pub struct Client {
@@ -44,9 +44,9 @@ impl Client {
     ) -> Result<(String, Vec<RelayMessage>)> {
         let (outputs, sdp) = self
             .driver
-            .process_input(Input::Transport {
-                peer: peer_id.clone(),
-                event: TransportInput::InitNegotiation,
+            .process_input(Input::Handshake {
+                from: peer_id.clone(),
+                event: HandshakeInput::InitNegotiation,
             })
             .await?;
 
@@ -63,9 +63,9 @@ impl Client {
     ) -> Result<(String, Vec<RelayMessage>)> {
         let (outputs, sdp) = self
             .driver
-            .process_input(Input::Transport {
-                peer: peer_id.clone(),
-                event: TransportInput::SDPOfferReceived { sdp: offer_sdp },
+            .process_input(Input::Handshake {
+                from: peer_id.clone(),
+                event: HandshakeInput::SDPOfferReceived { sdp: offer_sdp },
             })
             .await?;
 
@@ -82,9 +82,9 @@ impl Client {
     ) -> Result<Vec<RelayMessage>> {
         let (outputs, _) = self
             .driver
-            .process_input(Input::Transport {
-                peer: peer_id,
-                event: TransportInput::SDPAnswerReceived { sdp: answer_sdp },
+            .process_input(Input::Handshake {
+                from: peer_id,
+                event: HandshakeInput::SDPAnswerReceived { sdp: answer_sdp },
             })
             .await?;
 
@@ -98,7 +98,7 @@ impl Client {
     ) -> Result<Vec<RelayMessage>> {
         let (outputs, _) = self
             .driver
-            .process_input(Input::RelayReceived { from, payload })
+            .process_input(Input::Relay { from, payload })
             .await?;
 
         Ok(extract_relays(&outputs))
@@ -180,4 +180,3 @@ fn extract_relays(outputs: &[Output<Msg>]) -> Vec<RelayMessage> {
         })
         .collect()
 }
-

@@ -8,7 +8,7 @@ use crate::{
     webrtc::{DataChannelManager, PeerConnectionManager},
 };
 
-mod execute_transport;
+mod execute_handshake;
 
 pub struct Driver {
     /// SansIO-based protocol finite state machine to handle main logic
@@ -67,8 +67,8 @@ impl Driver {
 
         for output in outputs {
             match output {
-                Output::Transport { peer, event } => {
-                    if let Some(local_sdp) = self.execute_transport(&peer, event).await? {
+                Output::Handshake { peer, event } => {
+                    if let Some(local_sdp) = self.execute_handshake(&peer, event).await? {
                         sdp = Some(local_sdp);
                     }
                 }

@@ -1,31 +1,31 @@
-// v2/web/src/driver/execute_transport.rs
+// v2/web/src/driver/execute_handshake.rs
 
 use crate::{
     driver::Driver,
     utils::{Dispatcher, Msg, RtcCallbacks, RtcEvent},
     webrtc::{DataChannelManager, PeerConnectionManager},
 };
-use antenna_protocol::{Input, MeshFSM, Output, PeerID, TransportInput, TransportOutput};
+use antenna_protocol::{HandshakeInput, HandshakeOutput, Input, MeshFSM, Output, PeerID};
 use anyhow::{Context, Result};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 
 impl Driver {
-    pub(crate) async fn execute_transport(
+    pub(crate) async fn execute_handshake(
         &mut self,
         peer: &PeerID,
-        output: TransportOutput,
+        output: HandshakeOutput,
     ) -> Result<Option<String>> {
         match output {
-            TransportOutput::InitSDPOffer => self.execute_init_offer(peer).await,
-            TransportOutput::InitSDPAnswer { offer_sdp } => {
+            HandshakeOutput::InitSDPOffer => self.execute_init_offer(peer).await,
+            HandshakeOutput::InitSDPAnswer { offer_sdp } => {
                 self.execute_init_answer(peer, offer_sdp).await
             }
-            TransportOutput::AcceptSDPAnswer { sdp } => {
+            HandshakeOutput::AcceptSDPAnswer { sdp } => {
                 self.execute_accept_answer(peer, sdp).await?;
                 Ok(None)
             }
-            TransportOutput::Close => {
+            HandshakeOutput::Close => {
                 self.execute_close(peer)?;
                 Ok(None)
             }
@@ -42,9 +42,9 @@ impl Driver {
 
         let full_sdp = pc_manager.wait_for_ice_gathering_complete().await?;
 
-        self.fsm.borrow_mut().process(Input::<Msg>::Transport {
-            peer: peer.clone(),
-            event: TransportInput::SDPOfferCreated {
+        self.fsm.borrow_mut().process(Input::<Msg>::Handshake {
+            from: peer.clone(),
+            event: HandshakeInput::SDPOfferCreated {
                 sdp: full_sdp.clone(),
             },
         });
@@ -67,9 +67,9 @@ impl Driver {
         pc_manager.set_local_description(&answer_sdp, false).await?;
         let full_sdp = pc_manager.wait_for_ice_gathering_complete().await?;
 
-        self.fsm.borrow_mut().process(Input::<Msg>::Transport {
-            peer: peer.clone(),
-            event: TransportInput::SDPAnswerCreated {
+        self.fsm.borrow_mut().process(Input::<Msg>::Handshake {
+            from: peer.clone(),
+            event: HandshakeInput::SDPAnswerCreated {
                 sdp: full_sdp.clone(),
             },
         });
@@ -152,9 +152,9 @@ impl Driver {
             dc_manager.setup_on_open(move || {
                 let was_empty = fsm.borrow().connected_peers().is_empty();
 
-                fsm.borrow_mut().process(Input::<Msg>::Transport {
-                    peer: peer.clone(),
-                    event: TransportInput::DataChannelOpen,
+                fsm.borrow_mut().process(Input::<Msg>::Handshake {
+                    from: peer.clone(),
+                    event: HandshakeInput::DataChannelOpen,
                 });
 
                 if was_empty {
@@ -191,9 +191,9 @@ impl Driver {
             let fsm = fsm.clone();
             let callbacks = callbacks.clone();
             dc_manager.setup_on_close(move || {
-                fsm.borrow_mut().process(Input::<Msg>::Transport {
-                    peer: peer.clone(),
-                    event: TransportInput::Disconnected,
+                fsm.borrow_mut().process(Input::<Msg>::Handshake {
+                    from: peer.clone(),
+                    event: HandshakeInput::Disconnected,
                 });
 
                 callbacks

@@ -1,5 +1,5 @@
+mod handle_handshake;
 mod handle_relay;
-mod handle_transport;
 mod peer_id;
 mod test;
 
@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 
 pub use peer_id::PeerID;
 
-use crate::{Input, Output, TransportContext};
+use crate::{HandshakeContext, Input, Output};
 
 /// Core FSM of antenna client, handles SDP negotiation handshakes (but not signaling!!)
 /// and abstract mesh logic
@@ -15,8 +15,8 @@ pub struct MeshFSM {
     // ID of current peer, must be globally unique
     id: PeerID,
 
-    // Map of transport automati, contains state of current handshakes with other sessions
-    handshakes: HashMap<PeerID, TransportContext>,
+    // Map of handshake automati, contains state of current handshakes with other sessions
+    handshakes: HashMap<PeerID, HandshakeContext>,
 
     // Map of peers with established connection
     connected: HashSet<PeerID>,
@@ -45,7 +45,7 @@ impl MeshFSM {
 
     pub fn process<Msg>(&mut self, input: Input<Msg>) -> Vec<Output<Msg>> {
         match input {
-            Input::Transport { peer, event } => self.handle_transport(peer, event),
+            Input::Handshake { from, event } => self.handle_handshake(from, event),
             Input::PeerLeaving { peer } => self.handle_peer_leaving(peer),
             Input::MessageReceived { peer_from, data } => {
                 if self.connected.contains(&peer_from) {
@@ -68,7 +68,7 @@ impl MeshFSM {
                     vec![]
                 }
             }
-            Input::RelayReceived { from, payload } => self.handle_relay(from, payload),
+            Input::Relay { from, payload } => self.handle_relay(from, payload),
         }
     }
 
@@ -99,5 +99,4 @@ impl MeshFSM {
         }
         out
     }
-
 }

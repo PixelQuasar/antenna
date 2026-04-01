@@ -1,13 +1,16 @@
-use crate::{mesh::PeerID, state::RelayPayload, transport::TransportOutput};
+use crate::{handshake::HandshakeOutput, mesh::PeerID, state::RelayPayload};
 
 /// Common event that client FSM sends
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Output<T> {
-    /// Transport event
-    Transport {
-        event: TransportOutput,
+    /// Handshake event
+    Handshake {
+        event: HandshakeOutput,
         peer: PeerID,
     },
+
+    /// Relay event
+    Relay { via: PeerID, payload: RelayPayload },
 
     /// Send message to other peer in mesh
     SendMessage { peer_to: PeerID, data: T },
@@ -23,7 +26,4 @@ pub enum Output<T> {
 
     ///
     PeerDisconnected { peer: PeerID },
-
-    ///
-    Relay { via: PeerID, payload: RelayPayload },
 }

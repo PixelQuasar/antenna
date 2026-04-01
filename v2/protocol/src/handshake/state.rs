@@ -1,6 +1,6 @@
-/// Transport-level state of the client transport FSM.
+/// Handshake-level state of the client handshake FSM.
 #[derive(Debug, PartialEq, Eq)]
-pub enum TransportState {
+pub enum HandshakeState {
     /// Client created but SDP negotiation hasn't started yet
     Idle,
 

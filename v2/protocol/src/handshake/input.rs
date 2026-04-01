@@ -1,6 +1,6 @@
-/// Events fed into the transport FSM from the driver.
+/// Events fed into the handshake FSM from the driver.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum TransportInput {
+pub enum HandshakeInput {
     /// Input event signalizing that we started SDP negotiation
     InitNegotiation,
 
