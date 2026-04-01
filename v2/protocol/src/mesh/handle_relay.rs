@@ -60,7 +60,6 @@ impl MeshNodeFSM {
                     self.handle_handshake(src, event)
                 }
             }
-            RelayPayload::PeerLeft { peer } => self.handle_peer_leaving(peer),
         }
     }
 }

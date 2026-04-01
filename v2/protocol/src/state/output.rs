@@ -21,9 +21,9 @@ pub enum Output<T> {
     /// Initiate receiving message from any outer sender
     ReceiveMessage { peer_from: PeerID, data: T },
 
-    ///
+    /// Notify about new peer connected to mesh
     PeerConnected { peer: PeerID },
 
-    ///
+    /// Notify about new peer disconnected to mesh
     PeerDisconnected { peer: PeerID },
 }
