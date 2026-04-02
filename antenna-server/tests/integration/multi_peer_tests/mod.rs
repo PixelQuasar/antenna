@@ -1,3 +1,0 @@
-mod test_multiple_peers_join;
-mod test_peer_leaves_others_stay;
-mod test_three_peers_join;

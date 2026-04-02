@@ -1,4 +1,0 @@
-mod test_full_peer_cycle;
-mod test_peer_sends_binary_data;
-mod test_peer_sends_message;
-mod test_rapid_message_sending;

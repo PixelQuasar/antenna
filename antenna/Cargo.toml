@@ -2,17 +2,8 @@
 name = "antenna"
 version = "0.1.0"
 edition = "2024"
+rust-version.workspace = true
 
 [dependencies]
-antenna-core = { workspace = true }
-antenna-wasm-gen = { workspace = true, optional = true }
-antenna-server = { workspace = true, optional = true }
-antenna-codegen = { workspace = true}
-# transitive dependency for uuid in browser
-getrandom = { version = "0.2.17", features = ["js"], optional = true}
-
-[features]
-default = []
-server = ["dep:antenna-server"]
-client = ["dep:antenna-wasm-gen", "dep:getrandom"]
-full = ["server", "client"]
+antenna-web.workspace = true
+antenna-protocol.workspace = true

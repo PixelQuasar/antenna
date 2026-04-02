@@ -2,151 +2,71 @@
 resolver = "2"
 members = [
     "antenna",
-    "antenna-wasm-gen",
-    "antenna-codegen",
-    "antenna-server",
-    "antenna-core",
-    "antenna-cli",
+    "protocol",
+    "native",
+    "web", 
+    "example/*",
 ]
 
 [workspace.package]
 rust-version = "1.89.0"
 
-[workspace.dependencies.antenna-core]
-path = "antenna-core"
+[workspace.dependencies.antenna-protocol]
+path = "protocol"
 
-[workspace.dependencies.antenna-wasm-gen]
-path = "antenna-wasm-gen"
+[workspace.dependencies.antenna-web]
+path = "web"
 
-[workspace.dependencies.antenna-server]
-path = "antenna-server"
+[workspace.dependencies.antenna]
+path = "antenna"
 
-[workspace.dependencies.antenna-codegen]
-path = "antenna-codegen"
+[workspace.dependencies.antenna-native]
+path = "native"
 
 [workspace.dependencies.anyhow]
 version = "1.0.101"
-
-[workspace.dependencies.async-trait]
-version = "0.1.89"
-
-[workspace.dependencies.axum]
-version = "0.8.8"
-features = ["ws"]
-
-[workspace.dependencies.bytes]
-version = "1.11.0"
-
-[workspace.dependencies.dashmap]
-version = "6.1.0"
-
-[workspace.dependencies.futures]
-version = "0.3.32"
-
-[workspace.dependencies.heapless]
-version = "0.9.2"
-
-[workspace.dependencies.js-sys]
-version = "0.3.85"
-
-[workspace.dependencies.postcard]
-version = "1.1.3"
-features = ["alloc"]
 
 [workspace.dependencies.serde]
 version = "1.0.228"
 features = ["derive"]
 
-[workspace.dependencies.serde_bytes]
-version = "0.11.19"
-
 [workspace.dependencies.serde_json]
 version = "1.0.149"
 
-[workspace.dependencies.serde-wasm-bindgen]
-version = "0.6.5"
+[workspace.dependencies.futures]
+version = "0.3.32"
 
-[workspace.dependencies.thiserror]
-version = "2.0.18"
-
-[workspace.dependencies.tokio]
-version = "1.49.0"
-features = [
-    "full",
-    "macros",
-    "rt-multi-thread",
-    "test-util",
-]
-
-[workspace.dependencies.tracing]
-version = "0.1.44"
-
-[workspace.dependencies.tracing-subscriber]
-version = "0.3.10"
-features = ["env-filter"]
-
-[workspace.dependencies.turn]
-version = "0.17.1"
-
-[workspace.dependencies.uuid]
-version = "1.21.0"
-features = [
-    "js",
-    "serde",
-    "v4",
-]
-
+# WASM dependencies
 [workspace.dependencies.wasm-bindgen]
-version = "0.2.108"
+version = "0.2"
 
 [workspace.dependencies.wasm-bindgen-futures]
-version = "0.4.58"
+version = "0.4"
+
+[workspace.dependencies.js-sys]
+version = "0.3"
+
+[workspace.dependencies.serde-wasm-bindgen]
+version = "0.6"
 
 [workspace.dependencies.web-sys]
-version = "0.3.85"
+version = "0.3"
 features = [
-    "BinaryType",
-    "Blob",
-    "ErrorEvent",
-    "MessageEvent",
+    "RtcPeerConnection",
     "RtcConfiguration",
     "RtcDataChannel",
     "RtcDataChannelEvent",
+    "RtcDataChannelInit",
     "RtcDataChannelState",
     "RtcDataChannelType",
-    "RtcIceCandidate",
-    "RtcIceCandidateInit",
-    "RtcIceConnectionState",
-    "RtcIceGatheringState",
-    "RtcIceServer",
-    "RtcOfferOptions",
-    "RtcPeerConnection",
-    "RtcPeerConnectionIceEvent",
-    "RtcPeerConnectionState",
     "RtcSdpType",
+    "RtcSignalingState",
     "RtcSessionDescription",
     "RtcSessionDescriptionInit",
-    "RtcTrackEvent",
-    "RtcRtpSender",
-    "MediaStream",
-    "MediaStreamTrack",
-    "WebSocket",
-    "Window",
+    "RtcIceServer",
+    "RtcIceConnectionState",
+    "RtcIceGatheringState",
+    "MessageEvent",
+    "ErrorEvent",
     "console",
 ]
-
-[workspace.dependencies.webrtc]
-version = "0.17.1"
-
-[workspace.dependencies.clap]
-version = "4.5.6"
-features = ["derive"]
-
-[workspace.dependencies.colored]
-version = "3.1.1"
-
-[workspace.dependencies.dialoguer]
-version = "0.12"
-
-[workspace.dependencies.console_error_panic_hook]
-version = "0.1.7"
