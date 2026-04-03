@@ -6,16 +6,20 @@ version = 4
 name = "antenna"
 version = "0.1.0"
 dependencies = [
+ "antenna-client-web",
  "antenna-protocol",
- "antenna-web",
 ]
 
 [[package]]
-name = "antenna-protocol"
+name = "antenna-client-native"
 version = "0.1.0"
 
 [[package]]
-name = "antenna-web"
+name = "antenna-client-shared"
+version = "0.1.0"
+
+[[package]]
+name = "antenna-client-web"
 version = "0.1.0"
 dependencies = [
  "antenna-protocol",
@@ -29,6 +33,22 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
 ]
+
+[[package]]
+name = "antenna-protocol"
+version = "0.1.0"
+
+[[package]]
+name = "antenna-signaling-mesh"
+version = "0.1.0"
+
+[[package]]
+name = "antenna-signaling-server"
+version = "0.1.0"
+
+[[package]]
+name = "antenna-signaling-shared"
+version = "0.1.0"
 
 [[package]]
 name = "anyhow"
@@ -186,10 +206,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
 ]
-
-[[package]]
-name = "native"
-version = "0.1.0"
 
 [[package]]
 name = "once_cell"

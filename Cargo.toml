@@ -1,24 +1,37 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/*",
+    "crates/client/*",
+    "crates/signaling/*",
     "example/*",
 ]
 
 [workspace.package]
 rust-version = "1.89.0"
 
-[workspace.dependencies.antenna-protocol]
-path = "crates/protocol"
-
-[workspace.dependencies.antenna-web]
-path = "crates/web"
-
 [workspace.dependencies.antenna]
 path = "crates/antenna"
 
-[workspace.dependencies.antenna-native]
-path = "crates/native"
+[workspace.dependencies.antenna-protocol]
+path = "crates/protocol"
+
+[workspace.dependencies.antenna-client-web]
+path = "crates/client/web"
+
+[workspace.dependencies.antenna-client-native]
+path = "crates/client/native"
+
+[workspace.dependencies.antenna-client-shared]
+path = "crates/client/shared"
+
+[workspace.dependencies.antenna-signaling-mesh]
+path = "crates/signaling/mesh"
+
+[workspace.dependencies.antenna-signaling-server]
+path = "crates/signaling/server"
+
+[workspace.dependencies.antenna-signaling-shared]
+path = "crates/signaling/shared"
 
 [workspace.dependencies.anyhow]
 version = "1.0.101"

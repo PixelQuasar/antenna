@@ -1,9 +1,7 @@
 [package]
-name = "antenna"
+name = "antenna-signaling-mesh"
 version = "0.1.0"
 edition = "2024"
 rust-version.workspace = true
 
 [dependencies]
-antenna-client-web.workspace = true
-antenna-protocol.workspace = true
