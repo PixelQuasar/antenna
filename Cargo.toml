@@ -1,10 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "antenna",
-    "protocol",
-    "native",
-    "web", 
+    "crates/*",
     "example/*",
 ]
 
@@ -12,16 +9,16 @@ members = [
 rust-version = "1.89.0"
 
 [workspace.dependencies.antenna-protocol]
-path = "protocol"
+path = "crates/protocol"
 
 [workspace.dependencies.antenna-web]
-path = "web"
+path = "crates/web"
 
 [workspace.dependencies.antenna]
-path = "antenna"
+path = "crates/antenna"
 
 [workspace.dependencies.antenna-native]
-path = "native"
+path = "crates/native"
 
 [workspace.dependencies.anyhow]
 version = "1.0.101"
