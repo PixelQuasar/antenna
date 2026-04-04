@@ -15,24 +15,24 @@ impl Driver {
         &mut self,
         peer: &PeerID,
         output: HandshakeOutput,
-    ) -> Result<Option<String>> {
+    ) -> Result<()> {
         match output {
             HandshakeOutput::InitSDPOffer => self.execute_init_offer(peer).await,
-            HandshakeOutput::InitSDPAnswer { offer_sdp } => {
-                self.execute_init_answer(peer, offer_sdp).await
+            HandshakeOutput::RequestSDPAnswer { offer } => {
+                self.execute_init_answer(peer, offer).await
             }
-            HandshakeOutput::AcceptSDPAnswer { sdp } => {
-                self.execute_accept_answer(peer, sdp).await?;
-                Ok(None)
+            HandshakeOutput::AcceptSDPAnswer { answer } => {
+                self.execute_accept_answer(peer, answer).await?;
+                Ok(())
             }
             HandshakeOutput::Close => {
                 self.execute_close(peer)?;
-                Ok(None)
+                Ok(())
             }
         }
     }
 
-    async fn execute_init_offer(&mut self, peer: &PeerID) -> Result<Option<String>> {
+    async fn execute_init_offer(&mut self, peer: &PeerID) -> Result<()> {
         let pc_manager = PeerConnectionManager::from_ice_config(&self.ice_servers)?;
 
         self.setup_host_data_channel(peer, pc_manager.peer_connection());
@@ -50,14 +50,10 @@ impl Driver {
         });
 
         self.pc_managers.insert(peer.clone(), pc_manager);
-        Ok(Some(full_sdp))
+        Ok(())
     }
 
-    async fn execute_init_answer(
-        &mut self,
-        peer: &PeerID,
-        offer_sdp: String,
-    ) -> Result<Option<String>> {
+    async fn execute_init_answer(&mut self, peer: &PeerID, offer_sdp: String) -> Result<()> {
         let pc_manager = PeerConnectionManager::from_ice_config(&self.ice_servers)?;
 
         self.setup_joiner_data_channel(peer, pc_manager.peer_connection());
@@ -75,7 +71,7 @@ impl Driver {
         });
 
         self.pc_managers.insert(peer.clone(), pc_manager);
-        Ok(Some(full_sdp))
+        Ok(())
     }
 
     async fn execute_accept_answer(&mut self, peer: &PeerID, sdp: String) -> Result<()> {

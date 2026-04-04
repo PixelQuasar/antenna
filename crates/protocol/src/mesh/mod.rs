@@ -1,5 +1,4 @@
 mod handle_handshake;
-mod handle_relay;
 mod peer_id;
 mod test;
 
@@ -9,17 +8,30 @@ pub use peer_id::PeerID;
 
 use crate::{HandshakeContext, Input, Output};
 
+///
+#[derive(Default, Clone)]
+pub struct MeshMetadata {
+    ///
+    pub sdp_offer: Option<String>,
+
+    ///
+    pub sdp_answer: Option<String>,
+}
+
 /// Core FSM of antenna client, handles SDP negotiation handshakes (but not signaling!!)
 /// and abstract mesh logic
 pub struct MeshNodeFSM {
-    // ID of current peer, must be globally unique
+    /// ID of current peer, must be globally unique
     id: PeerID,
 
-    // Map of handshake automati, contains state of current handshakes with other sessions
+    /// Map of handshake automati, contains state of current handshakes with other sessions
     handshakes: HashMap<PeerID, HandshakeContext>,
 
-    // Map of peers with established connection
+    /// Map of peers with established connection
     connected: HashSet<PeerID>,
+
+    ///
+    metadata: MeshMetadata,
 }
 
 impl MeshNodeFSM {
@@ -28,6 +40,7 @@ impl MeshNodeFSM {
             id,
             handshakes: HashMap::new(),
             connected: HashSet::new(),
+            metadata: MeshMetadata::default(),
         }
     }
 
@@ -68,7 +81,6 @@ impl MeshNodeFSM {
                     vec![]
                 }
             }
-            Input::Relay { from, payload } => self.handle_relay(from, payload),
         }
     }
 
@@ -76,27 +88,14 @@ impl MeshNodeFSM {
         self.handshakes.remove(&peer);
         let was_connected = self.connected.remove(&peer);
 
-        let to_remove: Vec<_> = self
-            .handshakes
-            .iter()
-            .filter_map(|(id, ctx)| {
-                if ctx.via.as_ref() == Some(&peer) {
-                    Some(id.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
         let mut out = Vec::new();
-        for id in to_remove {
-            self.handshakes.remove(&id);
-            out.push(Output::PeerDisconnected { peer: id });
-        }
-
         if was_connected {
             out.push(Output::PeerDisconnected { peer });
         }
         out
+    }
+
+    pub fn metadata(&self) -> &MeshMetadata {
+        &self.metadata
     }
 }

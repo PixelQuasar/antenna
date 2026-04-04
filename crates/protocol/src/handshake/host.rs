@@ -28,7 +28,7 @@ impl Host {
             }
             (HandshakeState::WaitingForAnswer, HandshakeInput::SDPAnswerReceived { sdp }) => {
                 self.state = HandshakeState::WaitingForDataChannel;
-                Some(HandshakeOutput::AcceptSDPAnswer { sdp })
+                Some(HandshakeOutput::AcceptSDPAnswer { answer: sdp })
             }
             (HandshakeState::WaitingForDataChannel, HandshakeInput::DataChannelOpen) => {
                 self.state = HandshakeState::Connected;

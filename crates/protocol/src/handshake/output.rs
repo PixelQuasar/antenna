@@ -5,10 +5,10 @@ pub enum HandshakeOutput {
     InitSDPOffer,
 
     /// Initiate creating, applying and sending SDP answer to other peer (to host)
-    InitSDPAnswer { offer_sdp: String },
+    RequestSDPAnswer { offer: String },
 
     /// Apply received SDP answer from other peer (from joiner)
-    AcceptSDPAnswer { sdp: String },
+    AcceptSDPAnswer { answer: String },
 
     /// Close RTC connection
     Close,

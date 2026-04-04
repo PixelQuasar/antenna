@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{Input, MeshNodeFSM, Output, PeerID, HandshakeInput, HandshakeOutput};
+    use crate::{HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, Output, PeerID};
 
     fn alice() -> PeerID {
         PeerID::new("alice")
@@ -44,14 +44,12 @@ mod test {
             }
         )));
 
-        let out = fsm.process::<&str>(Input::Handshake {
+        fsm.process::<&str>(Input::Handshake {
             from: remote.clone(),
             event: HandshakeInput::DataChannelOpen,
         });
-        assert!(
-            out.iter()
-                .any(|o| matches!(o, Output::PeerConnected { .. }))
-        );
+
+        assert!(fsm.is_connected(remote));
     }
 
     #[test]
@@ -74,7 +72,7 @@ mod test {
         assert!(out.iter().any(|o| matches!(
             o,
             Output::Handshake {
-                event: HandshakeOutput::InitSDPAnswer { .. },
+                event: HandshakeOutput::RequestSDPAnswer { .. },
                 ..
             }
         )));
@@ -87,14 +85,11 @@ mod test {
         });
         assert!(out.is_empty());
 
-        let out = mesh.process::<&str>(Input::Handshake {
+        mesh.process::<&str>(Input::Handshake {
             from: alice(),
             event: HandshakeInput::DataChannelOpen,
         });
-        assert!(
-            out.iter()
-                .any(|o| matches!(o, Output::PeerConnected { .. }))
-        );
+
         assert!(mesh.is_connected(&alice()));
     }
 

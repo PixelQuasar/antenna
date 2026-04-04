@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::handshake::{Host, Joiner, HandshakeInput, HandshakeOutput, HandshakeState};
+    use crate::handshake::{HandshakeInput, HandshakeOutput, HandshakeState, Host, Joiner};
 
     #[test]
     fn host_smoke() {
@@ -24,7 +24,7 @@ mod tests {
         assert_eq!(
             out,
             Some(HandshakeOutput::AcceptSDPAnswer {
-                sdp: "mock-answer".into()
+                answer: "mock-answer".into()
             })
         );
 
@@ -44,8 +44,8 @@ mod tests {
         assert_eq!(*joiner.state(), HandshakeState::CreatingAnswer);
         assert_eq!(
             out,
-            Some(HandshakeOutput::InitSDPAnswer {
-                offer_sdp: "mock-offer".into()
+            Some(HandshakeOutput::RequestSDPAnswer {
+                offer: "mock-offer".into()
             })
         );
 

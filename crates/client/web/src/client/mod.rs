@@ -1,5 +1,3 @@
-// v2/web/src/client/mod.rs
-
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
@@ -9,8 +7,8 @@ use crate::{
         RtcCallbacks,
     },
 };
-use antenna_protocol::{HandshakeInput, Input, Output, PeerID, RelayPayload};
-use anyhow::Result;
+use antenna_protocol::{HandshakeInput, Input, PeerID};
+use anyhow::{Context, Result};
 
 pub struct Client {
     my_id: PeerID,
@@ -38,70 +36,47 @@ impl Client {
         &self.my_id
     }
 
-    pub async fn start_with_peer(
-        &mut self,
-        peer_id: PeerID,
-    ) -> Result<(String, Vec<RelayMessage>)> {
-        let (outputs, sdp) = self
-            .driver
+    pub async fn start_with_peer(&mut self, peer_id: PeerID) -> Result<String> {
+        self.driver
             .process_input(Input::Handshake {
                 from: peer_id.clone(),
                 event: HandshakeInput::InitNegotiation,
             })
             .await?;
-
-        let sdp = sdp.ok_or_else(|| anyhow::anyhow!("No local SDP produced for offer"))?;
-        let relays = extract_relays(&outputs);
-
-        Ok((sdp, relays))
+        self.driver
+            .fsm()
+            .borrow()
+            .metadata()
+            .sdp_offer
+            .clone()
+            .context("SDP offer not found on starting")
     }
 
-    pub async fn receive_offer(
-        &mut self,
-        peer_id: PeerID,
-        offer_sdp: String,
-    ) -> Result<(String, Vec<RelayMessage>)> {
-        let (outputs, sdp) = self
-            .driver
+    pub async fn receive_offer(&mut self, peer_id: PeerID, offer_sdp: String) -> Result<String> {
+        self.driver
             .process_input(Input::Handshake {
                 from: peer_id.clone(),
                 event: HandshakeInput::SDPOfferReceived { sdp: offer_sdp },
             })
             .await?;
-
-        let sdp = sdp.ok_or_else(|| anyhow::anyhow!("No local SDP produced for answer"))?;
-        let relays = extract_relays(&outputs);
-
-        Ok((sdp, relays))
+        self.driver
+            .fsm()
+            .borrow()
+            .metadata()
+            .sdp_answer
+            .clone()
+            .context("SDP answer not found on receiving offer")
     }
 
-    pub async fn receive_answer(
-        &mut self,
-        peer_id: PeerID,
-        answer_sdp: String,
-    ) -> Result<Vec<RelayMessage>> {
-        let (outputs, _) = self
-            .driver
+    pub async fn receive_answer(&mut self, peer_id: PeerID, answer_sdp: String) -> Result<()> {
+        self.driver
             .process_input(Input::Handshake {
                 from: peer_id,
                 event: HandshakeInput::SDPAnswerReceived { sdp: answer_sdp },
             })
             .await?;
 
-        Ok(extract_relays(&outputs))
-    }
-
-    pub async fn process_relay(
-        &mut self,
-        from: PeerID,
-        payload: RelayPayload,
-    ) -> Result<Vec<RelayMessage>> {
-        let (outputs, _) = self
-            .driver
-            .process_input(Input::Relay { from, payload })
-            .await?;
-
-        Ok(extract_relays(&outputs))
+        Ok(())
     }
 
     pub async fn send_to(&mut self, peer_id: PeerID, data: Msg) -> Result<()> {
@@ -158,25 +133,4 @@ impl Client {
     pub fn set_js_on_disconnected(&mut self, cb: js_sys::Function) {
         self.callbacks.borrow_mut().js_on_disconnected = Some(cb)
     }
-}
-
-// Helper types
-#[derive(Clone, Debug)]
-pub struct RelayMessage {
-    pub via: PeerID,
-    pub payload: RelayPayload,
-}
-
-// Helper functions
-fn extract_relays(outputs: &[Output<Msg>]) -> Vec<RelayMessage> {
-    outputs
-        .iter()
-        .filter_map(|o| match o {
-            Output::Relay { via, payload } => Some(RelayMessage {
-                via: via.clone(),
-                payload: payload.clone(),
-            }),
-            _ => None,
-        })
-        .collect()
 }

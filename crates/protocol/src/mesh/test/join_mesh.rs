@@ -2,9 +2,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use crate::{
-    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, Output, PeerID, RelayPayload,
-    assert_handshake_event, extract_relay,
-    mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake, relay_through,
+    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, Output, PeerID, assert_handshake_event,
+    mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake,
 };
 
 thread_local! {
@@ -41,7 +40,7 @@ pub(crate) fn join_mesh(
     bootstrap_id: &PeerID,
     all_peers: &mut HashMap<PeerID, MeshNodeFSM>,
 ) {
-    let connection_requests = {
+    let appeared_peers = {
         let mut bootstrap = all_peers.remove(bootstrap_id).unwrap();
         let mut new_peer = all_peers.remove(new_peer_id).unwrap();
 
@@ -53,36 +52,33 @@ pub(crate) fn join_mesh(
         outputs
             .iter()
             .filter_map(|o| match o {
-                Output::Relay { via, payload } if via == new_peer_id => match payload {
-                    RelayPayload::ConnectionRequest { peer } => Some(peer.clone()),
-                    _ => None,
-                },
+                Output::PeerAppeared { peer } => Some(peer.clone()),
                 _ => None,
             })
             .collect::<Vec<_>>()
     };
 
-    for existing_peer_id in connection_requests {
-        establish_relay_connection(all_peers, new_peer_id, &existing_peer_id, bootstrap_id);
+    for existing_peer_id in appeared_peers {
+        establish_direct_connection(all_peers, new_peer_id, &existing_peer_id);
     }
 }
 
-fn establish_relay_connection(
+/// Drives a full direct handshake between two peers that are not yet connected.
+/// The initiator acts as host, the target acts as joiner.
+fn establish_direct_connection(
     peers: &mut HashMap<PeerID, MeshNodeFSM>,
     initiator_id: &PeerID,
     target_id: &PeerID,
-    relay_id: &PeerID,
 ) {
     CONNECTION_COUNTER.with(|c| *c.borrow_mut() += 1);
 
+    // Initiator starts handshake as host
     let outputs = peers
         .get_mut(initiator_id)
         .unwrap()
-        .process::<()>(Input::Relay {
-            from: relay_id.clone(),
-            payload: RelayPayload::ConnectionRequest {
-                peer: target_id.clone(),
-            },
+        .process::<()>(Input::Handshake {
+            from: target_id.clone(),
+            event: HandshakeInput::InitNegotiation,
         });
 
     assert_handshake_event!(
@@ -91,7 +87,8 @@ fn establish_relay_connection(
         event: HandshakeOutput::InitSDPOffer
     );
 
-    let outputs = peers
+    // Initiator creates SDP offer
+    peers
         .get_mut(initiator_id)
         .unwrap()
         .process::<()>(Input::Handshake {
@@ -101,28 +98,25 @@ fn establish_relay_connection(
             },
         });
 
-    let relay_offer = extract_relay!(outputs, via: relay_id.clone());
-
-    let outputs = relay_through!(
-        peers.get_mut(relay_id).unwrap(),
-        from: initiator_id.clone(),
-        payload: relay_offer
-    );
-    let relay_to_target = extract_relay!(outputs, via: target_id.clone());
-
-    let outputs = relay_through!(
-        peers.get_mut(target_id).unwrap(),
-        from: relay_id.clone(),
-        payload: relay_to_target
-    );
+    // Target receives SDP offer
+    let outputs = peers
+        .get_mut(target_id)
+        .unwrap()
+        .process::<()>(Input::Handshake {
+            from: initiator_id.clone(),
+            event: HandshakeInput::SDPOfferReceived {
+                sdp: "offer".into(),
+            },
+        });
 
     assert_handshake_event!(
         outputs,
         peer: initiator_id.clone(),
-        event: HandshakeOutput::InitSDPAnswer { .. }
+        event: HandshakeOutput::RequestSDPAnswer { .. }
     );
 
-    let outputs = peers
+    // Target creates SDP answer
+    peers
         .get_mut(target_id)
         .unwrap()
         .process::<()>(Input::Handshake {
@@ -132,21 +126,24 @@ fn establish_relay_connection(
             },
         });
 
-    let relay_answer = extract_relay!(outputs, via: relay_id.clone());
+    // Initiator receives SDP answer
+    let outputs = peers
+        .get_mut(initiator_id)
+        .unwrap()
+        .process::<()>(Input::Handshake {
+            from: target_id.clone(),
+            event: HandshakeInput::SDPAnswerReceived {
+                sdp: "answer".into(),
+            },
+        });
 
-    let outputs = relay_through!(
-        peers.get_mut(relay_id).unwrap(),
-        from: target_id.clone(),
-        payload: relay_answer
+    assert_handshake_event!(
+        outputs,
+        peer: target_id.clone(),
+        event: HandshakeOutput::AcceptSDPAnswer { .. }
     );
-    let relay_to_initiator = extract_relay!(outputs, via: initiator_id.clone());
 
-    relay_through!(
-        peers.get_mut(initiator_id).unwrap(),
-        from: relay_id.clone(),
-        payload: relay_to_initiator
-    );
-
+    // Both sides open data channel
     peers
         .get_mut(initiator_id)
         .unwrap()

@@ -36,7 +36,7 @@ pub(crate) fn drive_bootstrap_handshake<Msg>(
     assert!(out.iter().any(|o| matches!(
         o,
         Output::Handshake {
-            event: HandshakeOutput::InitSDPAnswer { .. },
+            event: HandshakeOutput::RequestSDPAnswer { .. },
             ..
         }
     )));

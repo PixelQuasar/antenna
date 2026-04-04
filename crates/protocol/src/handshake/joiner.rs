@@ -20,7 +20,7 @@ impl Joiner {
         match (&self.state, input) {
             (HandshakeState::Idle, HandshakeInput::SDPOfferReceived { sdp }) => {
                 self.state = HandshakeState::CreatingAnswer;
-                Some(HandshakeOutput::InitSDPAnswer { offer_sdp: sdp })
+                Some(HandshakeOutput::RequestSDPAnswer { offer: sdp })
             }
             (HandshakeState::CreatingAnswer, HandshakeInput::SDPAnswerCreated { .. }) => {
                 self.state = HandshakeState::WaitingForDataChannel;

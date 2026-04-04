@@ -1,6 +1,6 @@
 use crate::{
-    HandshakeContext, HandshakeFSM, HandshakeInput, HandshakeState, Host, Joiner, MeshNodeFSM,
-    Output, PeerID, RelayPayload,
+    HandshakeContext, HandshakeFSM, HandshakeInput, HandshakeOutput, HandshakeState, Host, Joiner,
+    MeshNodeFSM, Output, PeerID,
 };
 
 impl MeshNodeFSM {
@@ -16,64 +16,34 @@ impl MeshNodeFSM {
                 _ => return vec![],
             };
 
-            self.handshakes.insert(
-                peer.clone(),
-                HandshakeContext {
-                    handshake,
-                    via: None,
-                },
-            );
+            self.handshakes
+                .insert(peer.clone(), HandshakeContext { handshake });
         }
 
-        let input_sdp = match &event {
-            HandshakeInput::SDPOfferCreated { sdp } => Some(sdp.clone()),
-            HandshakeInput::SDPAnswerCreated { sdp } => Some(sdp.clone()),
-            _ => None,
-        };
+        let ctx = self.handshakes.get_mut(&peer).unwrap();
+        let handshake_out = ctx.handshake.process(event.clone());
+        let state = ctx.handshake.state();
 
-        let handshake_ctx = self.handshakes.get_mut(&peer).unwrap();
-        let handshake_out = handshake_ctx.handshake.process(event.clone());
-        let state = handshake_ctx.handshake.state();
-        let relay_via = handshake_ctx.via.clone();
+        if let Some(out) = handshake_out.clone() {
+            match out {
+                HandshakeOutput::RequestSDPAnswer { offer } => {
+                    self.metadata.sdp_offer = Some(offer);
+                }
+                HandshakeOutput::AcceptSDPAnswer { answer } => {
+                    self.metadata.sdp_answer = Some(answer);
+                }
+                _ => {}
+            }
+        }
 
         match state {
             HandshakeState::WaitingForAnswer => {
-                let mut out = vec![];
+                let mut out: Vec<Output<Msg>> = vec![];
                 if let Some(event) = handshake_out {
                     out.push(Output::Handshake {
                         peer: peer.clone(),
                         event,
                     });
-                } else if let (Some(via), Some(sdp)) = (relay_via, &input_sdp) {
-                    out.push(Output::Relay {
-                        via,
-                        payload: RelayPayload::HandshakeForward {
-                            src: self.id.clone(),
-                            dst: peer,
-                            event: HandshakeInput::SDPOfferReceived { sdp: sdp.clone() },
-                        },
-                    });
-                }
-                out
-            }
-            HandshakeState::Connected => {
-                self.handshakes.remove(&peer);
-                self.connected.insert(peer.clone());
-                let mut out = vec![Output::PeerConnected { peer: peer.clone() }];
-                for existing in &self.connected {
-                    // TODO solve problem: currently "full mesh connection" is not atomic, so new peer can start broadcasting before he is
-                    // connected to anyone in mesh, that would cause race condition.
-                    if existing != &peer {
-                        out.push(Output::Relay {
-                            via: peer.clone(),
-                            payload: RelayPayload::ConnectionRequest {
-                                peer: existing.clone(),
-                            },
-                        });
-                    }
-                }
-                if let Some(event) = handshake_out {
-                    out.push(Output::Handshake { peer, event });
                 }
                 out
             }
@@ -85,15 +55,22 @@ impl MeshNodeFSM {
                         event,
                     });
                 }
-                if let (Some(via), Some(sdp)) = (relay_via, &input_sdp) {
-                    out.push(Output::Relay {
-                        via,
-                        payload: RelayPayload::HandshakeForward {
-                            src: self.id.clone(),
-                            dst: peer,
-                            event: HandshakeInput::SDPAnswerReceived { sdp: sdp.clone() },
-                        },
-                    });
+                out
+            }
+            HandshakeState::Connected => {
+                self.handshakes.remove(&peer);
+                self.connected.insert(peer.clone());
+                let mut out = vec![];
+                // out.push(Output::PeerConnected { peer: peer.clone() });
+                for existing in &self.connected {
+                    if existing != &peer {
+                        out.push(Output::PeerAppeared {
+                            peer: existing.clone(),
+                        });
+                    }
+                }
+                if let Some(event) = handshake_out {
+                    out.push(Output::Handshake { peer, event });
                 }
                 out
             }

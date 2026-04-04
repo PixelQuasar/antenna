@@ -38,7 +38,7 @@ impl ChatApp {
     pub async fn start_as_host(&mut self, remote_id: String) -> Result<String, JsValue> {
         self.remote = Some(PeerID::new(remote_id.clone()));
 
-        let (offer, _relays) = self
+        let offer = self
             .client
             .start_with_peer(PeerID::new(remote_id))
             .await
@@ -54,7 +54,7 @@ impl ChatApp {
     ) -> Result<String, JsValue> {
         self.remote = Some(PeerID::new(remote_id.clone()));
 
-        let (answer, _relays) = self
+        let answer = self
             .client
             .receive_offer(PeerID::new(remote_id), offer_sdp)
             .await

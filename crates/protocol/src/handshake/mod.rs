@@ -11,8 +11,6 @@ pub use joiner::Joiner;
 pub use output::HandshakeOutput;
 pub use state::HandshakeState;
 
-use crate::mesh::PeerID;
-
 /// Trait that is implemented by handshake-side module of client FSM
 pub enum HandshakeFSM {
     Host(Host),
@@ -38,9 +36,6 @@ impl HandshakeFSM {
 }
 
 pub struct HandshakeContext {
-    /// Peer ID from through we are handshaking. If none, handshake is direct
-    pub via: Option<PeerID>,
-
     /// Handshake state machine
     pub handshake: HandshakeFSM,
 }

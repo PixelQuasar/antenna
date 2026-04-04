@@ -55,23 +55,15 @@ impl Driver {
             .collect()
     }
 
-    pub async fn process_input(
-        &mut self,
-        input: Input<Msg>,
-    ) -> Result<(Vec<Output<Msg>>, Option<String>)> {
+    pub async fn process_input(&mut self, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
         let was_connected = !self.fsm.borrow().connected_peers().is_empty();
         let outputs = self.fsm.borrow_mut().process(input);
 
         let mut unhandled = Vec::new();
-        let mut sdp = None;
 
         for output in outputs {
             match output {
-                Output::Handshake { peer, event } => {
-                    if let Some(local_sdp) = self.execute_handshake(&peer, event).await? {
-                        sdp = Some(local_sdp);
-                    }
-                }
+                Output::Handshake { peer, event } => self.execute_handshake(&peer, event).await?,
                 Output::SendMessage { peer_to, data } => {
                     self.send(&peer_to, &data).await?;
                 }
@@ -103,7 +95,7 @@ impl Driver {
             self.callbacks.borrow().emit(RtcEvent::Disconnected);
         }
 
-        Ok((unhandled, sdp))
+        Ok(unhandled)
     }
 
     async fn send(&self, peer: &PeerID, data: &[u8]) -> Result<()> {
@@ -121,5 +113,9 @@ impl Driver {
             }
         }
         Ok(())
+    }
+
+    pub fn fsm(&self) -> Rc<RefCell<MeshNodeFSM>> {
+        self.fsm.clone()
     }
 }
