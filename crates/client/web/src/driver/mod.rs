@@ -74,9 +74,7 @@ where
                 Output::SendMessage { peer_to, data } => {
                     self.send(&peer_to, &data).await?;
                 }
-                Output::ReceiveMessage {
-                    peer_from, data, ..
-                } => match data {
+                Output::ReceiveMessage { peer_from, data } => match data {
                     MsgPayload::User(data) => self
                         .callbacks
                         .borrow()

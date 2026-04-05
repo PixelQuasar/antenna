@@ -1,4 +1,4 @@
-use antenna::web::{Client, IceServerConfig, PeerID};
+use antenna::web::{Client, IceServerConfig, PeerID, Rtc};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -33,7 +33,7 @@ impl ChatApp {
         ));
 
         let mut client = Client::with_ice_servers(PeerID::new(id), ice_servers);
-        client.set_on_message(Self::on_message);
+        client.subscribe(Rtc::UserMessage(Self::on_message));
 
         Ok(ChatApp {
             client,
@@ -83,7 +83,7 @@ impl ChatApp {
             .clone()
             .ok_or_else(|| JsValue::from_str("Not connected"))?;
         self.client
-            .send_to(remote_id, Message { text })
+            .send(remote_id, Message { text })
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }

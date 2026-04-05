@@ -3,10 +3,7 @@ mod callbacks;
 mod config;
 
 pub use async_callback::async_callback;
-pub use callbacks::{
-    Dispatcher, MessageCallback, PeerConnectedCallback, PeerDisconnectedCallback, RtcCallbacks,
-    RtcEvent,
-};
+pub use callbacks::{CallbackId, Dispatcher, Rtc, RtcCallbacks, RtcEvent};
 pub use config::IceServerConfig;
 use wasm_bindgen::JsCast;
 

@@ -2,10 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     driver::Driver,
-    utils::{
-        IceServerConfig, MessageCallback, PeerConnectedCallback, PeerDisconnectedCallback,
-        RtcCallbacks,
-    },
+    utils::{CallbackId, IceServerConfig, Rtc, RtcCallbacks},
 };
 use antenna_protocol::{HandshakeInput, Input, MsgPayload, PeerID, UserMsgPayload};
 
@@ -41,6 +38,14 @@ where
 
     pub fn my_id(&self) -> &PeerID {
         &self.my_id
+    }
+
+    pub fn subscribe(&mut self, subscription: Rtc<Msg>) -> CallbackId {
+        self.callbacks.borrow_mut().subscribe(subscription)
+    }
+
+    pub fn unsubscribe(&mut self, id: CallbackId) -> bool {
+        self.callbacks.borrow_mut().unsubscribe(id)
     }
 
     pub async fn start(&mut self, peer_id: PeerID) -> Result<String> {
@@ -127,27 +132,15 @@ where
             .collect()
     }
 
-    pub fn set_on_message(&mut self, cb: MessageCallback<Msg>) {
-        self.callbacks.borrow_mut().on_message = Some(cb);
-    }
-
-    pub fn set_on_peer_connected(&mut self, cb: PeerConnectedCallback) {
-        self.callbacks.borrow_mut().on_peer_connected = Some(cb);
-    }
-
-    pub fn set_on_peer_disconnected(&mut self, cb: PeerDisconnectedCallback) {
-        self.callbacks.borrow_mut().on_peer_disconnected = Some(cb);
-    }
-
     pub fn set_js_on_message(&mut self, cb: js_sys::Function) {
-        self.callbacks.borrow_mut().js_on_message = Some(cb)
+        self.subscribe(Rtc::JsUserMessage(cb));
     }
 
     pub fn set_js_on_connected(&mut self, cb: js_sys::Function) {
-        self.callbacks.borrow_mut().js_on_connected = Some(cb)
+        self.subscribe(Rtc::JsConnected(cb));
     }
 
     pub fn set_js_on_disconnected(&mut self, cb: js_sys::Function) {
-        self.callbacks.borrow_mut().js_on_disconnected = Some(cb)
+        self.subscribe(Rtc::JsDisconnected(cb));
     }
 }
