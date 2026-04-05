@@ -6,7 +6,7 @@ use crate::{
     webrtc::{DataChannelManager, PeerConnectionManager},
 };
 use antenna_protocol::{
-    UserMsgPayload, HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, Output, PeerID,
+    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID, UserMsgPayload,
 };
 
 use anyhow::{Context, Result};
@@ -198,25 +198,45 @@ where
             let fsm = fsm.clone();
             let callbacks = callbacks.clone();
             dc_manager.setup_on_message(move |data| {
+                let data: MsgPayload<Msg> = match serde_json::from_slice(&data) {
+                    Ok(data) => data,
+                    Err(err) => {
+                        web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&format!(
+                            "Failed to deserialize incoming message: {err:#}"
+                        )));
+                        return;
+                    }
+                };
                 let outputs = fsm.borrow_mut().process(Input::MessageReceived {
                     peer_from: peer.clone(),
                     data,
                 });
                 for output in outputs {
-                    if let Output::ReceiveMessage { peer_from, data } = output {
-                        match serde_json::from_slice::<Msg>(&data) {
-                            Ok(msg) => {
-                                if let Err(err) =
-                                    callbacks.borrow().emit(RtcEvent::Message(peer_from, msg))
+                    if let Output::<Msg>::ReceiveMessage { peer_from, data } = output {
+                        match data {
+                            MsgPayload::User(data) => {
+                                if let Err(err) = callbacks
+                                    .borrow()
+                                    .emit(RtcEvent::UserMessage(peer_from, data))
                                 {
                                     web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(
-                                        &format!("Failed to emit message callback: {err:#}"),
+                                        &format!("Failed to emit message callback: {:#?}", err),
                                     ));
                                 }
                             }
-                            Err(err) => {
-                                web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(
-                                    &format!("Failed to deserialize incoming message: {err}"),
+                            MsgPayload::Signaling(data) => {
+                                if let Err(err) = callbacks
+                                    .borrow()
+                                    .emit(RtcEvent::SignalingMessage(peer_from, data))
+                                {
+                                    web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(
+                                        &format!("Failed to emit message callback: {:#?}", err),
+                                    ));
+                                }
+                            }
+                            _ => {
+                                web_sys::console::warn_1(&wasm_bindgen::JsValue::from_str(
+                                    &format!("Unknown message type"),
                                 ));
                             }
                         }

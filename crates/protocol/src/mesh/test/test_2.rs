@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, Output, PeerID};
+    use crate::{HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID};
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,7 +103,7 @@ mod test {
 
         let out = mesh.process(Input::MessageReceived {
             peer_from: bob(),
-            data: TestMsg("hello".into()),
+            data: MsgPayload::User(TestMsg("hello".into())),
         });
         assert!(out.is_empty());
 
@@ -111,12 +111,15 @@ mod test {
 
         let out = mesh.process(Input::MessageReceived {
             peer_from: bob(),
-            data: TestMsg("hello".into()),
+            data: MsgPayload::User(TestMsg("hello".into())),
         });
         assert_eq!(out.len(), 1);
         assert!(matches!(&out[0], Output::ReceiveMessage { .. }));
         if let Output::ReceiveMessage { data, .. } = &out[0] {
-            assert_eq!(data, &TestMsg("hello".into()));
+            match data {
+                MsgPayload::User(TestMsg(text)) => assert_eq!(text, "hello"),
+                _ => panic!("expected user payload"),
+            }
         }
     }
 
@@ -126,7 +129,7 @@ mod test {
 
         let out = mesh.process(Input::Send {
             peer_to: bob(),
-            data: TestMsg("msg".into()),
+            data: MsgPayload::User(TestMsg("hello".into())),
         });
         assert!(out.is_empty());
 
@@ -134,7 +137,7 @@ mod test {
 
         let out = mesh.process(Input::Send {
             peer_to: bob(),
-            data: TestMsg("msg".into()),
+            data: MsgPayload::User(TestMsg("hello".into())),
         });
         assert_eq!(out.len(), 1);
         assert!(matches!(&out[0], Output::SendMessage { .. }));

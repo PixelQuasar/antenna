@@ -7,7 +7,7 @@ use crate::{
         RtcCallbacks,
     },
 };
-use antenna_protocol::{UserMsgPayload, HandshakeInput, Input, PeerID};
+use antenna_protocol::{HandshakeInput, Input, MsgPayload, PeerID, UserMsgPayload};
 
 use anyhow::{Context, Result};
 
@@ -86,11 +86,21 @@ where
         Ok(())
     }
 
-    pub async fn send_to(&mut self, peer_id: PeerID, data: Msg) -> Result<()> {
+    pub async fn send(&mut self, peer_id: PeerID, data: Msg) -> Result<()> {
         self.driver
-            .process_input(Input::PeerSend {
+            .process_input(Input::Send {
                 peer_to: peer_id,
-                data: data,
+                data: MsgPayload::User(data),
+            })
+            .await?;
+        Ok(())
+    }
+
+    pub async fn send_signaling(&mut self, peer_id: PeerID, data: HandshakeInput) -> Result<()> {
+        self.driver
+            .process_input(Input::Send {
+                peer_to: peer_id,
+                data: MsgPayload::Signaling(data),
             })
             .await?;
         Ok(())
@@ -98,7 +108,9 @@ where
 
     pub async fn broadcast(&mut self, data: Msg) -> Result<()> {
         self.driver
-            .process_input(Input::PeerBroadcast { data: data })
+            .process_input(Input::Broadcast {
+                data: MsgPayload::User(data),
+            })
             .await?;
         Ok(())
     }

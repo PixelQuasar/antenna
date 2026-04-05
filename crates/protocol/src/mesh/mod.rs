@@ -69,7 +69,10 @@ impl MeshNodeFSM {
             }
             Input::Send { peer_to, data } => {
                 if self.connected.contains(&peer_to) {
-                    vec![Output::SendMessage { peer_to, data }]
+                    vec![Output::SendMessage {
+                        peer_to,
+                        data: data,
+                    }]
                 } else {
                     vec![]
                 }

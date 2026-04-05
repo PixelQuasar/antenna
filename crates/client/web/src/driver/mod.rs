@@ -1,7 +1,8 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use antenna_protocol::{UserMsgPayload, Input, MeshNodeFSM, Output, PeerID};
+use antenna_protocol::{Input, MeshNodeFSM, MsgPayload, Output, PeerID, UserMsgPayload};
 use anyhow::{Context, Result};
+use wasm_bindgen::JsValue;
 
 use crate::{
     utils::{Dispatcher, IceServerConfig, RtcCallbacks, RtcEvent},
@@ -73,15 +74,21 @@ where
                 Output::SendMessage { peer_to, data } => {
                     self.send(&peer_to, &data).await?;
                 }
-                Output::Broadcast { data } => {
-                    self.broadcast(&data).await?;
-                }
                 Output::ReceiveMessage {
                     peer_from, data, ..
-                } => self
-                    .callbacks
-                    .borrow()
-                    .emit(RtcEvent::Message(peer_from, data))?,
+                } => match data {
+                    MsgPayload::User(data) => self
+                        .callbacks
+                        .borrow()
+                        .emit(RtcEvent::UserMessage(peer_from, data))?,
+                    MsgPayload::Signaling(data) => self
+                        .callbacks
+                        .borrow()
+                        .emit(RtcEvent::SignalingMessage(peer_from, data))?,
+                    _ => {
+                        web_sys::console::warn_1(&JsValue::from_str("Unknown message type"));
+                    }
+                },
                 Output::PeerConnected { peer } => self
                     .callbacks
                     .borrow()
@@ -104,19 +111,10 @@ where
         Ok(unhandled)
     }
 
-    async fn send(&self, peer: &PeerID, data: &Msg) -> Result<()> {
+    async fn send(&self, peer: &PeerID, data: &MsgPayload<Msg>) -> Result<()> {
         let dc = self.dc_managers.get(peer).context("Peer not found")?;
         if let Some(dc) = dc.borrow().as_ref() {
             dc.send_data(data)?;
-        }
-        Ok(())
-    }
-
-    async fn broadcast(&self, data: &Msg) -> Result<()> {
-        for (_, dc) in &self.dc_managers {
-            if let Some(dc) = dc.borrow().as_ref() {
-                dc.send_data(data)?;
-            }
         }
         Ok(())
     }

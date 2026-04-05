@@ -23,7 +23,7 @@ impl DataChannelManager {
     }
 
     pub fn setup_on_open<F: Fn() + 'static>(&self, on_open: F) {
-        let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_evt: JsValue| {
+        let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_: JsValue| {
             on_open();
         }));
         self.data_channel
@@ -32,8 +32,8 @@ impl DataChannelManager {
     }
 
     pub fn setup_on_message<F: Fn(Vec<u8>) + 'static>(&self, on_message: F) {
-        let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |evt: JsValue| {
-            let event: web_sys::MessageEvent = evt.unchecked_into();
+        let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |event: JsValue| {
+            let event: web_sys::MessageEvent = event.unchecked_into();
             if let Ok(ab) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
                 let bytes = js_sys::Uint8Array::new(&ab).to_vec();
                 on_message(bytes);
@@ -47,7 +47,7 @@ impl DataChannelManager {
     }
 
     pub fn setup_on_close<F: Fn() + 'static>(&self, on_close: F) {
-        let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_evt: JsValue| {
+        let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_: JsValue| {
             on_close();
         }));
         self.data_channel

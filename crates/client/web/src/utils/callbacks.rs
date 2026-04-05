@@ -1,13 +1,15 @@
-use antenna_protocol::{UserMsgPayload, PeerID};
+use antenna_protocol::{HandshakeInput, PeerID, UserMsgPayload};
 use anyhow::{Result, anyhow};
 use wasm_bindgen::prelude::*;
 
 use crate::utils::to_js_object;
 
-pub enum RtcEvent<T> {
+pub enum RtcEvent<Msg: UserMsgPayload> {
     Connected,
 
-    Message(PeerID, T),
+    UserMessage(PeerID, Msg),
+
+    SignalingMessage(PeerID, HandshakeInput),
 
     Disconnected,
 
@@ -16,19 +18,21 @@ pub enum RtcEvent<T> {
     PeerDisconnected(PeerID),
 }
 
-pub trait Dispatcher<T> {
-    fn emit(&self, event: RtcEvent<T>) -> Result<()>;
+pub trait Dispatcher<Msg: UserMsgPayload> {
+    fn emit(&self, event: RtcEvent<Msg>) -> Result<()>;
 }
 
 pub type ConnectedCallback = fn();
 
-pub type MessageCallback<T> = fn(PeerID, T);
+pub type MessageCallback<Msg> = fn(PeerID, Msg);
 
 pub type DisconnectedCallback = fn();
 
 pub type PeerConnectedCallback = fn(PeerID);
 
 pub type PeerDisconnectedCallback = fn(PeerID);
+
+pub type SignalingMessageCallback = fn(PeerID, HandshakeInput);
 
 #[derive(Clone)]
 pub struct RtcCallbacks<Msg>
@@ -37,21 +41,23 @@ where
 {
     pub on_connected: Option<ConnectedCallback>,
 
-    pub js_on_connected: Option<js_sys::Function>,
-
     pub on_message: Option<MessageCallback<Msg>>,
-
-    pub js_on_message: Option<js_sys::Function>,
 
     pub on_disconnected: Option<DisconnectedCallback>,
 
-    pub js_on_disconnected: Option<js_sys::Function>,
-
     pub on_peer_connected: Option<PeerConnectedCallback>,
 
-    pub js_on_peer_connected: Option<js_sys::Function>,
-
     pub on_peer_disconnected: Option<PeerDisconnectedCallback>,
+
+    pub on_signaling_message: Option<SignalingMessageCallback>,
+
+    pub js_on_connected: Option<js_sys::Function>,
+
+    pub js_on_message: Option<js_sys::Function>,
+
+    pub js_on_disconnected: Option<js_sys::Function>,
+
+    pub js_on_peer_connected: Option<js_sys::Function>,
 
     pub js_on_peer_disconnected: Option<js_sys::Function>,
 }
@@ -72,6 +78,7 @@ where
             js_on_peer_connected: None,
             on_peer_disconnected: None,
             js_on_peer_disconnected: None,
+            on_signaling_message: None,
         }
     }
 }
@@ -92,7 +99,7 @@ where
                         .map_err(|e| anyhow!("Failed to call onConnected callback: {:#?}", e))?;
                 }
             }
-            RtcEvent::Message(peer, data) => {
+            RtcEvent::UserMessage(peer, data) => {
                 if let Some(on_message) = self.on_message {
                     on_message(peer.clone(), data.clone());
                 }
@@ -103,6 +110,11 @@ where
                     on_message
                         .call2(&JsValue::NULL, &peer, &msg_obj)
                         .map_err(|e| anyhow!("Failed to call onMessage callback: {:#?}", e))?;
+                }
+            }
+            RtcEvent::SignalingMessage(peer, data) => {
+                if let Some(on_signaling_message) = self.on_signaling_message {
+                    on_signaling_message(peer.clone(), data.clone());
                 }
             }
             RtcEvent::Disconnected => {

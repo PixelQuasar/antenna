@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 /// Events fed into the handshake FSM from the driver.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum HandshakeInput {
     /// Input event signalizing that we started SDP negotiation
     InitNegotiation,
