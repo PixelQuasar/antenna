@@ -1,9 +1,15 @@
 use antenna::web::{Client, IceServerConfig, PeerID};
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+
+#[derive(Serialize, Deserialize, Clone)]
+struct Message {
+    pub text: String,
+}
 
 #[wasm_bindgen]
 pub struct ChatApp {
-    client: Client,
+    client: Client<Message>,
     remote: Option<PeerID>,
 }
 
@@ -37,13 +43,11 @@ impl ChatApp {
 
     pub async fn start_as_host(&mut self, remote_id: String) -> Result<String, JsValue> {
         self.remote = Some(PeerID::new(remote_id.clone()));
-
         let offer = self
             .client
-            .start_with_peer(PeerID::new(remote_id))
+            .start(PeerID::new(remote_id))
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-
         Ok(offer)
     }
 
@@ -53,13 +57,11 @@ impl ChatApp {
         offer_sdp: String,
     ) -> Result<String, JsValue> {
         self.remote = Some(PeerID::new(remote_id.clone()));
-
         let answer = self
             .client
             .receive_offer(PeerID::new(remote_id), offer_sdp)
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-
         Ok(answer)
     }
 
@@ -68,12 +70,10 @@ impl ChatApp {
             .remote
             .clone()
             .ok_or_else(|| JsValue::from_str("Remote peer ID not set"))?;
-
         self.client
             .receive_answer(remote_id, answer_sdp)
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-
         Ok(())
     }
 
@@ -82,9 +82,8 @@ impl ChatApp {
             .remote
             .clone()
             .ok_or_else(|| JsValue::from_str("Not connected"))?;
-
         self.client
-            .send_to(remote_id, text.as_bytes().to_vec())
+            .send_to(remote_id, Message { text })
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
@@ -97,11 +96,10 @@ impl ChatApp {
         }
     }
 
-    fn on_message(peer: PeerID, data: Vec<u8>) {
-        let text = String::from_utf8_lossy(&data).to_string();
+    fn on_message(peer: PeerID, data: Message) {
         web_sys::console::log_2(
             &JsValue::from_str(&peer.as_str()),
-            &JsValue::from_str(&text),
+            &JsValue::from_str(&data.text),
         );
     }
 

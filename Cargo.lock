@@ -17,12 +17,17 @@ version = "0.1.0"
 [[package]]
 name = "antenna-client-shared"
 version = "0.1.0"
+dependencies = [
+ "antenna-protocol",
+ "anyhow",
+]
 
 [[package]]
 name = "antenna-client-web"
 version = "0.1.0"
 dependencies = [
  "antenna-protocol",
+ "antenna-shared",
  "anyhow",
  "futures",
  "js-sys",
@@ -37,6 +42,17 @@ dependencies = [
 [[package]]
 name = "antenna-protocol"
 version = "0.1.0"
+dependencies = [
+ "antenna-shared",
+ "anyhow",
+]
+
+[[package]]
+name = "antenna-shared"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "antenna-signaling-mesh"
@@ -49,6 +65,11 @@ version = "0.1.0"
 [[package]]
 name = "antenna-signaling-shared"
 version = "0.1.0"
+dependencies = [
+ "antenna-client-shared",
+ "antenna-protocol",
+ "anyhow",
+]
 
 [[package]]
 name = "anyhow"
@@ -202,6 +223,8 @@ dependencies = [
  "console_error_panic_hook",
  "dotenvy",
  "js-sys",
+ "serde",
+ "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",

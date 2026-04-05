@@ -2,15 +2,19 @@
 
 use crate::{
     driver::Driver,
-    utils::{Dispatcher, Msg, RtcCallbacks, RtcEvent},
+    utils::{Dispatcher, RtcCallbacks, RtcEvent},
     webrtc::{DataChannelManager, PeerConnectionManager},
 };
 use antenna_protocol::{HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, Output, PeerID};
+use antenna_shared::AntennaPayload;
 use anyhow::{Context, Result};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 
-impl Driver {
+impl<Msg> Driver<Msg>
+where
+    Msg: AntennaPayload,
+{
     pub(crate) async fn execute_handshake(
         &mut self,
         peer: &PeerID,
@@ -35,7 +39,7 @@ impl Driver {
     async fn execute_init_offer(&mut self, peer: &PeerID) -> Result<()> {
         let pc_manager = PeerConnectionManager::from_ice_config(&self.ice_servers)?;
 
-        self.setup_host_data_channel(peer, pc_manager.peer_connection());
+        self.setup_host_data_channel(peer, pc_manager.peer_connection())?;
 
         let offer_sdp = pc_manager.create_offer().await?;
         pc_manager.set_local_description(&offer_sdp, true).await?;
@@ -56,7 +60,7 @@ impl Driver {
     async fn execute_init_answer(&mut self, peer: &PeerID, offer_sdp: String) -> Result<()> {
         let pc_manager = PeerConnectionManager::from_ice_config(&self.ice_servers)?;
 
-        self.setup_joiner_data_channel(peer, pc_manager.peer_connection());
+        self.setup_joiner_data_channel(peer, pc_manager.peer_connection())?;
 
         pc_manager.set_remote_description(&offer_sdp, true).await?;
         let answer_sdp = pc_manager.create_answer().await?;
@@ -98,20 +102,30 @@ impl Driver {
         Ok(())
     }
 
-    fn setup_host_data_channel(&mut self, peer: &PeerID, pc: &web_sys::RtcPeerConnection) {
+    fn setup_host_data_channel(
+        &mut self,
+        peer: &PeerID,
+        pc: &web_sys::RtcPeerConnection,
+    ) -> Result<()> {
         let dc_manager = DataChannelManager::new(pc, "data");
         Self::attach_data_channel_callbacks(
             peer.clone(),
             self.fsm.clone(),
             self.callbacks.clone(),
             &dc_manager,
-        );
+        )?;
 
         let dc = Rc::new(RefCell::new(Some(dc_manager)));
         self.dc_managers.insert(peer.clone(), dc);
+
+        Ok(())
     }
 
-    fn setup_joiner_data_channel(&mut self, peer: &PeerID, pc: &web_sys::RtcPeerConnection) {
+    fn setup_joiner_data_channel(
+        &mut self,
+        peer: &PeerID,
+        pc: &web_sys::RtcPeerConnection,
+    ) -> Result<()> {
         let peer_id = peer.clone();
         let fsm = self.fsm.clone();
         let callbacks = self.callbacks.clone();
@@ -122,17 +136,23 @@ impl Driver {
             let channel = event.channel();
             let dc_manager = DataChannelManager::from_existing(channel);
 
-            Self::attach_data_channel_callbacks(
+            let result = Self::attach_data_channel_callbacks(
                 peer_id.clone(),
                 fsm.clone(),
                 callbacks.clone(),
                 &dc_manager,
             );
+            if let Err(e) = result {
+                web_sys::console::error_1(&JsValue::from_str(&format!(
+                    "Error while attaching data channel callbacks: {:?}",
+                    e
+                )));
+            };
             *dc_storage.borrow_mut() = Some(dc_manager);
         }));
-
         pc.set_ondatachannel(Some(cb.as_ref().unchecked_ref()));
         cb.forget();
+        Ok(())
     }
 
     fn attach_data_channel_callbacks(
@@ -140,25 +160,34 @@ impl Driver {
         fsm: Rc<RefCell<MeshNodeFSM>>,
         callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
         dc_manager: &DataChannelManager,
-    ) {
+    ) -> Result<()> {
         {
             let peer = peer.clone();
             let fsm = fsm.clone();
             let callbacks = callbacks.clone();
             dc_manager.setup_on_open(move || {
                 let was_empty = fsm.borrow().connected_peers().is_empty();
-
                 fsm.borrow_mut().process(Input::<Msg>::Handshake {
                     from: peer.clone(),
                     event: HandshakeInput::DataChannelOpen,
                 });
-
                 if was_empty {
-                    callbacks.borrow().emit(RtcEvent::Connected);
+                    if let Err(e) = callbacks.borrow().emit(RtcEvent::Connected) {
+                        web_sys::console::error_1(&JsValue::from_str(&format!(
+                            "Error while emitting Connected: {:?}",
+                            e
+                        )));
+                    }
                 }
-                callbacks
+                if let Err(e) = callbacks
                     .borrow()
-                    .emit(RtcEvent::PeerConnected(peer.clone()));
+                    .emit(RtcEvent::PeerConnected(peer.clone()))
+                {
+                    web_sys::console::error_1(&JsValue::from_str(&format!(
+                        "Error while emitting PeerConnected: {:?}",
+                        e
+                    )));
+                }
             });
         }
 
@@ -172,11 +201,23 @@ impl Driver {
                     data,
                 });
                 for output in outputs {
-                    if let Output::ReceiveMessage {
-                        peer_from, data, ..
-                    } = output
-                    {
-                        callbacks.borrow().emit(RtcEvent::Message(peer_from, data));
+                    if let Output::ReceiveMessage { peer_from, data } = output {
+                        match serde_json::from_slice::<Msg>(&data) {
+                            Ok(msg) => {
+                                if let Err(err) =
+                                    callbacks.borrow().emit(RtcEvent::Message(peer_from, msg))
+                                {
+                                    web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(
+                                        &format!("Failed to emit message callback: {err:#}"),
+                                    ));
+                                }
+                            }
+                            Err(err) => {
+                                web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(
+                                    &format!("Failed to deserialize incoming message: {err}"),
+                                ));
+                            }
+                        }
                     }
                 }
             });
@@ -191,15 +232,25 @@ impl Driver {
                     from: peer.clone(),
                     event: HandshakeInput::Disconnected,
                 });
-
-                callbacks
+                if let Err(e) = callbacks
                     .borrow()
-                    .emit(RtcEvent::PeerDisconnected(peer.clone()));
-
+                    .emit(RtcEvent::PeerDisconnected(peer.clone()))
+                {
+                    web_sys::console::error_1(&JsValue::from_str(&format!(
+                        "Error while emitting PeerDisconnected: {:?}",
+                        e
+                    )));
+                }
                 if fsm.borrow().connected_peers().is_empty() {
-                    callbacks.borrow().emit(RtcEvent::Disconnected);
+                    if let Err(e) = callbacks.borrow().emit(RtcEvent::Disconnected) {
+                        web_sys::console::error_1(&JsValue::from_str(&format!(
+                            "Error while emitting Disconnected: {:?}",
+                            e
+                        )));
+                    }
                 }
             });
         }
+        Ok(())
     }
 }

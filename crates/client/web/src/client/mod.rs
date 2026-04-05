@@ -3,26 +3,33 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     driver::Driver,
     utils::{
-        IceServerConfig, MessageCallback, Msg, PeerConnectedCallback, PeerDisconnectedCallback,
+        IceServerConfig, MessageCallback, PeerConnectedCallback, PeerDisconnectedCallback,
         RtcCallbacks,
     },
 };
 use antenna_protocol::{HandshakeInput, Input, PeerID};
+use antenna_shared::AntennaPayload;
 use anyhow::{Context, Result};
 
-pub struct Client {
+pub struct Client<Msg>
+where
+    Msg: AntennaPayload,
+{
     my_id: PeerID,
-    driver: Driver,
+    driver: Driver<Msg>,
     callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
 }
 
-impl Client {
+impl<Msg> Client<Msg>
+where
+    Msg: AntennaPayload,
+{
     pub fn new(my_id: PeerID) -> Self {
         Self::with_ice_servers(my_id, IceServerConfig::default_stun())
     }
 
     pub fn with_ice_servers(my_id: PeerID, ice_servers: Vec<IceServerConfig>) -> Self {
-        let callbacks = Rc::new(RefCell::new(RtcCallbacks::default()));
+        let callbacks = Rc::new(RefCell::new(RtcCallbacks::new()));
         let driver = Driver::new(my_id.clone(), ice_servers, callbacks.clone());
 
         Self {
@@ -36,7 +43,7 @@ impl Client {
         &self.my_id
     }
 
-    pub async fn start_with_peer(&mut self, peer_id: PeerID) -> Result<String> {
+    pub async fn start(&mut self, peer_id: PeerID) -> Result<String> {
         self.driver
             .process_input(Input::Handshake {
                 from: peer_id.clone(),
@@ -52,11 +59,11 @@ impl Client {
             .context("SDP offer not found on starting")
     }
 
-    pub async fn receive_offer(&mut self, peer_id: PeerID, offer_sdp: String) -> Result<String> {
+    pub async fn receive_offer(&mut self, peer_id: PeerID, offer: String) -> Result<String> {
         self.driver
             .process_input(Input::Handshake {
                 from: peer_id.clone(),
-                event: HandshakeInput::SDPOfferReceived { sdp: offer_sdp },
+                event: HandshakeInput::SDPOfferReceived { sdp: offer },
             })
             .await?;
         self.driver
@@ -68,11 +75,11 @@ impl Client {
             .context("SDP answer not found on receiving offer")
     }
 
-    pub async fn receive_answer(&mut self, peer_id: PeerID, answer_sdp: String) -> Result<()> {
+    pub async fn receive_answer(&mut self, peer_id: PeerID, answer: String) -> Result<()> {
         self.driver
             .process_input(Input::Handshake {
                 from: peer_id,
-                event: HandshakeInput::SDPAnswerReceived { sdp: answer_sdp },
+                event: HandshakeInput::SDPAnswerReceived { sdp: answer },
             })
             .await?;
 
@@ -91,9 +98,7 @@ impl Client {
 
     pub async fn broadcast(&mut self, data: Msg) -> Result<()> {
         self.driver
-            .process_input(Input::PeerBroadcast {
-                data: data.to_vec(),
-            })
+            .process_input(Input::PeerBroadcast { data: data })
             .await?;
         Ok(())
     }

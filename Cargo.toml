@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/protocol",
+    "crates/antenna",
+    "crates/shared",
     "crates/client/*",
     "crates/signaling/*",
     "example/*",
@@ -14,6 +17,9 @@ path = "crates/antenna"
 
 [workspace.dependencies.antenna-protocol]
 path = "crates/protocol"
+
+[workspace.dependencies.antenna-shared]
+path = "crates/shared"
 
 [workspace.dependencies.antenna-client-web]
 path = "crates/client/web"

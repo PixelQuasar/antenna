@@ -5,3 +5,5 @@ edition = "2024"
 rust-version.workspace = true
 
 [dependencies]
+antenna-protocol.workspace = true
+anyhow.workspace = true

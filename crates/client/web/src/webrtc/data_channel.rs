@@ -1,3 +1,4 @@
+use antenna_shared::AntennaPayload;
 use anyhow::{Result, anyhow};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
@@ -54,9 +55,12 @@ impl DataChannelManager {
         cb.forget();
     }
 
-    pub fn send_data(&self, data: &[u8]) -> Result<()> {
+    pub fn send_data<Msg: AntennaPayload>(&self, data: &Msg) -> Result<()> {
+        let bytes =
+            serde_json::to_vec(data).map_err(|e| anyhow!("Failed to serialize message: {e}"))?;
+
         self.data_channel
-            .send_with_u8_array(data)
+            .send_with_u8_array(&bytes)
             .map_err(|e| anyhow!("Failed to send data: {:?}", e))
     }
 
