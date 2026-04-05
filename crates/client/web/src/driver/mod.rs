@@ -1,7 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use antenna_protocol::{Input, MeshNodeFSM, Output, PeerID};
-use antenna_shared::AntennaPayload;
+use antenna_protocol::{UserMsgPayload, Input, MeshNodeFSM, Output, PeerID};
 use anyhow::{Context, Result};
 
 use crate::{
@@ -13,7 +12,7 @@ mod execute_handshake;
 
 pub struct Driver<Msg>
 where
-    Msg: AntennaPayload,
+    Msg: UserMsgPayload,
 {
     /// SansIO-based protocol finite state machine to handle main logic
     fsm: Rc<RefCell<MeshNodeFSM>>,
@@ -33,7 +32,7 @@ where
 
 impl<Msg> Driver<Msg>
 where
-    Msg: AntennaPayload,
+    Msg: UserMsgPayload,
 {
     pub fn new(
         id: PeerID,

@@ -5,15 +5,17 @@ use crate::{
     utils::{Dispatcher, RtcCallbacks, RtcEvent},
     webrtc::{DataChannelManager, PeerConnectionManager},
 };
-use antenna_protocol::{HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, Output, PeerID};
-use antenna_shared::AntennaPayload;
+use antenna_protocol::{
+    UserMsgPayload, HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, Output, PeerID,
+};
+
 use anyhow::{Context, Result};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 
 impl<Msg> Driver<Msg>
 where
-    Msg: AntennaPayload,
+    Msg: UserMsgPayload,
 {
     pub(crate) async fn execute_handshake(
         &mut self,

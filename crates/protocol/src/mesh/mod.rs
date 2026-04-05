@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 pub use peer_id::PeerID;
 
-use crate::{HandshakeContext, Input, Output};
+use crate::{HandshakeContext, Input, Output, UserMsgPayload};
 
 ///
 #[derive(Default, Clone)]
@@ -56,7 +56,7 @@ impl MeshNodeFSM {
         &self.connected
     }
 
-    pub fn process<Msg>(&mut self, input: Input<Msg>) -> Vec<Output<Msg>> {
+    pub fn process<Msg: UserMsgPayload>(&mut self, input: Input<Msg>) -> Vec<Output<Msg>> {
         match input {
             Input::Handshake { from, event } => self.handle_handshake(from, event),
             Input::PeerLeaving { peer } => self.handle_peer_leaving(peer),
@@ -67,24 +67,27 @@ impl MeshNodeFSM {
                     vec![]
                 }
             }
-            Input::PeerSend { peer_to, data } => {
+            Input::Send { peer_to, data } => {
                 if self.connected.contains(&peer_to) {
                     vec![Output::SendMessage { peer_to, data }]
                 } else {
                     vec![]
                 }
             }
-            Input::PeerBroadcast { data } => {
-                if !self.connected.is_empty() {
-                    vec![Output::Broadcast { data }]
-                } else {
-                    vec![]
+            Input::Broadcast { data } => {
+                let mut out = vec![];
+                for peer in &self.connected {
+                    out.push(Output::SendMessage {
+                        peer_to: peer.clone(),
+                        data: data.clone(),
+                    })
                 }
+                out
             }
         }
     }
 
-    fn handle_peer_leaving<Msg>(&mut self, peer: PeerID) -> Vec<Output<Msg>> {
+    fn handle_peer_leaving<Msg: UserMsgPayload>(&mut self, peer: PeerID) -> Vec<Output<Msg>> {
         self.handshakes.remove(&peer);
         let was_connected = self.connected.remove(&peer);
 

@@ -1,5 +1,4 @@
-use antenna_protocol::PeerID;
-use antenna_shared::AntennaPayload;
+use antenna_protocol::{UserMsgPayload, PeerID};
 use anyhow::{Result, anyhow};
 use wasm_bindgen::prelude::*;
 
@@ -34,7 +33,7 @@ pub type PeerDisconnectedCallback = fn(PeerID);
 #[derive(Clone)]
 pub struct RtcCallbacks<Msg>
 where
-    Msg: AntennaPayload,
+    Msg: UserMsgPayload,
 {
     pub on_connected: Option<ConnectedCallback>,
 
@@ -59,7 +58,7 @@ where
 
 impl<Msg> RtcCallbacks<Msg>
 where
-    Msg: AntennaPayload,
+    Msg: UserMsgPayload,
 {
     pub fn new() -> Self {
         RtcCallbacks {
@@ -79,7 +78,7 @@ where
 
 impl<Msg> Dispatcher<Msg> for RtcCallbacks<Msg>
 where
-    Msg: AntennaPayload,
+    Msg: UserMsgPayload,
 {
     fn emit(&self, event: RtcEvent<Msg>) -> Result<()> {
         match event {

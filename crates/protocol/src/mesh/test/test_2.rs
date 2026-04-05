@@ -120,7 +120,7 @@ mod test {
     fn send_only_when_connected() {
         let mut mesh = MeshNodeFSM::new(alice());
 
-        let out = mesh.process(Input::PeerSend {
+        let out = mesh.process(Input::Send {
             peer_to: bob(),
             data: "msg",
         });
@@ -128,7 +128,7 @@ mod test {
 
         drive_host_handshake(&mut mesh, &bob());
 
-        let out = mesh.process(Input::PeerSend {
+        let out = mesh.process(Input::Send {
             peer_to: bob(),
             data: "msg",
         });

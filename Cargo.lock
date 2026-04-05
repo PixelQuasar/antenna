@@ -27,7 +27,6 @@ name = "antenna-client-web"
 version = "0.1.0"
 dependencies = [
  "antenna-protocol",
- "antenna-shared",
  "anyhow",
  "futures",
  "js-sys",
@@ -43,14 +42,7 @@ dependencies = [
 name = "antenna-protocol"
 version = "0.1.0"
 dependencies = [
- "antenna-shared",
  "anyhow",
-]
-
-[[package]]
-name = "antenna-shared"
-version = "0.1.0"
-dependencies = [
  "serde",
 ]
 

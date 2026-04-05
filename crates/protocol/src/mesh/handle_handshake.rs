@@ -1,10 +1,10 @@
 use crate::{
     HandshakeContext, HandshakeFSM, HandshakeInput, HandshakeOutput, HandshakeState, Host, Joiner,
-    MeshNodeFSM, Output, PeerID,
+    MeshNodeFSM, Output, PeerID, UserMsgPayload,
 };
 
 impl MeshNodeFSM {
-    pub(crate) fn handle_handshake<Msg>(
+    pub(crate) fn handle_handshake<Msg: UserMsgPayload>(
         &mut self,
         peer: PeerID,
         event: HandshakeInput,

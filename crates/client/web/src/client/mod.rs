@@ -7,13 +7,13 @@ use crate::{
         RtcCallbacks,
     },
 };
-use antenna_protocol::{HandshakeInput, Input, PeerID};
-use antenna_shared::AntennaPayload;
+use antenna_protocol::{UserMsgPayload, HandshakeInput, Input, PeerID};
+
 use anyhow::{Context, Result};
 
 pub struct Client<Msg>
 where
-    Msg: AntennaPayload,
+    Msg: UserMsgPayload,
 {
     my_id: PeerID,
     driver: Driver<Msg>,
@@ -22,7 +22,7 @@ where
 
 impl<Msg> Client<Msg>
 where
-    Msg: AntennaPayload,
+    Msg: UserMsgPayload,
 {
     pub fn new(my_id: PeerID) -> Self {
         Self::with_ice_servers(my_id, IceServerConfig::default_stun())
