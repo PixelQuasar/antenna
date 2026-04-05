@@ -1,13 +1,18 @@
 #[cfg(test)]
 mod tests {
-    use crate::handshake::{HandshakeInput, HandshakeOutput, HandshakeState, Host, Joiner};
+    use crate::{
+        HandshakeMode,
+        handshake::{HandshakeInput, HandshakeOutput, HandshakeState, Host, Joiner},
+    };
 
     #[test]
     fn host_smoke() {
         let mut host = Host::new();
         assert_eq!(*host.state(), HandshakeState::Idle);
 
-        let out = host.process(HandshakeInput::InitNegotiation);
+        let out = host.process(HandshakeInput::InitNegotiation {
+            mode: HandshakeMode::Bootstrap,
+        });
         assert_eq!(*host.state(), HandshakeState::CreatingOffer);
         assert_eq!(out, Some(HandshakeOutput::InitSDPOffer));
 
@@ -40,6 +45,7 @@ mod tests {
 
         let out = joiner.process(HandshakeInput::SDPOfferReceived {
             sdp: "mock-offer".into(),
+            mode: HandshakeMode::Bootstrap,
         });
         assert_eq!(*joiner.state(), HandshakeState::CreatingAnswer);
         assert_eq!(
@@ -63,7 +69,9 @@ mod tests {
     #[test]
     fn host_disconnect_mid_handshake() {
         let mut host = Host::new();
-        host.process(HandshakeInput::InitNegotiation);
+        host.process(HandshakeInput::InitNegotiation {
+            mode: HandshakeMode::Bootstrap,
+        });
         assert_eq!(*host.state(), HandshakeState::CreatingOffer);
 
         let out = host.process(HandshakeInput::Disconnected);
@@ -74,13 +82,18 @@ mod tests {
     #[test]
     fn invalid_input_ignored() {
         let mut host = Host::new();
-        host.process(HandshakeInput::InitNegotiation);
+        host.process(HandshakeInput::InitNegotiation {
+            mode: HandshakeMode::Bootstrap,
+        });
         host.process(HandshakeInput::SDPOfferCreated {
             sdp: "mock-offer".into(),
         });
         assert_eq!(*host.state(), HandshakeState::WaitingForAnswer);
 
-        let out = host.process(HandshakeInput::SDPOfferReceived { sdp: "mock".into() });
+        let out = host.process(HandshakeInput::SDPOfferReceived {
+            sdp: "mock".into(),
+            mode: HandshakeMode::Bootstrap,
+        });
         assert_eq!(*host.state(), HandshakeState::WaitingForAnswer);
         assert_eq!(out, None);
     }
@@ -88,7 +101,9 @@ mod tests {
     #[test]
     fn host_transitions_to_waiting_for_answer_after_offer_created() {
         let mut host = Host::new();
-        host.process(HandshakeInput::InitNegotiation);
+        host.process(HandshakeInput::InitNegotiation {
+            mode: HandshakeMode::Bootstrap,
+        });
         host.process(HandshakeInput::SDPOfferCreated {
             sdp: "v=0\r\noffer-sdp".into(),
         });
@@ -100,6 +115,7 @@ mod tests {
         let mut joiner = Joiner::new();
         joiner.process(HandshakeInput::SDPOfferReceived {
             sdp: "mock-offer".into(),
+            mode: HandshakeMode::Bootstrap,
         });
         joiner.process(HandshakeInput::SDPAnswerCreated {
             sdp: "v=0\r\nanswer-sdp".into(),

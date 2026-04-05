@@ -4,7 +4,7 @@ use crate::{
     driver::Driver,
     utils::{CallbackId, IceServerConfig, Rtc, RtcCallbacks},
 };
-use antenna_protocol::{HandshakeInput, Input, MsgPayload, PeerID, UserMsgPayload};
+use antenna_protocol::{HandshakeInput, HandshakeMode, Input, MsgPayload, PeerID, UserMsgPayload};
 
 use anyhow::{Context, Result};
 
@@ -48,11 +48,13 @@ where
         self.callbacks.borrow_mut().unsubscribe(id)
     }
 
-    pub async fn start(&mut self, peer_id: PeerID) -> Result<String> {
+    pub async fn start_bootstrap(&mut self, peer_id: PeerID) -> Result<String> {
         self.driver
             .process_input(Input::Handshake {
                 from: peer_id.clone(),
-                event: HandshakeInput::InitNegotiation,
+                event: HandshakeInput::InitNegotiation {
+                    mode: HandshakeMode::Bootstrap,
+                },
             })
             .await?;
         self.driver
@@ -64,11 +66,18 @@ where
             .context("SDP offer not found on starting")
     }
 
-    pub async fn receive_offer(&mut self, peer_id: PeerID, offer: String) -> Result<String> {
+    pub async fn receive_bootstrap_offer(
+        &mut self,
+        peer_id: PeerID,
+        offer: String,
+    ) -> Result<String> {
         self.driver
             .process_input(Input::Handshake {
                 from: peer_id.clone(),
-                event: HandshakeInput::SDPOfferReceived { sdp: offer },
+                event: HandshakeInput::SDPOfferReceived {
+                    sdp: offer,
+                    mode: HandshakeMode::Bootstrap,
+                },
             })
             .await?;
         self.driver
@@ -105,7 +114,10 @@ where
         self.driver
             .process_input(Input::Send {
                 peer_to: peer_id,
-                data: MsgPayload::Signaling(data),
+                data: MsgPayload::Signaling {
+                    via: self.my_id.clone(),
+                    data,
+                },
             })
             .await?;
         Ok(())

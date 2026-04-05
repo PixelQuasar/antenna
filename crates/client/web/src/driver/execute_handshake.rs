@@ -224,10 +224,13 @@ where
                                     ));
                                 }
                             }
-                            MsgPayload::Signaling(data) => {
-                                if let Err(err) = callbacks
-                                    .borrow()
-                                    .emit(RtcEvent::SignalingMessage(peer_from, data))
+                            MsgPayload::Signaling { data, via } => {
+                                if let Err(err) =
+                                    callbacks.borrow().emit(RtcEvent::SignalingMessage {
+                                        from: peer_from,
+                                        via,
+                                        data,
+                                    })
                                 {
                                     web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(
                                         &format!("Failed to emit message callback: {:#?}", err),

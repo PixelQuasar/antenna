@@ -1,6 +1,9 @@
 #[cfg(test)]
 mod test {
-    use crate::{HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID};
+    use crate::{
+        HandshakeInput, HandshakeMode, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output,
+        PeerID,
+    };
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -16,7 +19,9 @@ mod test {
     fn drive_host_handshake(fsm: &mut MeshNodeFSM, remote: &PeerID) {
         let out = fsm.process::<TestMsg>(Input::Handshake {
             from: remote.clone(),
-            event: HandshakeInput::InitNegotiation,
+            event: HandshakeInput::InitNegotiation {
+                mode: HandshakeMode::Bootstrap,
+            },
         });
         assert!(out.iter().any(|o| matches!(
             o,
@@ -71,6 +76,7 @@ mod test {
             from: alice(),
             event: HandshakeInput::SDPOfferReceived {
                 sdp: "offer".into(),
+                mode: HandshakeMode::Bootstrap,
             },
         });
         assert!(out.iter().any(|o| matches!(

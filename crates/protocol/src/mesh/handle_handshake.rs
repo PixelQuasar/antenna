@@ -11,13 +11,17 @@ impl MeshNodeFSM {
     ) -> Vec<Output<Msg>> {
         if !self.handshakes.contains_key(&peer) {
             let handshake = match &event {
-                HandshakeInput::InitNegotiation => HandshakeFSM::Host(Host::new()),
-                HandshakeInput::SDPOfferReceived { .. } => HandshakeFSM::Joiner(Joiner::new()),
+                HandshakeInput::InitNegotiation { mode } => HandshakeContext {
+                    handshake: HandshakeFSM::Host(Host::new()),
+                    mode: mode.clone(),
+                },
+                HandshakeInput::SDPOfferReceived { mode, .. } => HandshakeContext {
+                    handshake: HandshakeFSM::Joiner(Joiner::new()),
+                    mode: mode.clone(),
+                },
                 _ => return vec![],
             };
-
-            self.handshakes
-                .insert(peer.clone(), HandshakeContext { handshake });
+            self.handshakes.insert(peer.clone(), handshake);
         }
 
         let ctx = self.handshakes.get_mut(&peer).unwrap();

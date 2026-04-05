@@ -79,10 +79,13 @@ where
                         .callbacks
                         .borrow()
                         .emit(RtcEvent::UserMessage(peer_from, data))?,
-                    MsgPayload::Signaling(data) => self
-                        .callbacks
-                        .borrow()
-                        .emit(RtcEvent::SignalingMessage(peer_from, data))?,
+                    MsgPayload::Signaling { via, data } => {
+                        self.callbacks.borrow().emit(RtcEvent::SignalingMessage {
+                            from: peer_from,
+                            via,
+                            data,
+                        })?
+                    }
                     _ => {
                         web_sys::console::warn_1(&JsValue::from_str("Unknown message type"));
                     }

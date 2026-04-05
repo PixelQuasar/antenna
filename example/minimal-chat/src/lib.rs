@@ -45,7 +45,7 @@ impl ChatApp {
         self.remote = Some(PeerID::new(remote_id.clone()));
         let offer = self
             .client
-            .start(PeerID::new(remote_id))
+            .start_bootstrap(PeerID::new(remote_id))
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok(offer)
@@ -59,7 +59,7 @@ impl ChatApp {
         self.remote = Some(PeerID::new(remote_id.clone()));
         let answer = self
             .client
-            .receive_offer(PeerID::new(remote_id), offer_sdp)
+            .receive_bootstrap_offer(PeerID::new(remote_id), offer_sdp)
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok(answer)

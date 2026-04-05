@@ -9,6 +9,7 @@ pub use host::Host;
 pub use input::HandshakeInput;
 pub use joiner::Joiner;
 pub use output::HandshakeOutput;
+use serde::{Deserialize, Serialize};
 pub use state::HandshakeState;
 
 /// Trait that is implemented by handshake-side module of client FSM
@@ -35,7 +36,18 @@ impl HandshakeFSM {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub enum HandshakeMode {
+    /// Initial handshake with completely new peer, establishing first datachannel with that peer to our mesh
+    Bootstrap,
+
+    /// Handshake of newly connected peer with all others through "inviter" data channel.
+    Relay,
+}
+
 pub struct HandshakeContext {
     /// Handshake state machine
     pub handshake: HandshakeFSM,
+
+    pub mode: HandshakeMode,
 }

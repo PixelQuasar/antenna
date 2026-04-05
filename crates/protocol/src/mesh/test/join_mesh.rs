@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use crate::{
-    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, Output, PeerID, assert_handshake_event,
-    mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake,
+    HandshakeInput, HandshakeMode, HandshakeOutput, Input, MeshNodeFSM, Output, PeerID,
+    assert_handshake_event, mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake,
 };
 
 thread_local! {
@@ -78,7 +78,9 @@ fn establish_direct_connection(
         .unwrap()
         .process::<()>(Input::Handshake {
             from: target_id.clone(),
-            event: HandshakeInput::InitNegotiation,
+            event: HandshakeInput::InitNegotiation {
+                mode: HandshakeMode::Bootstrap,
+            },
         });
 
     assert_handshake_event!(
@@ -106,6 +108,7 @@ fn establish_direct_connection(
             from: initiator_id.clone(),
             event: HandshakeInput::SDPOfferReceived {
                 sdp: "offer".into(),
+                mode: HandshakeMode::Bootstrap,
             },
         });
 

@@ -18,7 +18,7 @@ impl Joiner {
 
     pub fn process(&mut self, input: HandshakeInput) -> Option<HandshakeOutput> {
         match (&self.state, input) {
-            (HandshakeState::Idle, HandshakeInput::SDPOfferReceived { sdp }) => {
+            (HandshakeState::Idle, HandshakeInput::SDPOfferReceived { sdp, .. }) => {
                 self.state = HandshakeState::CreatingAnswer;
                 Some(HandshakeOutput::RequestSDPAnswer { offer: sdp })
             }

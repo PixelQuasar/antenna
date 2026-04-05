@@ -1,4 +1,6 @@
-use crate::{HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, Output, UserMsgPayload};
+use crate::{
+    HandshakeInput, HandshakeMode, HandshakeOutput, Input, MeshNodeFSM, Output, UserMsgPayload,
+};
 
 /// Drives a complete bootstrap handshake between two peers.
 pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
@@ -10,7 +12,9 @@ pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
 
     let out = host.process::<Msg>(Input::Handshake {
         from: joiner_id.clone(),
-        event: HandshakeInput::InitNegotiation,
+        event: HandshakeInput::InitNegotiation {
+            mode: HandshakeMode::Bootstrap,
+        },
     });
     assert!(out.iter().any(|o| matches!(
         o,
@@ -31,6 +35,7 @@ pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
         from: host_id.clone(),
         event: HandshakeInput::SDPOfferReceived {
             sdp: "offer".into(),
+            mode: HandshakeMode::Bootstrap,
         },
     });
     assert!(out.iter().any(|o| matches!(
