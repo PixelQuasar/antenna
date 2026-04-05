@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use antenna_protocol::{HandshakeInput, PeerID, UserMsgPayload};
 use anyhow::{Result, anyhow};
@@ -39,7 +39,7 @@ pub enum Rtc<Msg: UserMsgPayload> {
     JsPeerDisconnected(js_sys::Function),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum SubscriptionKind {
     Connected,
     UserMessage,
@@ -47,6 +47,34 @@ enum SubscriptionKind {
     Disconnected,
     PeerConnected,
     PeerDisconnected,
+}
+
+impl<Msg: UserMsgPayload> Rtc<Msg> {
+    fn kind(&self) -> SubscriptionKind {
+        match self {
+            Self::Connected(_) | Self::JsConnected(_) => SubscriptionKind::Connected,
+            Self::UserMessage(_) | Self::JsUserMessage(_) => SubscriptionKind::UserMessage,
+            Self::SignalingMessage(_) => SubscriptionKind::SignalingMessage,
+            Self::Disconnected(_) | Self::JsDisconnected(_) => SubscriptionKind::Disconnected,
+            Self::PeerConnected(_) | Self::JsPeerConnected(_) => SubscriptionKind::PeerConnected,
+            Self::PeerDisconnected(_) | Self::JsPeerDisconnected(_) => {
+                SubscriptionKind::PeerDisconnected
+            }
+        }
+    }
+}
+
+impl<Msg: UserMsgPayload> RtcEvent<Msg> {
+    fn kind(&self) -> SubscriptionKind {
+        match self {
+            Self::Connected => SubscriptionKind::Connected,
+            Self::UserMessage(_, _) => SubscriptionKind::UserMessage,
+            Self::SignalingMessage(_, _) => SubscriptionKind::SignalingMessage,
+            Self::Disconnected => SubscriptionKind::Disconnected,
+            Self::PeerConnected(_) => SubscriptionKind::PeerConnected,
+            Self::PeerDisconnected(_) => SubscriptionKind::PeerDisconnected,
+        }
+    }
 }
 
 pub trait Dispatcher<Msg: UserMsgPayload> {
@@ -58,18 +86,8 @@ where
     Msg: UserMsgPayload,
 {
     next_callback_id: CallbackId,
-    id_map: HashMap<CallbackId, SubscriptionKind>,
-    connected_map: HashMap<CallbackId, ConnectedCallback>,
-    message_map: HashMap<CallbackId, MessageCallback<Msg>>,
-    signaling_message_map: HashMap<CallbackId, SignalingMessageCallback>,
-    disconnected_map: HashMap<CallbackId, DisconnectedCallback>,
-    peer_connected_map: HashMap<CallbackId, PeerConnectedCallback>,
-    peer_disconnected_map: HashMap<CallbackId, PeerDisconnectedCallback>,
-    js_connected_map: HashMap<CallbackId, js_sys::Function>,
-    js_message_map: HashMap<CallbackId, js_sys::Function>,
-    js_disconnected_map: HashMap<CallbackId, js_sys::Function>,
-    js_peer_connected_map: HashMap<CallbackId, js_sys::Function>,
-    js_peer_disconnected_map: HashMap<CallbackId, js_sys::Function>,
+    subscriptions: HashMap<CallbackId, Rtc<Msg>>,
+    subscriptions_by_kind: HashMap<SubscriptionKind, HashSet<CallbackId>>,
 }
 
 impl<Msg> RtcCallbacks<Msg>
@@ -79,18 +97,8 @@ where
     pub fn new() -> Self {
         Self {
             next_callback_id: 1,
-            id_map: HashMap::new(),
-            connected_map: HashMap::new(),
-            message_map: HashMap::new(),
-            signaling_message_map: HashMap::new(),
-            disconnected_map: HashMap::new(),
-            peer_connected_map: HashMap::new(),
-            peer_disconnected_map: HashMap::new(),
-            js_connected_map: HashMap::new(),
-            js_message_map: HashMap::new(),
-            js_disconnected_map: HashMap::new(),
-            js_peer_connected_map: HashMap::new(),
-            js_peer_disconnected_map: HashMap::new(),
+            subscriptions: HashMap::new(),
+            subscriptions_by_kind: HashMap::new(),
         }
     }
 
@@ -102,83 +110,31 @@ where
 
     pub fn subscribe(&mut self, subscription: Rtc<Msg>) -> CallbackId {
         let id = self.next_id();
+        let kind = subscription.kind();
 
-        match subscription {
-            Rtc::Connected(cb) => {
-                self.id_map.insert(id, SubscriptionKind::Connected);
-                self.connected_map.insert(id, cb);
-            }
-            Rtc::UserMessage(cb) => {
-                self.id_map.insert(id, SubscriptionKind::UserMessage);
-                self.message_map.insert(id, cb);
-            }
-            Rtc::SignalingMessage(cb) => {
-                self.id_map.insert(id, SubscriptionKind::SignalingMessage);
-                self.signaling_message_map.insert(id, cb);
-            }
-            Rtc::Disconnected(cb) => {
-                self.id_map.insert(id, SubscriptionKind::Disconnected);
-                self.disconnected_map.insert(id, cb);
-            }
-            Rtc::PeerConnected(cb) => {
-                self.id_map.insert(id, SubscriptionKind::PeerConnected);
-                self.peer_connected_map.insert(id, cb);
-            }
-            Rtc::PeerDisconnected(cb) => {
-                self.id_map.insert(id, SubscriptionKind::PeerDisconnected);
-                self.peer_disconnected_map.insert(id, cb);
-            }
-            Rtc::JsConnected(cb) => {
-                self.id_map.insert(id, SubscriptionKind::Connected);
-                self.js_connected_map.insert(id, cb);
-            }
-            Rtc::JsUserMessage(cb) => {
-                self.id_map.insert(id, SubscriptionKind::UserMessage);
-                self.js_message_map.insert(id, cb);
-            }
-            Rtc::JsDisconnected(cb) => {
-                self.id_map.insert(id, SubscriptionKind::Disconnected);
-                self.js_disconnected_map.insert(id, cb);
-            }
-            Rtc::JsPeerConnected(cb) => {
-                self.id_map.insert(id, SubscriptionKind::PeerConnected);
-                self.js_peer_connected_map.insert(id, cb);
-            }
-            Rtc::JsPeerDisconnected(cb) => {
-                self.id_map.insert(id, SubscriptionKind::PeerDisconnected);
-                self.js_peer_disconnected_map.insert(id, cb);
-            }
-        }
+        self.subscriptions.insert(id, subscription);
+        self.subscriptions_by_kind
+            .entry(kind)
+            .or_default()
+            .insert(id);
+
         id
     }
 
     pub fn unsubscribe(&mut self, id: CallbackId) -> bool {
-        let Some(kind) = self.id_map.remove(&id) else {
+        let Some(subscription) = self.subscriptions.remove(&id) else {
             return false;
         };
 
-        match kind {
-            SubscriptionKind::Connected => {
-                self.connected_map.remove(&id).is_some()
-                    || self.js_connected_map.remove(&id).is_some()
-            }
-            SubscriptionKind::UserMessage => {
-                self.message_map.remove(&id).is_some() || self.js_message_map.remove(&id).is_some()
-            }
-            SubscriptionKind::SignalingMessage => self.signaling_message_map.remove(&id).is_some(),
-            SubscriptionKind::Disconnected => {
-                self.disconnected_map.remove(&id).is_some()
-                    || self.js_disconnected_map.remove(&id).is_some()
-            }
-            SubscriptionKind::PeerConnected => {
-                self.peer_connected_map.remove(&id).is_some()
-                    || self.js_peer_connected_map.remove(&id).is_some()
-            }
-            SubscriptionKind::PeerDisconnected => {
-                self.peer_disconnected_map.remove(&id).is_some()
-                    || self.js_peer_disconnected_map.remove(&id).is_some()
+        let kind = subscription.kind();
+        if let Some(ids) = self.subscriptions_by_kind.get_mut(&kind) {
+            ids.remove(&id);
+            if ids.is_empty() {
+                self.subscriptions_by_kind.remove(&kind);
             }
         }
+
+        true
     }
 }
 
@@ -187,62 +143,54 @@ where
     Msg: UserMsgPayload,
 {
     fn emit(&self, event: RtcEvent<Msg>) -> Result<()> {
-        match event {
-            RtcEvent::Connected => {
-                for callback in self.connected_map.values() {
-                    callback();
+        let Some(ids) = self.subscriptions_by_kind.get(&event.kind()) else {
+            return Ok(());
+        };
+
+        let ids: Vec<CallbackId> = ids.iter().copied().collect();
+
+        for id in ids {
+            let Some(subscription) = self.subscriptions.get(&id) else {
+                continue;
+            };
+
+            match (subscription, &event) {
+                (Rtc::Connected(cb), RtcEvent::Connected) => cb(),
+                (Rtc::UserMessage(cb), RtcEvent::UserMessage(peer, data)) => {
+                    cb(peer.clone(), data.clone())
                 }
-                for callback in self.js_connected_map.values() {
-                    callback
-                        .call0(&JsValue::NULL)
+                (Rtc::SignalingMessage(cb), RtcEvent::SignalingMessage(peer, data)) => {
+                    cb(peer.clone(), data.clone())
+                }
+                (Rtc::Disconnected(cb), RtcEvent::Disconnected) => cb(),
+                (Rtc::PeerConnected(cb), RtcEvent::PeerConnected(peer)) => cb(peer.clone()),
+                (Rtc::PeerDisconnected(cb), RtcEvent::PeerDisconnected(peer)) => cb(peer.clone()),
+                (Rtc::JsConnected(cb), RtcEvent::Connected) => {
+                    cb.call0(&JsValue::NULL)
                         .map_err(|e| anyhow!("Failed to call onConnected callback: {:#?}", e))?;
                 }
-            }
-            RtcEvent::UserMessage(peer, data) => {
-                for callback in self.message_map.values() {
-                    callback(peer.clone(), data.clone());
-                }
-                let msg_obj = to_js_object(&data)
-                    .map_err(|e| anyhow!("Failed to serialize message payload {:#?}", e))?;
-                let peer = js_sys::JsString::from(peer.as_str());
-                for callback in self.js_message_map.values() {
-                    callback
-                        .call2(&JsValue::NULL, &peer, &msg_obj)
+                (Rtc::JsUserMessage(cb), RtcEvent::UserMessage(peer, data)) => {
+                    let msg_obj = to_js_object(data)
+                        .map_err(|e| anyhow!("Failed to serialize message payload {:#?}", e))?;
+                    let peer = js_sys::JsString::from(peer.as_str());
+                    cb.call2(&JsValue::NULL, &peer, &msg_obj)
                         .map_err(|e| anyhow!("Failed to call onMessage callback: {:#?}", e))?;
                 }
-            }
-            RtcEvent::SignalingMessage(peer, data) => {
-                for callback in self.signaling_message_map.values() {
-                    callback(peer.clone(), data.clone());
+                (Rtc::JsDisconnected(cb), RtcEvent::Disconnected) => {
+                    cb.call0(&JsValue::NULL).ok();
                 }
-            }
-            RtcEvent::Disconnected => {
-                for callback in self.disconnected_map.values() {
-                    callback();
+                (Rtc::JsPeerConnected(cb), RtcEvent::PeerConnected(peer)) => {
+                    let peer = js_sys::JsString::from(peer.as_str());
+                    cb.call1(&JsValue::NULL, &peer).ok();
                 }
-                for callback in self.js_disconnected_map.values() {
-                    callback.call0(&JsValue::NULL).ok();
+                (Rtc::JsPeerDisconnected(cb), RtcEvent::PeerDisconnected(peer)) => {
+                    let peer = js_sys::JsString::from(peer.as_str());
+                    cb.call1(&JsValue::NULL, &peer).ok();
                 }
-            }
-            RtcEvent::PeerConnected(peer) => {
-                for callback in self.peer_connected_map.values() {
-                    callback(peer.clone());
-                }
-                let peer = js_sys::JsString::from(peer.as_str());
-                for callback in self.js_peer_connected_map.values() {
-                    callback.call1(&JsValue::NULL, &peer).ok();
-                }
-            }
-            RtcEvent::PeerDisconnected(peer) => {
-                for callback in self.peer_disconnected_map.values() {
-                    callback(peer.clone());
-                }
-                let peer = js_sys::JsString::from(peer.as_str());
-                for callback in self.js_peer_disconnected_map.values() {
-                    callback.call1(&JsValue::NULL, &peer).ok();
-                }
+                _ => {}
             }
         }
+
         Ok(())
     }
 }
