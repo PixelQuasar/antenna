@@ -82,3 +82,7 @@ features = [
     "ErrorEvent",
     "console",
 ]
+
+[profile.release]
+opt-level = "z"
+lto = true

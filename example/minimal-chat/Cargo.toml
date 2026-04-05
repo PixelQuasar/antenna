@@ -17,6 +17,3 @@ serde_json = { workspace = true }
 console_error_panic_hook = "0.1"
 dotenvy = "0.15.7"
 
-[profile.release]
-opt-level = "z"
-lto = true

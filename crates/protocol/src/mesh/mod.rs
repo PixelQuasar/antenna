@@ -1,5 +1,6 @@
 mod handle_handshake;
 mod peer_id;
+#[cfg(test)]
 mod test;
 
 use std::collections::{HashMap, HashSet};
