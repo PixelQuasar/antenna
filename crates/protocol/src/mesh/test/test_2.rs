@@ -1,6 +1,10 @@
 #[cfg(test)]
 mod test {
     use crate::{HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, Output, PeerID};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    struct TestMsg(String);
 
     fn alice() -> PeerID {
         PeerID::new("alice")
@@ -10,7 +14,7 @@ mod test {
     }
 
     fn drive_host_handshake(fsm: &mut MeshNodeFSM, remote: &PeerID) {
-        let out = fsm.process::<&str>(Input::Handshake {
+        let out = fsm.process::<TestMsg>(Input::Handshake {
             from: remote.clone(),
             event: HandshakeInput::InitNegotiation,
         });
@@ -22,7 +26,7 @@ mod test {
             }
         )));
 
-        let out = fsm.process::<&str>(Input::Handshake {
+        let out = fsm.process::<TestMsg>(Input::Handshake {
             from: remote.clone(),
             event: HandshakeInput::SDPOfferCreated {
                 sdp: "offer".into(),
@@ -30,7 +34,7 @@ mod test {
         });
         assert!(out.is_empty());
 
-        let out = fsm.process::<&str>(Input::Handshake {
+        let out = fsm.process::<TestMsg>(Input::Handshake {
             from: remote.clone(),
             event: HandshakeInput::SDPAnswerReceived {
                 sdp: "answer".into(),
@@ -44,7 +48,7 @@ mod test {
             }
         )));
 
-        fsm.process::<&str>(Input::Handshake {
+        fsm.process::<TestMsg>(Input::Handshake {
             from: remote.clone(),
             event: HandshakeInput::DataChannelOpen,
         });
@@ -63,7 +67,7 @@ mod test {
     fn joiner_handshake_full_flow() {
         let mut mesh = MeshNodeFSM::new(bob());
 
-        let out = mesh.process::<&str>(Input::Handshake {
+        let out = mesh.process::<TestMsg>(Input::Handshake {
             from: alice(),
             event: HandshakeInput::SDPOfferReceived {
                 sdp: "offer".into(),
@@ -77,7 +81,7 @@ mod test {
             }
         )));
 
-        let out = mesh.process::<&str>(Input::Handshake {
+        let out = mesh.process::<TestMsg>(Input::Handshake {
             from: alice(),
             event: HandshakeInput::SDPAnswerCreated {
                 sdp: "answer".into(),
@@ -85,7 +89,7 @@ mod test {
         });
         assert!(out.is_empty());
 
-        mesh.process::<&str>(Input::Handshake {
+        mesh.process::<TestMsg>(Input::Handshake {
             from: alice(),
             event: HandshakeInput::DataChannelOpen,
         });
@@ -99,7 +103,7 @@ mod test {
 
         let out = mesh.process(Input::MessageReceived {
             peer_from: bob(),
-            data: "hello",
+            data: TestMsg("hello".into()),
         });
         assert!(out.is_empty());
 
@@ -107,13 +111,13 @@ mod test {
 
         let out = mesh.process(Input::MessageReceived {
             peer_from: bob(),
-            data: "hello",
+            data: TestMsg("hello".into()),
         });
         assert_eq!(out.len(), 1);
-        assert!(matches!(
-            &out[0],
-            Output::ReceiveMessage { data: "hello", .. }
-        ));
+        assert!(matches!(&out[0], Output::ReceiveMessage { .. }));
+        if let Output::ReceiveMessage { data, .. } = &out[0] {
+            assert_eq!(data, &TestMsg("hello".into()));
+        }
     }
 
     #[test]
@@ -122,7 +126,7 @@ mod test {
 
         let out = mesh.process(Input::Send {
             peer_to: bob(),
-            data: "msg",
+            data: TestMsg("msg".into()),
         });
         assert!(out.is_empty());
 
@@ -130,7 +134,7 @@ mod test {
 
         let out = mesh.process(Input::Send {
             peer_to: bob(),
-            data: "msg",
+            data: TestMsg("msg".into()),
         });
         assert_eq!(out.len(), 1);
         assert!(matches!(&out[0], Output::SendMessage { .. }));
@@ -142,7 +146,7 @@ mod test {
         drive_host_handshake(&mut mesh, &bob());
         assert!(mesh.is_connected(&bob()));
 
-        let out = mesh.process::<&str>(Input::PeerLeaving { peer: bob() });
+        let out = mesh.process::<TestMsg>(Input::PeerLeaving { peer: bob() });
         assert!(
             out.iter()
                 .any(|o| matches!(o, Output::PeerDisconnected { .. }))
@@ -154,7 +158,7 @@ mod test {
     fn unknown_handshake_event_ignored() {
         let mut mesh = MeshNodeFSM::new(alice());
 
-        let out = mesh.process::<&str>(Input::Handshake {
+        let out = mesh.process::<TestMsg>(Input::Handshake {
             from: bob(),
             event: HandshakeInput::DataChannelOpen,
         });
