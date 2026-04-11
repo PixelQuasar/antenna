@@ -1,6 +1,9 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use antenna_protocol::{Input, MeshNodeFSM, MsgPayload, Output, PeerID, UserMsgPayload};
+use antenna_protocol::{
+    HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MeshNodeFSM, MsgPayload, Output,
+    PeerID, UserMsgPayload,
+};
 use anyhow::{Context, Result};
 use wasm_bindgen::JsValue;
 
@@ -122,5 +125,27 @@ where
 
     pub fn fsm(&self) -> Rc<RefCell<MeshNodeFSM>> {
         self.fsm.clone()
+    }
+
+    pub async fn init_host(&mut self, peer_id: PeerID) -> Result<Vec<Output<Msg>>> {
+        self.process_input(Input::Handshake {
+            from: peer_id,
+            event: HandshakeInput::Init {
+                mode: HandshakeMode::Bootstrap,
+                strategy: HandshakeStrategy::Host,
+            },
+        })
+        .await
+    }
+
+    pub async fn init_joiner(&mut self, peer_id: PeerID) -> Result<Vec<Output<Msg>>> {
+        self.process_input(Input::Handshake {
+            from: peer_id,
+            event: HandshakeInput::Init {
+                mode: HandshakeMode::Bootstrap,
+                strategy: HandshakeStrategy::Joiner,
+            },
+        })
+        .await
     }
 }

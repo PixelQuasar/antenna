@@ -1,4 +1,4 @@
-use crate::{handshake::HandshakeInput, mesh::PeerID, state::MsgPayload, UserMsgPayload};
+use crate::{UserMsgPayload, handshake::HandshakeInput, mesh::PeerID, state::MsgPayload};
 
 /// Common event that client FSM receives
 #[derive(Debug, Clone)]

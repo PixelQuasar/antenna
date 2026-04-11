@@ -53,7 +53,7 @@ where
             event: HandshakeInput::SDPOfferCreated {
                 sdp: full_sdp.clone(),
             },
-        });
+        })?;
 
         self.pc_managers.insert(peer.clone(), pc_manager);
         Ok(())
@@ -74,7 +74,7 @@ where
             event: HandshakeInput::SDPAnswerCreated {
                 sdp: full_sdp.clone(),
             },
-        });
+        })?;
 
         self.pc_managers.insert(peer.clone(), pc_manager);
         Ok(())
@@ -169,10 +169,19 @@ where
             let callbacks = callbacks.clone();
             dc_manager.setup_on_open(move || {
                 let was_empty = fsm.borrow().connected_peers().is_empty();
-                fsm.borrow_mut().process(Input::<Msg>::Handshake {
+                match fsm.borrow_mut().process(Input::<Msg>::Handshake {
                     from: peer.clone(),
                     event: HandshakeInput::DataChannelOpen,
-                });
+                }) {
+                    Ok(..) => {}
+                    Err(e) => {
+                        web_sys::console::error_1(&JsValue::from_str(&format!(
+                            "Error while emitting Connected: {:?}",
+                            e
+                        )));
+                        return;
+                    }
+                }
                 if was_empty {
                     if let Err(e) = callbacks.borrow().emit(RtcEvent::Connected) {
                         web_sys::console::error_1(&JsValue::from_str(&format!(
@@ -261,10 +270,19 @@ where
             let fsm = fsm.clone();
             let callbacks = callbacks.clone();
             dc_manager.setup_on_close(move || {
-                fsm.borrow_mut().process(Input::<Msg>::Handshake {
+                match fsm.borrow_mut().process(Input::<Msg>::Handshake {
                     from: peer.clone(),
                     event: HandshakeInput::Disconnected,
-                });
+                }) {
+                    Ok(..) => {}
+                    Err(e) => {
+                        web_sys::console::error_1(&JsValue::from_str(&format!(
+                            "Error while emitting Connected: {:?}",
+                            e
+                        )));
+                        return;
+                    }
+                }
                 if let Err(e) = callbacks
                     .borrow()
                     .emit(RtcEvent::PeerDisconnected(peer.clone()))

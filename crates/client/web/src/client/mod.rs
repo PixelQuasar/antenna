@@ -4,7 +4,9 @@ use crate::{
     driver::Driver,
     utils::{CallbackId, IceServerConfig, Rtc, RtcCallbacks},
 };
-use antenna_protocol::{HandshakeInput, HandshakeMode, Input, MsgPayload, PeerID, UserMsgPayload};
+use antenna_protocol::{
+    HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MsgPayload, PeerID, UserMsgPayload,
+};
 
 use anyhow::{Context, Result};
 
@@ -49,6 +51,7 @@ where
     }
 
     pub async fn start_bootstrap(&mut self, peer_id: PeerID) -> Result<String> {
+        self.driver.init_host(peer_id.clone()).await?;
         self.driver
             .process_input(Input::Handshake {
                 from: peer_id.clone(),
@@ -69,6 +72,7 @@ where
         peer_id: PeerID,
         offer: String,
     ) -> Result<String> {
+        self.driver.init_joiner(peer_id.clone()).await?;
         self.driver
             .process_input(Input::Handshake {
                 from: peer_id.clone(),

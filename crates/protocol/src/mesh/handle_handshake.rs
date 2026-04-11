@@ -16,7 +16,9 @@ impl MeshNodeFSM {
                 self.handshakes
                     .insert(peer.clone(), HandshakeFSM::new(mode, strategy));
             } else {
-                anyhow!("There is no handshake FSM instance to proccess this event");
+                return Err(anyhow!(
+                    "There is no handshake FSM instance to process this event"
+                ));
             }
         }
 
