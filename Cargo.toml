@@ -4,7 +4,7 @@ members = [
     "crates/protocol",
     "crates/antenna",
     "crates/client/*",
-    "crates/signaling/*",
+    "crates/signaling-server",
     "example/*",
 ]
 
@@ -26,14 +26,8 @@ path = "crates/client/native"
 [workspace.dependencies.antenna-client-shared]
 path = "crates/client/shared"
 
-[workspace.dependencies.antenna-signaling-mesh]
-path = "crates/signaling/mesh"
-
 [workspace.dependencies.antenna-signaling-server]
-path = "crates/signaling/server"
-
-[workspace.dependencies.antenna-signaling-shared]
-path = "crates/signaling/shared"
+path = "crates/signaling-server"
 
 [workspace.dependencies.anyhow]
 version = "1.0.101"

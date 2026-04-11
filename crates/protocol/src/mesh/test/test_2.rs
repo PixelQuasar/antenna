@@ -19,7 +19,7 @@ mod test {
     fn drive_host_handshake(fsm: &mut MeshNodeFSM, remote: &PeerID) {
         let out = fsm.process::<TestMsg>(Input::Handshake {
             from: remote.clone(),
-            event: HandshakeInput::InitNegotiation {
+            event: HandshakeInput::StartAsHost {
                 mode: HandshakeMode::Bootstrap,
             },
         });

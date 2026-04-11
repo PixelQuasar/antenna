@@ -64,7 +64,7 @@ where
 
     pub async fn process_input(&mut self, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
         let was_connected = !self.fsm.borrow().connected_peers().is_empty();
-        let outputs = self.fsm.borrow_mut().process(input);
+        let outputs = self.fsm.borrow_mut().process(input)?;
 
         let mut unhandled = Vec::new();
 
@@ -79,7 +79,7 @@ where
                         .callbacks
                         .borrow()
                         .emit(RtcEvent::UserMessage(peer_from, data))?,
-                    MsgPayload::Signaling { via, data } => {
+                    MsgPayload::RelaySignaling { via, data } => {
                         self.callbacks.borrow().emit(RtcEvent::SignalingMessage {
                             from: peer_from,
                             via,

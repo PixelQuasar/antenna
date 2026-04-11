@@ -52,9 +52,7 @@ where
         self.driver
             .process_input(Input::Handshake {
                 from: peer_id.clone(),
-                event: HandshakeInput::InitNegotiation {
-                    mode: HandshakeMode::Bootstrap,
-                },
+                event: HandshakeInput::StartAsHost,
             })
             .await?;
         self.driver
@@ -74,10 +72,7 @@ where
         self.driver
             .process_input(Input::Handshake {
                 from: peer_id.clone(),
-                event: HandshakeInput::SDPOfferReceived {
-                    sdp: offer,
-                    mode: HandshakeMode::Bootstrap,
-                },
+                event: HandshakeInput::SDPOfferReceived { sdp: offer },
             })
             .await?;
         self.driver
@@ -114,7 +109,7 @@ where
         self.driver
             .process_input(Input::Send {
                 peer_to: peer_id,
-                data: MsgPayload::Signaling {
+                data: MsgPayload::RelaySignaling {
                     via: self.my_id.clone(),
                     data,
                 },

@@ -1,6 +1,8 @@
+use anyhow::{Result, anyhow};
+
 use crate::{
-    HandshakeContext, HandshakeFSM, HandshakeInput, HandshakeOutput, HandshakeState, Host, Joiner,
-    MeshNodeFSM, Output, PeerID, UserMsgPayload,
+    HandshakeFSM, HandshakeInput, HandshakeOutput, HandshakeState, MeshNodeFSM, Output, PeerID,
+    UserMsgPayload,
 };
 
 impl MeshNodeFSM {
@@ -8,25 +10,19 @@ impl MeshNodeFSM {
         &mut self,
         peer: PeerID,
         event: HandshakeInput,
-    ) -> Vec<Output<Msg>> {
+    ) -> Result<Vec<Output<Msg>>> {
         if !self.handshakes.contains_key(&peer) {
-            let handshake = match &event {
-                HandshakeInput::InitNegotiation { mode } => HandshakeContext {
-                    handshake: HandshakeFSM::Host(Host::new()),
-                    mode: mode.clone(),
-                },
-                HandshakeInput::SDPOfferReceived { mode, .. } => HandshakeContext {
-                    handshake: HandshakeFSM::Joiner(Joiner::new()),
-                    mode: mode.clone(),
-                },
-                _ => return vec![],
-            };
-            self.handshakes.insert(peer.clone(), handshake);
+            if let HandshakeInput::Init { mode, strategy } = event.clone() {
+                self.handshakes
+                    .insert(peer.clone(), HandshakeFSM::new(mode, strategy));
+            } else {
+                anyhow!("There is no handshake FSM instance to proccess this event");
+            }
         }
 
-        let ctx = self.handshakes.get_mut(&peer).unwrap();
-        let handshake_out = ctx.handshake.process(event.clone());
-        let state = ctx.handshake.state();
+        let handshake_fsm = self.handshakes.get_mut(&peer).unwrap();
+        let handshake_out = handshake_fsm.process(event.clone())?;
+        let state = handshake_fsm.state();
 
         if let Some(out) = handshake_out.clone() {
             match out {
@@ -49,7 +45,7 @@ impl MeshNodeFSM {
                         event,
                     });
                 }
-                out
+                Ok(out)
             }
             HandshakeState::WaitingForDataChannel => {
                 let mut out = Vec::new();
@@ -59,7 +55,7 @@ impl MeshNodeFSM {
                         event,
                     });
                 }
-                out
+                Ok(out)
             }
             HandshakeState::Connected => {
                 self.handshakes.remove(&peer);
@@ -76,7 +72,7 @@ impl MeshNodeFSM {
                 if let Some(event) = handshake_out {
                     out.push(Output::Handshake { peer, event });
                 }
-                out
+                Ok(out)
             }
             HandshakeState::Closed => {
                 self.handshakes.remove(&peer);
@@ -84,11 +80,9 @@ impl MeshNodeFSM {
                 if let Some(event) = handshake_out {
                     out.push(Output::Handshake { peer, event });
                 }
-                out
+                Ok(out)
             }
-            _ => handshake_out
-                .map(|event| vec![Output::Handshake { peer, event }])
-                .unwrap_or_default(),
+            _ => Err(anyhow!("Unhandled input by mesh fsm")),
         }
     }
 }

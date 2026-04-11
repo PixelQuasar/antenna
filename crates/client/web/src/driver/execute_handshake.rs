@@ -207,10 +207,18 @@ where
                         return;
                     }
                 };
-                let outputs = fsm.borrow_mut().process(Input::MessageReceived {
+                let outputs = match fsm.borrow_mut().process(Input::MessageReceived {
                     peer_from: peer.clone(),
                     data,
-                });
+                }) {
+                    Ok(outputs) => outputs,
+                    Err(err) => {
+                        web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&format!(
+                            "Failed to process incoming message: {err:#}"
+                        )));
+                        return;
+                    }
+                };
                 for output in outputs {
                     if let Output::<Msg>::ReceiveMessage { peer_from, data } = output {
                         match data {
@@ -224,7 +232,7 @@ where
                                     ));
                                 }
                             }
-                            MsgPayload::Signaling { data, via } => {
+                            MsgPayload::RelaySignaling { data, via } => {
                                 if let Err(err) =
                                     callbacks.borrow().emit(RtcEvent::SignalingMessage {
                                         from: peer_from,

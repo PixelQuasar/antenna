@@ -1,12 +1,18 @@
 use serde::{Deserialize, Serialize};
 
-use crate::HandshakeMode;
+use crate::{HandshakeMode, HandshakeStrategy};
 
 /// Events fed into the handshake FSM from the driver.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum HandshakeInput {
-    /// Input event signalizing that we started SDP negotiation
-    InitNegotiation { mode: HandshakeMode },
+    ///
+    Init {
+        mode: HandshakeMode,
+        strategy: HandshakeStrategy,
+    },
+
+    /// Input event signalizing that we started SDP negotiation as host
+    StartAsHost,
 
     ///
     SDPOfferCreated { sdp: String },
@@ -15,7 +21,7 @@ pub enum HandshakeInput {
     SDPAnswerCreated { sdp: String },
 
     /// Input event containing sdp offer from other peer (from host)
-    SDPOfferReceived { sdp: String, mode: HandshakeMode },
+    SDPOfferReceived { sdp: String },
 
     /// Input event containing sdp answer from other peer (from joiner)
     SDPAnswerReceived { sdp: String },

@@ -78,7 +78,7 @@ fn establish_direct_connection(
         .unwrap()
         .process::<()>(Input::Handshake {
             from: target_id.clone(),
-            event: HandshakeInput::InitNegotiation {
+            event: HandshakeInput::StartAsHost {
                 mode: HandshakeMode::Bootstrap,
             },
         });

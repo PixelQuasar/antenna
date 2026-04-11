@@ -12,7 +12,7 @@ pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
 
     let out = host.process::<Msg>(Input::Handshake {
         from: joiner_id.clone(),
-        event: HandshakeInput::InitNegotiation {
+        event: HandshakeInput::StartAsHost {
             mode: HandshakeMode::Bootstrap,
         },
     });

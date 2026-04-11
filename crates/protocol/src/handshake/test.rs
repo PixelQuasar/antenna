@@ -10,7 +10,7 @@ mod tests {
         let mut host = Host::new();
         assert_eq!(*host.state(), HandshakeState::Idle);
 
-        let out = host.process(HandshakeInput::InitNegotiation {
+        let out = host.process(HandshakeInput::StartAsHost {
             mode: HandshakeMode::Bootstrap,
         });
         assert_eq!(*host.state(), HandshakeState::CreatingOffer);
@@ -69,7 +69,7 @@ mod tests {
     #[test]
     fn host_disconnect_mid_handshake() {
         let mut host = Host::new();
-        host.process(HandshakeInput::InitNegotiation {
+        host.process(HandshakeInput::StartAsHost {
             mode: HandshakeMode::Bootstrap,
         });
         assert_eq!(*host.state(), HandshakeState::CreatingOffer);
@@ -82,7 +82,7 @@ mod tests {
     #[test]
     fn invalid_input_ignored() {
         let mut host = Host::new();
-        host.process(HandshakeInput::InitNegotiation {
+        host.process(HandshakeInput::StartAsHost {
             mode: HandshakeMode::Bootstrap,
         });
         host.process(HandshakeInput::SDPOfferCreated {
@@ -101,7 +101,7 @@ mod tests {
     #[test]
     fn host_transitions_to_waiting_for_answer_after_offer_created() {
         let mut host = Host::new();
-        host.process(HandshakeInput::InitNegotiation {
+        host.process(HandshakeInput::StartAsHost {
             mode: HandshakeMode::Bootstrap,
         });
         host.process(HandshakeInput::SDPOfferCreated {

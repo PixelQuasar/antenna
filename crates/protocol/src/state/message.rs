@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{HandshakeInput, PeerID};
 
@@ -10,6 +10,6 @@ impl<T> UserMsgPayload for T where T: Serialize + DeserializeOwned + Clone + 'st
 #[serde(bound(serialize = "Msg: Serialize", deserialize = "Msg: DeserializeOwned"))]
 pub enum MsgPayload<Msg: UserMsgPayload> {
     User(Msg),
-    Signaling { via: PeerID, data: HandshakeInput },
+    RelaySignaling { via: PeerID, data: HandshakeInput },
     Heartbeat,
 }

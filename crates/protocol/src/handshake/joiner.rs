@@ -1,4 +1,5 @@
 use crate::handshake::{HandshakeInput, HandshakeOutput, HandshakeState};
+use anyhow::{Result, anyhow};
 
 /// Joiner-side handshake FSM
 pub struct Joiner {
@@ -16,25 +17,25 @@ impl Joiner {
         &self.state
     }
 
-    pub fn process(&mut self, input: HandshakeInput) -> Option<HandshakeOutput> {
+    pub fn process(&mut self, input: HandshakeInput) -> Result<Option<HandshakeOutput>> {
         match (&self.state, input) {
             (HandshakeState::Idle, HandshakeInput::SDPOfferReceived { sdp, .. }) => {
                 self.state = HandshakeState::CreatingAnswer;
-                Some(HandshakeOutput::RequestSDPAnswer { offer: sdp })
+                Ok(Some(HandshakeOutput::RequestSDPAnswer { offer: sdp }))
             }
             (HandshakeState::CreatingAnswer, HandshakeInput::SDPAnswerCreated { .. }) => {
                 self.state = HandshakeState::WaitingForDataChannel;
-                None
+                Ok(None)
             }
             (HandshakeState::WaitingForDataChannel, HandshakeInput::DataChannelOpen) => {
                 self.state = HandshakeState::Connected;
-                None
+                Ok(None)
             }
             (_, HandshakeInput::Disconnected) => {
                 self.state = HandshakeState::Closed;
-                Some(HandshakeOutput::Close)
+                Ok(Some(HandshakeOutput::Close))
             }
-            _ => None,
+            _ => Err(anyhow!("Unhandled input by joiner fsm")),
         }
     }
 }

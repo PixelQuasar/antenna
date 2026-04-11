@@ -1,4 +1,5 @@
 use crate::handshake::{HandshakeInput, HandshakeOutput, HandshakeState};
+use anyhow::{Result, anyhow};
 
 /// Host-side handshake FSM
 pub struct Host {
@@ -16,29 +17,29 @@ impl Host {
         &self.state
     }
 
-    pub fn process(&mut self, input: HandshakeInput) -> Option<HandshakeOutput> {
+    pub fn process(&mut self, input: HandshakeInput) -> Result<Option<HandshakeOutput>> {
         match (&self.state, input) {
-            (HandshakeState::Idle, HandshakeInput::InitNegotiation { .. }) => {
+            (HandshakeState::Idle, HandshakeInput::StartAsHost { .. }) => {
                 self.state = HandshakeState::CreatingOffer;
-                Some(HandshakeOutput::InitSDPOffer)
+                Ok(Some(HandshakeOutput::InitSDPOffer))
             }
             (HandshakeState::CreatingOffer, HandshakeInput::SDPOfferCreated { .. }) => {
                 self.state = HandshakeState::WaitingForAnswer;
-                None
+                Ok(None)
             }
             (HandshakeState::WaitingForAnswer, HandshakeInput::SDPAnswerReceived { sdp }) => {
                 self.state = HandshakeState::WaitingForDataChannel;
-                Some(HandshakeOutput::AcceptSDPAnswer { answer: sdp })
+                Ok(Some(HandshakeOutput::AcceptSDPAnswer { answer: sdp }))
             }
             (HandshakeState::WaitingForDataChannel, HandshakeInput::DataChannelOpen) => {
                 self.state = HandshakeState::Connected;
-                None
+                Ok(None)
             }
             (_, HandshakeInput::Disconnected) => {
                 self.state = HandshakeState::Closed;
-                Some(HandshakeOutput::Close)
+                Ok(Some(HandshakeOutput::Close))
             }
-            _ => None,
+            _ => Err(anyhow!("Unhandled input by host fsm")),
         }
     }
 }

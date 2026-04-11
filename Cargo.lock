@@ -47,21 +47,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "antenna-signaling-mesh"
-version = "0.1.0"
-
-[[package]]
 name = "antenna-signaling-server"
 version = "0.1.0"
-
-[[package]]
-name = "antenna-signaling-shared"
-version = "0.1.0"
-dependencies = [
- "antenna-client-shared",
- "antenna-protocol",
- "anyhow",
-]
 
 [[package]]
 name = "anyhow"
