@@ -128,23 +128,19 @@ where
     }
 
     pub async fn init_host(&mut self, peer_id: PeerID) -> Result<Vec<Output<Msg>>> {
-        self.process_input(Input::Handshake {
-            from: peer_id,
-            event: HandshakeInput::Init {
-                mode: HandshakeMode::Bootstrap,
-                strategy: HandshakeStrategy::Host,
-            },
+        self.process_input(Input::InitHandshake {
+            with: peer_id,
+            mode: HandshakeMode::Bootstrap,
+            strategy: HandshakeStrategy::Host,
         })
         .await
     }
 
     pub async fn init_joiner(&mut self, peer_id: PeerID) -> Result<Vec<Output<Msg>>> {
-        self.process_input(Input::Handshake {
-            from: peer_id,
-            event: HandshakeInput::Init {
-                mode: HandshakeMode::Bootstrap,
-                strategy: HandshakeStrategy::Joiner,
-            },
+        self.process_input(Input::InitHandshake {
+            with: peer_id,
+            mode: HandshakeMode::Bootstrap,
+            strategy: HandshakeStrategy::Joiner,
         })
         .await
     }

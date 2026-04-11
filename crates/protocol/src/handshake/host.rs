@@ -19,7 +19,7 @@ impl Host {
 
     pub fn process(&mut self, input: HandshakeInput) -> Result<Option<HandshakeOutput>> {
         match (&self.state, input) {
-            (HandshakeState::Idle, HandshakeInput::StartAsHost { .. }) => {
+            (HandshakeState::Idle, HandshakeInput::StartAsHost) => {
                 self.state = HandshakeState::CreatingOffer;
                 Ok(Some(HandshakeOutput::InitSDPOffer))
             }

@@ -1,8 +1,18 @@
-use crate::{UserMsgPayload, handshake::HandshakeInput, mesh::PeerID, state::MsgPayload};
+use crate::{
+    HandshakeMode, HandshakeStrategy, UserMsgPayload, handshake::HandshakeInput, mesh::PeerID,
+    state::MsgPayload,
+};
 
 /// Common event that client FSM receives
 #[derive(Debug, Clone)]
 pub enum Input<Msg: UserMsgPayload> {
+    ///
+    InitHandshake {
+        with: PeerID,
+        mode: HandshakeMode,
+        strategy: HandshakeStrategy,
+    },
+
     /// Reveice handshake event
     Handshake { event: HandshakeInput, from: PeerID },
 

@@ -1,9 +1,12 @@
 mod handle_handshake;
+mod handle_message;
 mod peer_id;
 #[cfg(test)]
 mod test;
 
-use crate::{HandshakeFSM, Input, Output, UserMsgPayload};
+use crate::{
+    HandshakeFSM, HandshakeInput, HandshakeMode, HandshakeStrategy, Input, Output, UserMsgPayload,
+};
 use anyhow::Result;
 pub use peer_id::PeerID;
 use std::collections::{HashMap, HashSet};
@@ -18,6 +21,11 @@ pub struct MeshMetadata {
     pub sdp_answer: Option<String>,
 }
 
+pub struct HandshakeContext {
+    pub fsm: HandshakeFSM,
+    pub relay_via: Option<PeerID>,
+}
+
 /// Core FSM of antenna client, handles SDP negotiation handshakes (but not signaling!!)
 /// and abstract mesh logic
 pub struct MeshNodeFSM {
@@ -25,7 +33,7 @@ pub struct MeshNodeFSM {
     id: PeerID,
 
     /// Map of handshake automati, contains state of current handshakes with other sessions
-    handshakes: HashMap<PeerID, HandshakeFSM>,
+    handshakes: HashMap<PeerID, HandshakeContext>,
 
     /// Map of peers with established connection
     connected: HashSet<PeerID>,
@@ -58,15 +66,26 @@ impl MeshNodeFSM {
 
     pub fn process<Msg: UserMsgPayload>(&mut self, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
         match input {
+            Input::InitHandshake {
+                with,
+                mode,
+                strategy,
+            } => {
+                self.handshakes.insert(
+                    with,
+                    HandshakeContext {
+                        fsm: HandshakeFSM::new(mode.clone(), strategy),
+                        relay_via: match mode {
+                            HandshakeMode::Bootstrap => None,
+                            HandshakeMode::Relay(via) => Some(via),
+                        },
+                    },
+                );
+                return Ok(vec![]);
+            }
             Input::Handshake { from, event } => self.handle_handshake(from, event),
             Input::PeerLeaving { peer } => self.handle_peer_leaving(peer),
-            Input::MessageReceived { peer_from, data } => {
-                if self.connected.contains(&peer_from) {
-                    Ok(vec![Output::ReceiveMessage { peer_from, data }])
-                } else {
-                    Ok(vec![])
-                }
-            }
+            Input::MessageReceived { peer_from, data } => self.handle_message(peer_from, data),
             Input::Send { peer_to, data } => {
                 if self.connected.contains(&peer_to) {
                     Ok(vec![Output::SendMessage {
@@ -90,6 +109,25 @@ impl MeshNodeFSM {
         }
     }
 
+    fn handle_peer_joined<Msg: UserMsgPayload>(
+        &mut self,
+        peer: PeerID,
+    ) -> Result<Vec<Output<Msg>>> {
+        if peer == self.id || self.connected.contains(&peer) {
+            return Ok(vec![]);
+        }
+
+        self.process::<Msg>(Input::InitHandshake {
+            with: peer.clone(),
+            mode: HandshakeMode::Relay(self.id.clone()),
+            strategy: HandshakeStrategy::Host,
+        })?;
+
+        self.process::<Msg>(Input::Handshake {
+            from: peer,
+            event: HandshakeInput::StartAsHost,
+        })
+    }
     fn handle_peer_leaving<Msg: UserMsgPayload>(
         &mut self,
         peer: PeerID,

@@ -1,8 +1,7 @@
 use anyhow::{Result, anyhow};
 
 use crate::{
-    HandshakeFSM, HandshakeInput, HandshakeOutput, HandshakeState, MeshNodeFSM, Output, PeerID,
-    UserMsgPayload,
+    HandshakeInput, HandshakeOutput, HandshakeState, MeshNodeFSM, Output, PeerID, UserMsgPayload,
 };
 
 impl MeshNodeFSM {
@@ -12,19 +11,12 @@ impl MeshNodeFSM {
         event: HandshakeInput,
     ) -> Result<Vec<Output<Msg>>> {
         if !self.handshakes.contains_key(&peer) {
-            if let HandshakeInput::Init { mode, strategy } = event.clone() {
-                self.handshakes
-                    .insert(peer.clone(), HandshakeFSM::new(mode, strategy));
-            } else {
-                return Err(anyhow!(
-                    "There is no handshake FSM instance to process this event"
-                ));
-            }
+            return Err(anyhow!("Handshake instance with peer not found"));
         }
 
-        let handshake_fsm = self.handshakes.get_mut(&peer).unwrap();
-        let handshake_out = handshake_fsm.process(event.clone())?;
-        let state = handshake_fsm.state();
+        let ctx = self.handshakes.get_mut(&peer).unwrap();
+        let handshake_out = ctx.fsm.process(event.clone())?;
+        let state = ctx.fsm.state();
 
         if let Some(out) = handshake_out.clone() {
             match out {
@@ -84,7 +76,9 @@ impl MeshNodeFSM {
                 }
                 Ok(out)
             }
-            _ => Err(anyhow!("Unhandled input by mesh fsm")),
+            _ => Ok(handshake_out
+                .map(|event| vec![Output::Handshake { peer, event }])
+                .unwrap_or_default()),
         }
     }
 }

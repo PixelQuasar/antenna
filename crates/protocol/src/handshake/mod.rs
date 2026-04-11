@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 pub use state::HandshakeState;
 pub use strategy::{HandshakeStrategy, StrategyFSM};
 
+use crate::PeerID;
+
 pub struct HandshakeFSM {
     strategy: HandshakeStrategy,
     mode: HandshakeMode,
@@ -70,5 +72,5 @@ pub enum HandshakeMode {
     Bootstrap,
 
     /// Handshake of newly connected peer with all others through "inviter" data channel.
-    Relay,
+    Relay(PeerID),
 }
