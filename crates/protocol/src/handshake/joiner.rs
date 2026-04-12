@@ -1,3 +1,4 @@
+use crate::SignalingPayload;
 use crate::handshake::{HandshakeInput, HandshakeOutput, HandshakeState};
 use anyhow::{Result, anyhow};
 
@@ -19,11 +20,14 @@ impl Joiner {
 
     pub fn process(&mut self, input: HandshakeInput) -> Result<Option<HandshakeOutput>> {
         match (&self.state, input) {
-            (HandshakeState::Idle, HandshakeInput::SDPOfferReceived { sdp, .. }) => {
+            (HandshakeState::Idle, HandshakeInput::Signaling(SignalingPayload::Offer(sdp))) => {
                 self.state = HandshakeState::CreatingAnswer;
                 Ok(Some(HandshakeOutput::RequestSDPAnswer { offer: sdp }))
             }
-            (HandshakeState::CreatingAnswer, HandshakeInput::SDPAnswerCreated { .. }) => {
+            (
+                HandshakeState::CreatingAnswer,
+                HandshakeInput::SignalingCreated(SignalingPayload::Answer(_)),
+            ) => {
                 self.state = HandshakeState::WaitingForDataChannel;
                 Ok(None)
             }

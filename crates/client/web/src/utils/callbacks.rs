@@ -13,17 +13,12 @@ type MessageCallback<Msg> = fn(PeerID, Msg);
 type DisconnectedCallback = fn();
 type PeerConnectedCallback = fn(PeerID);
 type PeerDisconnectedCallback = fn(PeerID);
-type SignalingMessageCallback = fn(PeerID, PeerID, HandshakeInput);
 
 #[derive(Clone)]
 pub enum RtcEvent<Msg: UserMsgPayload> {
     Connected,
     UserMessage(PeerID, Msg),
-    SignalingMessage {
-        from: PeerID,
-        via: PeerID,
-        data: HandshakeInput,
-    },
+
     Disconnected,
     PeerConnected(PeerID),
     PeerDisconnected(PeerID),
@@ -32,7 +27,6 @@ pub enum RtcEvent<Msg: UserMsgPayload> {
 pub enum Rtc<Msg: UserMsgPayload> {
     Connected(ConnectedCallback),
     UserMessage(MessageCallback<Msg>),
-    SignalingMessage(SignalingMessageCallback),
     Disconnected(DisconnectedCallback),
     PeerConnected(PeerConnectedCallback),
     PeerDisconnected(PeerDisconnectedCallback),
@@ -47,7 +41,6 @@ pub enum Rtc<Msg: UserMsgPayload> {
 enum SubscriptionKind {
     Connected,
     UserMessage,
-    SignalingMessage,
     Disconnected,
     PeerConnected,
     PeerDisconnected,
@@ -58,7 +51,6 @@ impl<Msg: UserMsgPayload> Rtc<Msg> {
         match self {
             Self::Connected(_) | Self::JsConnected(_) => SubscriptionKind::Connected,
             Self::UserMessage(_) | Self::JsUserMessage(_) => SubscriptionKind::UserMessage,
-            Self::SignalingMessage(_) => SubscriptionKind::SignalingMessage,
             Self::Disconnected(_) | Self::JsDisconnected(_) => SubscriptionKind::Disconnected,
             Self::PeerConnected(_) | Self::JsPeerConnected(_) => SubscriptionKind::PeerConnected,
             Self::PeerDisconnected(_) | Self::JsPeerDisconnected(_) => {
@@ -73,7 +65,6 @@ impl<Msg: UserMsgPayload> RtcEvent<Msg> {
         match self {
             Self::Connected => SubscriptionKind::Connected,
             Self::UserMessage(_, _) => SubscriptionKind::UserMessage,
-            Self::SignalingMessage { .. } => SubscriptionKind::SignalingMessage,
             Self::Disconnected => SubscriptionKind::Disconnected,
             Self::PeerConnected(_) => SubscriptionKind::PeerConnected,
             Self::PeerDisconnected(_) => SubscriptionKind::PeerDisconnected,
@@ -162,9 +153,6 @@ where
                 (Rtc::Connected(cb), RtcEvent::Connected) => cb(),
                 (Rtc::UserMessage(cb), RtcEvent::UserMessage(peer, data)) => {
                     cb(peer.clone(), data.clone())
-                }
-                (Rtc::SignalingMessage(cb), RtcEvent::SignalingMessage { from, via, data }) => {
-                    cb(from.clone(), via.clone(), data.clone())
                 }
                 (Rtc::Disconnected(cb), RtcEvent::Disconnected) => cb(),
                 (Rtc::PeerConnected(cb), RtcEvent::PeerConnected(peer)) => cb(peer.clone()),

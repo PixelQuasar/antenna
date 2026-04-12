@@ -5,7 +5,7 @@ mod test;
 
 pub use crate::handshake::{
     HandshakeFSM, HandshakeInput, HandshakeMode, HandshakeOutput, HandshakeState,
-    HandshakeStrategy, Host, Joiner,
+    HandshakeStrategy, Host, Joiner, SignalingPayload,
 };
-pub use crate::mesh::{MeshMetadata, MeshNodeFSM, PeerID};
-pub use crate::state::{Input, MsgPayload, Output, UserMsgPayload};
+pub use crate::mesh::{MeshNodeFSM, PeerID};
+pub use crate::state::{Input, MsgPayload, Output, RelayPayload, UserMsgPayload};

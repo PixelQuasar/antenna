@@ -1,4 +1,7 @@
-use crate::{MeshNodeFSM, MsgPayload, Output, PeerID, UserMsgPayload};
+use crate::{
+    HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MeshNodeFSM, MsgPayload, Output,
+    PeerID, RelayPayload, UserMsgPayload,
+};
 use anyhow::Result;
 
 impl MeshNodeFSM {
@@ -12,11 +15,67 @@ impl MeshNodeFSM {
         }
 
         match msg {
-            MsgPayload::PeerJoined(peer) => self.handle_peer_joined(peer),
-            other => Ok(vec![Output::ReceiveMessage {
+            MsgPayload::RelaySignalingTo { dst, data } => {
+                self.handle_relay_signaling_to(peer, dst, data)
+            }
+            MsgPayload::RelaySignalingFrom { src, data } => {
+                self.handle_relay_signaling_from(peer, src, data)
+            }
+            MsgPayload::User(_) => Ok(vec![Output::ReceiveMessage {
                 peer_from: peer,
-                data: other,
+                data: msg,
             }]),
+            _ => Ok(vec![]),
+        }
+    }
+
+    fn handle_relay_signaling_to<Msg: UserMsgPayload>(
+        &mut self,
+        src: PeerID,
+        dst: PeerID,
+        data: RelayPayload,
+    ) -> Result<Vec<Output<Msg>>> {
+        Ok(vec![Output::SendMessage {
+            peer_to: dst,
+            data: MsgPayload::RelaySignalingFrom { src, data },
+        }])
+    }
+
+    fn handle_relay_signaling_from<Msg: UserMsgPayload>(
+        &mut self,
+        via: PeerID,
+        src: PeerID,
+        data: RelayPayload,
+    ) -> Result<Vec<Output<Msg>>> {
+        match data {
+            RelayPayload::InitHost => {
+                if self.handshakes.contains_key(&src) || self.connected.contains(&src) {
+                    return Ok(vec![]);
+                }
+                self.process::<Msg>(Input::InitHandshake {
+                    with: src.clone(),
+                    mode: HandshakeMode::Relay(via),
+                    strategy: HandshakeStrategy::Host,
+                })?;
+                self.process::<Msg>(Input::Handshake {
+                    from: src,
+                    event: HandshakeInput::Init,
+                })
+            }
+            RelayPayload::InitJoiner => {
+                if self.handshakes.contains_key(&src) || self.connected.contains(&src) {
+                    return Ok(vec![]);
+                }
+                self.process::<Msg>(Input::InitHandshake {
+                    with: src,
+                    mode: HandshakeMode::Relay(via),
+                    strategy: HandshakeStrategy::Joiner,
+                })
+            }
+            RelayPayload::Signaling(payload) => self.process::<Msg>(Input::Handshake {
+                from: src,
+                event: HandshakeInput::Signaling(payload),
+            }),
         }
     }
 }

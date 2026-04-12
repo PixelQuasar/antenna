@@ -1,22 +1,18 @@
 use serde::{Deserialize, Serialize};
 
+use crate::SignalingPayload;
+
 /// Events fed into the handshake FSM from the driver.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum HandshakeInput {
-    /// Input event signalizing that we started SDP negotiation as host
-    StartAsHost,
+    ///
+    Init,
 
     ///
-    SDPOfferCreated { sdp: String },
+    Signaling(SignalingPayload),
 
-    ///
-    SDPAnswerCreated { sdp: String },
-
-    /// Input event containing sdp offer from other peer (from host)
-    SDPOfferReceived { sdp: String },
-
-    /// Input event containing sdp answer from other peer (from joiner)
-    SDPAnswerReceived { sdp: String },
+    /// Driver sends when it creates SDP offer/answer
+    SignalingCreated(SignalingPayload),
 
     /// Input event signalizing about opening of data channel with peer
     DataChannelOpen,

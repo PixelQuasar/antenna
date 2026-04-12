@@ -7,42 +7,41 @@ mod strategy;
 mod test;
 
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
+
 pub use host::Host;
 pub use input::HandshakeInput;
 pub use joiner::Joiner;
 pub use output::HandshakeOutput;
-use serde::{Deserialize, Serialize};
-pub use state::HandshakeState;
+pub use state::{HandshakeState, SignalingPayload};
 pub use strategy::{HandshakeStrategy, StrategyFSM};
 
 use crate::PeerID;
 
 pub struct HandshakeFSM {
     strategy: HandshakeStrategy,
-    mode: HandshakeMode,
     fsm: StrategyFSM,
 }
 
 impl HandshakeFSM {
-    pub fn new(mode: HandshakeMode, strategy: HandshakeStrategy) -> Self {
+    pub fn new(strategy: HandshakeStrategy) -> Self {
         match strategy {
-            HandshakeStrategy::Host => Self::host(mode),
-            HandshakeStrategy::Joiner => Self::joiner(mode),
+            HandshakeStrategy::Host => Self::host(),
+            HandshakeStrategy::Joiner => Self::joiner(),
         }
     }
 
-    pub fn host(mode: HandshakeMode) -> Self {
+    pub fn host() -> Self {
         Self {
             strategy: HandshakeStrategy::Host,
             fsm: StrategyFSM::Host(Host::new()),
-            mode,
         }
     }
 
-    pub fn joiner(mode: HandshakeMode) -> Self {
+    pub fn joiner() -> Self {
         Self {
             strategy: HandshakeStrategy::Joiner,
-            mode,
+
             fsm: StrategyFSM::Joiner(Joiner::new()),
         }
     }
@@ -50,10 +49,6 @@ impl HandshakeFSM {
     /// Get current handshake stat
     pub fn state(&self) -> &HandshakeState {
         self.fsm.state()
-    }
-
-    pub fn mode(&self) -> &HandshakeMode {
-        &self.mode
     }
 
     pub fn stragegy(&self) -> &HandshakeStrategy {

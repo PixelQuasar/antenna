@@ -5,7 +5,7 @@ use crate::{
     utils::{CallbackId, IceServerConfig, Rtc, RtcCallbacks},
 };
 use antenna_protocol::{
-    HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MsgPayload, PeerID, UserMsgPayload,
+    HandshakeInput, Input, MsgPayload, PeerID, SignalingPayload, UserMsgPayload,
 };
 
 use anyhow::{Context, Result};
@@ -55,7 +55,7 @@ where
         self.driver
             .process_input(Input::Handshake {
                 from: peer_id.clone(),
-                event: HandshakeInput::StartAsHost,
+                event: HandshakeInput::Init,
             })
             .await?;
         self.driver
@@ -76,7 +76,7 @@ where
         self.driver
             .process_input(Input::Handshake {
                 from: peer_id.clone(),
-                event: HandshakeInput::SDPOfferReceived { sdp: offer },
+                event: HandshakeInput::Signaling(SignalingPayload::Offer(offer)),
             })
             .await?;
         self.driver
@@ -92,7 +92,7 @@ where
         self.driver
             .process_input(Input::Handshake {
                 from: peer_id,
-                event: HandshakeInput::SDPAnswerReceived { sdp: answer },
+                event: HandshakeInput::Signaling(SignalingPayload::Answer(answer)),
             })
             .await?;
 
@@ -104,19 +104,6 @@ where
             .process_input(Input::Send {
                 peer_to: peer_id,
                 data: MsgPayload::User(data),
-            })
-            .await?;
-        Ok(())
-    }
-
-    pub async fn send_signaling(&mut self, peer_id: PeerID, data: HandshakeInput) -> Result<()> {
-        self.driver
-            .process_input(Input::Send {
-                peer_to: peer_id,
-                data: MsgPayload::RelaySignaling {
-                    via: self.my_id.clone(),
-                    data,
-                },
             })
             .await?;
         Ok(())

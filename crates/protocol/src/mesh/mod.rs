@@ -4,9 +4,7 @@ mod peer_id;
 #[cfg(test)]
 mod test;
 
-use crate::{
-    HandshakeFSM, HandshakeInput, HandshakeMode, HandshakeStrategy, Input, Output, UserMsgPayload,
-};
+use crate::{HandshakeFSM, HandshakeMode, Input, Output, UserMsgPayload};
 use anyhow::Result;
 pub use peer_id::PeerID;
 use std::collections::{HashMap, HashSet};
@@ -23,7 +21,7 @@ pub struct MeshMetadata {
 
 pub struct HandshakeContext {
     pub fsm: HandshakeFSM,
-    pub relay_via: Option<PeerID>,
+    pub mode: HandshakeMode,
 }
 
 /// Core FSM of antenna client, handles SDP negotiation handshakes (but not signaling!!)
@@ -74,11 +72,8 @@ impl MeshNodeFSM {
                 self.handshakes.insert(
                     with,
                     HandshakeContext {
-                        fsm: HandshakeFSM::new(mode.clone(), strategy),
-                        relay_via: match mode {
-                            HandshakeMode::Bootstrap => None,
-                            HandshakeMode::Relay(via) => Some(via),
-                        },
+                        fsm: HandshakeFSM::new(strategy),
+                        mode,
                     },
                 );
                 return Ok(vec![]);
@@ -109,25 +104,10 @@ impl MeshNodeFSM {
         }
     }
 
-    fn handle_peer_joined<Msg: UserMsgPayload>(
-        &mut self,
-        peer: PeerID,
-    ) -> Result<Vec<Output<Msg>>> {
-        if peer == self.id || self.connected.contains(&peer) {
-            return Ok(vec![]);
-        }
-
-        self.process::<Msg>(Input::InitHandshake {
-            with: peer.clone(),
-            mode: HandshakeMode::Relay(self.id.clone()),
-            strategy: HandshakeStrategy::Host,
-        })?;
-
-        self.process::<Msg>(Input::Handshake {
-            from: peer,
-            event: HandshakeInput::StartAsHost,
-        })
+    pub fn metadata(&self) -> &MeshMetadata {
+        &self.metadata
     }
+
     fn handle_peer_leaving<Msg: UserMsgPayload>(
         &mut self,
         peer: PeerID,
@@ -140,9 +120,5 @@ impl MeshNodeFSM {
             out.push(Output::PeerDisconnected { peer });
         }
         Ok(out)
-    }
-
-    pub fn metadata(&self) -> &MeshMetadata {
-        &self.metadata
     }
 }

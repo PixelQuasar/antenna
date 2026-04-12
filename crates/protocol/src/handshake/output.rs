@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 /// Commands emitted by the handshake FSM for the driver to execute.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
 pub enum HandshakeOutput {
     /// Initiate creating, applying and sending SDP offer to other peer (to joiner)
     InitSDPOffer,

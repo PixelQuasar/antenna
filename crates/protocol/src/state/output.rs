@@ -1,12 +1,14 @@
-use crate::{MsgPayload, UserMsgPayload, handshake::HandshakeOutput, mesh::PeerID};
+use crate::{
+    MsgPayload, SignalingPayload, UserMsgPayload, handshake::HandshakeOutput, mesh::PeerID,
+};
 
 /// Common event that client FSM sends
 #[derive(Debug, Clone)]
 pub enum Output<Msg: UserMsgPayload> {
     /// Handshake event
     Handshake {
-        event: HandshakeOutput,
         peer: PeerID,
+        event: HandshakeOutput,
     },
 
     /// Send message to other peer in mesh

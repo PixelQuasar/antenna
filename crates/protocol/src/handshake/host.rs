@@ -1,3 +1,4 @@
+use crate::SignalingPayload;
 use crate::handshake::{HandshakeInput, HandshakeOutput, HandshakeState};
 use anyhow::{Result, anyhow};
 
@@ -19,15 +20,21 @@ impl Host {
 
     pub fn process(&mut self, input: HandshakeInput) -> Result<Option<HandshakeOutput>> {
         match (&self.state, input) {
-            (HandshakeState::Idle, HandshakeInput::StartAsHost) => {
+            (HandshakeState::Idle, HandshakeInput::Init) => {
                 self.state = HandshakeState::CreatingOffer;
                 Ok(Some(HandshakeOutput::InitSDPOffer))
             }
-            (HandshakeState::CreatingOffer, HandshakeInput::SDPOfferCreated { .. }) => {
+            (
+                HandshakeState::CreatingOffer,
+                HandshakeInput::SignalingCreated(SignalingPayload::Offer(_)),
+            ) => {
                 self.state = HandshakeState::WaitingForAnswer;
                 Ok(None)
             }
-            (HandshakeState::WaitingForAnswer, HandshakeInput::SDPAnswerReceived { sdp }) => {
+            (
+                HandshakeState::WaitingForAnswer,
+                HandshakeInput::Signaling(SignalingPayload::Answer(sdp)),
+            ) => {
                 self.state = HandshakeState::WaitingForDataChannel;
                 Ok(Some(HandshakeOutput::AcceptSDPAnswer { answer: sdp }))
             }

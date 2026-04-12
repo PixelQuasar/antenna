@@ -1,7 +1,8 @@
 use anyhow::{Result, anyhow};
 
 use crate::{
-    HandshakeInput, HandshakeOutput, HandshakeState, MeshNodeFSM, Output, PeerID, UserMsgPayload,
+    HandshakeInput, HandshakeMode, HandshakeState, MeshNodeFSM, MsgPayload, Output, PeerID,
+    RelayPayload, SignalingPayload, UserMsgPayload,
 };
 
 impl MeshNodeFSM {
@@ -17,68 +18,77 @@ impl MeshNodeFSM {
         let ctx = self.handshakes.get_mut(&peer).unwrap();
         let handshake_out = ctx.fsm.process(event.clone())?;
         let state = ctx.fsm.state();
+        let mode = ctx.mode.clone();
 
-        if let Some(out) = handshake_out.clone() {
-            match out {
-                HandshakeOutput::RequestSDPAnswer { offer } => {
-                    self.metadata.sdp_offer = Some(offer);
+        let mut outputs: Vec<Output<Msg>> = vec![];
+
+        if let Some(event) = handshake_out {
+            outputs.push(Output::Handshake {
+                peer: peer.clone(),
+                event,
+            });
+        }
+
+        match &event {
+            HandshakeInput::SignalingCreated(payload) => match &mode {
+                HandshakeMode::Bootstrap => match payload {
+                    SignalingPayload::Offer(sdp) => {
+                        self.metadata.sdp_offer = Some(sdp.clone());
+                    }
+                    SignalingPayload::Answer(sdp) => {
+                        self.metadata.sdp_answer = Some(sdp.clone());
+                    }
+                },
+                HandshakeMode::Relay(via) => {
+                    outputs.push(Output::SendMessage {
+                        peer_to: via.clone(),
+                        data: MsgPayload::RelaySignalingTo {
+                            dst: peer.clone(),
+                            data: RelayPayload::Signaling(payload.clone()),
+                        },
+                    });
                 }
-                HandshakeOutput::AcceptSDPAnswer { answer } => {
-                    self.metadata.sdp_answer = Some(answer);
-                }
-                _ => {}
-            }
+            },
+            _ => {}
         }
 
         match state {
-            HandshakeState::WaitingForAnswer => {
-                let mut out: Vec<Output<Msg>> = vec![];
-                if let Some(event) = handshake_out {
-                    out.push(Output::Handshake {
-                        peer: peer.clone(),
-                        event,
-                    });
-                }
-                Ok(out)
-            }
-            HandshakeState::WaitingForDataChannel => {
-                let mut out = Vec::new();
-                if let Some(event) = handshake_out {
-                    out.push(Output::Handshake {
-                        peer: peer.clone(),
-                        event,
-                    });
-                }
-                Ok(out)
-            }
             HandshakeState::Connected => {
                 self.handshakes.remove(&peer);
                 self.connected.insert(peer.clone());
-                let mut out = vec![];
-                // out.push(Output::PeerConnected { peer: peer.clone() });
+
                 for existing in &self.connected {
                     if existing != &peer {
-                        out.push(Output::PeerAppeared {
+                        outputs.push(Output::PeerAppeared {
                             peer: existing.clone(),
                         });
+
+                        if mode == HandshakeMode::Bootstrap {
+                            outputs.push(Output::SendMessage {
+                                peer_to: existing.clone(),
+                                data: MsgPayload::RelaySignalingFrom {
+                                    src: peer.clone(),
+                                    data: RelayPayload::InitHost,
+                                },
+                            });
+                            outputs.push(Output::SendMessage {
+                                peer_to: peer.clone(),
+                                data: MsgPayload::RelaySignalingFrom {
+                                    src: existing.clone(),
+                                    data: RelayPayload::InitJoiner,
+                                },
+                            });
+                        }
                     }
                 }
-                if let Some(event) = handshake_out {
-                    out.push(Output::Handshake { peer, event });
-                }
-                Ok(out)
             }
             HandshakeState::Closed => {
                 self.handshakes.remove(&peer);
-                let mut out = vec![Output::PeerDisconnected { peer: peer.clone() }];
-                if let Some(event) = handshake_out {
-                    out.push(Output::Handshake { peer, event });
-                }
-                Ok(out)
+                outputs.push(Output::PeerDisconnected { peer: peer.clone() });
             }
-            _ => Ok(handshake_out
-                .map(|event| vec![Output::Handshake { peer, event }])
-                .unwrap_or_default()),
+            _ => {}
         }
+
+        Ok(outputs)
     }
 }

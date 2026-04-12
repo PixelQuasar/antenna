@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 /// Handshake-level state of the client handshake FSM.
 #[derive(Debug, PartialEq, Eq)]
 pub enum HandshakeState {
@@ -21,4 +23,10 @@ pub enum HandshakeState {
 
     /// Connection is closed
     Closed,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub enum SignalingPayload {
+    Offer(String),
+    Answer(String),
 }

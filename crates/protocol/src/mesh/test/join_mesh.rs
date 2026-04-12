@@ -2,8 +2,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use crate::{
-    HandshakeInput, HandshakeMode, HandshakeOutput, Input, MeshNodeFSM, Output, PeerID,
-    assert_handshake_event, mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake,
+    HandshakeInput, HandshakeMode, HandshakeOutput, HandshakeStrategy, Input, MeshNodeFSM, Output,
+    PeerID, SignalingPayload, assert_handshake_event,
+    mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake,
 };
 
 thread_local! {
@@ -72,16 +73,36 @@ fn establish_direct_connection(
 ) {
     CONNECTION_COUNTER.with(|c| *c.borrow_mut() += 1);
 
-    // Initiator starts handshake as host
+    // Create FSMs for both sides
+    peers
+        .get_mut(initiator_id)
+        .unwrap()
+        .process::<()>(Input::InitHandshake {
+            with: target_id.clone(),
+            mode: HandshakeMode::Bootstrap,
+            strategy: HandshakeStrategy::Host,
+        })
+        .unwrap();
+
+    peers
+        .get_mut(target_id)
+        .unwrap()
+        .process::<()>(Input::InitHandshake {
+            with: initiator_id.clone(),
+            mode: HandshakeMode::Bootstrap,
+            strategy: HandshakeStrategy::Joiner,
+        })
+        .unwrap();
+
+    // Initiator: Init → CreatingOffer
     let outputs = peers
         .get_mut(initiator_id)
         .unwrap()
         .process::<()>(Input::Handshake {
             from: target_id.clone(),
-            event: HandshakeInput::StartAsHost {
-                mode: HandshakeMode::Bootstrap,
-            },
-        });
+            event: HandshakeInput::Init,
+        })
+        .unwrap();
 
     assert_handshake_event!(
         outputs,
@@ -89,28 +110,25 @@ fn establish_direct_connection(
         event: HandshakeOutput::InitSDPOffer
     );
 
-    // Initiator creates SDP offer
+    // Initiator: SignalingCreated(Offer)
     peers
         .get_mut(initiator_id)
         .unwrap()
         .process::<()>(Input::Handshake {
             from: target_id.clone(),
-            event: HandshakeInput::SDPOfferCreated {
-                sdp: "offer".into(),
-            },
-        });
+            event: HandshakeInput::SignalingCreated(SignalingPayload::Offer("offer".into())),
+        })
+        .unwrap();
 
-    // Target receives SDP offer
+    // Target: Signaling(Offer) → CreatingAnswer
     let outputs = peers
         .get_mut(target_id)
         .unwrap()
         .process::<()>(Input::Handshake {
             from: initiator_id.clone(),
-            event: HandshakeInput::SDPOfferReceived {
-                sdp: "offer".into(),
-                mode: HandshakeMode::Bootstrap,
-            },
-        });
+            event: HandshakeInput::Signaling(SignalingPayload::Offer("offer".into())),
+        })
+        .unwrap();
 
     assert_handshake_event!(
         outputs,
@@ -118,27 +136,25 @@ fn establish_direct_connection(
         event: HandshakeOutput::RequestSDPAnswer { .. }
     );
 
-    // Target creates SDP answer
+    // Target: SignalingCreated(Answer)
     peers
         .get_mut(target_id)
         .unwrap()
         .process::<()>(Input::Handshake {
             from: initiator_id.clone(),
-            event: HandshakeInput::SDPAnswerCreated {
-                sdp: "answer".into(),
-            },
-        });
+            event: HandshakeInput::SignalingCreated(SignalingPayload::Answer("answer".into())),
+        })
+        .unwrap();
 
-    // Initiator receives SDP answer
+    // Initiator: Signaling(Answer) → AcceptSDPAnswer
     let outputs = peers
         .get_mut(initiator_id)
         .unwrap()
         .process::<()>(Input::Handshake {
             from: target_id.clone(),
-            event: HandshakeInput::SDPAnswerReceived {
-                sdp: "answer".into(),
-            },
-        });
+            event: HandshakeInput::Signaling(SignalingPayload::Answer("answer".into())),
+        })
+        .unwrap();
 
     assert_handshake_event!(
         outputs,
@@ -146,14 +162,15 @@ fn establish_direct_connection(
         event: HandshakeOutput::AcceptSDPAnswer { .. }
     );
 
-    // Both sides open data channel
+    // Both: DataChannelOpen
     peers
         .get_mut(initiator_id)
         .unwrap()
         .process::<()>(Input::Handshake {
             from: target_id.clone(),
             event: HandshakeInput::DataChannelOpen,
-        });
+        })
+        .unwrap();
 
     peers
         .get_mut(target_id)
@@ -161,7 +178,8 @@ fn establish_direct_connection(
         .process::<()>(Input::Handshake {
             from: initiator_id.clone(),
             event: HandshakeInput::DataChannelOpen,
-        });
+        })
+        .unwrap();
 }
 
 pub(crate) fn assert_full_mesh_connectivity(peers: &HashMap<PeerID, MeshNodeFSM>) {

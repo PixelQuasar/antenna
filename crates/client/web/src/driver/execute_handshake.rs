@@ -6,7 +6,8 @@ use crate::{
     webrtc::{DataChannelManager, PeerConnectionManager},
 };
 use antenna_protocol::{
-    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID, UserMsgPayload,
+    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID,
+    SignalingPayload, UserMsgPayload,
 };
 
 use anyhow::{Context, Result};
@@ -50,9 +51,7 @@ where
 
         self.fsm.borrow_mut().process(Input::<Msg>::Handshake {
             from: peer.clone(),
-            event: HandshakeInput::SDPOfferCreated {
-                sdp: full_sdp.clone(),
-            },
+            event: HandshakeInput::SignalingCreated(SignalingPayload::Offer(full_sdp.clone())),
         })?;
 
         self.pc_managers.insert(peer.clone(), pc_manager);
@@ -71,9 +70,7 @@ where
 
         self.fsm.borrow_mut().process(Input::<Msg>::Handshake {
             from: peer.clone(),
-            event: HandshakeInput::SDPAnswerCreated {
-                sdp: full_sdp.clone(),
-            },
+            event: HandshakeInput::SignalingCreated(SignalingPayload::Answer(full_sdp.clone())),
         })?;
 
         self.pc_managers.insert(peer.clone(), pc_manager);
@@ -229,37 +226,16 @@ where
                     }
                 };
                 for output in outputs {
-                    if let Output::<Msg>::ReceiveMessage { peer_from, data } = output {
-                        match data {
-                            MsgPayload::User(data) => {
-                                if let Err(err) = callbacks
+                    match output {
+                        Output::ReceiveMessage { peer_from, data } => {
+                            if let MsgPayload::User(data) = data {
+                                callbacks
                                     .borrow()
                                     .emit(RtcEvent::UserMessage(peer_from, data))
-                                {
-                                    web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(
-                                        &format!("Failed to emit message callback: {:#?}", err),
-                                    ));
-                                }
-                            }
-                            MsgPayload::RelaySignaling { data, via } => {
-                                if let Err(err) =
-                                    callbacks.borrow().emit(RtcEvent::SignalingMessage {
-                                        from: peer_from,
-                                        via,
-                                        data,
-                                    })
-                                {
-                                    web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(
-                                        &format!("Failed to emit message callback: {:#?}", err),
-                                    ));
-                                }
-                            }
-                            _ => {
-                                web_sys::console::warn_1(&wasm_bindgen::JsValue::from_str(
-                                    &format!("Unknown message type"),
-                                ));
+                                    .ok();
                             }
                         }
+                        _ => {}
                     }
                 }
             });
