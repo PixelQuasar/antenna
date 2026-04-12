@@ -33,10 +33,10 @@ impl Host {
             }
             (
                 HandshakeState::WaitingForAnswer,
-                HandshakeInput::Signaling(SignalingPayload::Answer(sdp)),
+                HandshakeInput::Signaling(SignalingPayload::Answer(answer)),
             ) => {
                 self.state = HandshakeState::WaitingForDataChannel;
-                Ok(Some(HandshakeOutput::AcceptSDPAnswer { answer: sdp }))
+                Ok(Some(HandshakeOutput::AcceptSDPAnswer { answer }))
             }
             (HandshakeState::WaitingForDataChannel, HandshakeInput::DataChannelOpen) => {
                 self.state = HandshakeState::Connected;

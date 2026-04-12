@@ -24,7 +24,7 @@ pub struct HandshakeContext {
     pub mode: HandshakeMode,
 }
 
-/// Core FSM of antenna client, handles SDP negotiation handshakes (but not signaling!!)
+/// Core FSM of antenna client, handles negotiation handshakes (but not signaling!!)
 /// and abstract mesh logic
 pub struct MeshNodeFSM {
     /// ID of current peer, must be globally unique

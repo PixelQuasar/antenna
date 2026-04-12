@@ -32,11 +32,11 @@ impl MeshNodeFSM {
         match &event {
             HandshakeInput::SignalingCreated(payload) => match &mode {
                 HandshakeMode::Bootstrap => match payload {
-                    SignalingPayload::Offer(sdp) => {
-                        self.metadata.sdp_offer = Some(sdp.clone());
+                    SignalingPayload::Offer(offer) => {
+                        self.metadata.sdp_offer = Some(offer.clone());
                     }
-                    SignalingPayload::Answer(sdp) => {
-                        self.metadata.sdp_answer = Some(sdp.clone());
+                    SignalingPayload::Answer(answer) => {
+                        self.metadata.sdp_answer = Some(answer.clone());
                     }
                 },
                 HandshakeMode::Relay(via) => {

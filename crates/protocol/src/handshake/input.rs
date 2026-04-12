@@ -11,7 +11,7 @@ pub enum HandshakeInput {
     ///
     Signaling(SignalingPayload),
 
-    /// Driver sends when it creates SDP offer/answer
+    /// Driver sends when it creates offer/answer
     SignalingCreated(SignalingPayload),
 
     /// Input event signalizing about opening of data channel with peer

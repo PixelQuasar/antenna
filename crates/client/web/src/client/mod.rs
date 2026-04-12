@@ -74,7 +74,7 @@ where
             .metadata()
             .sdp_offer
             .clone()
-            .context("SDP offer not found on starting")
+            .context("Offer not found on starting")
     }
 
     pub async fn receive_bootstrap_offer(
@@ -100,7 +100,7 @@ where
             .metadata()
             .sdp_answer
             .clone()
-            .context("SDP answer not found on receiving offer")
+            .context("Answer not found on receiving offer")
     }
 
     pub async fn receive_answer(&mut self, peer_id: PeerID, answer: String) -> Result<()> {

@@ -93,13 +93,13 @@ where
         Ok(())
     }
 
-    async fn execute_accept_answer(&mut self, peer: &PeerID, sdp: String) -> Result<()> {
+    async fn execute_accept_answer(&mut self, peer: &PeerID, answer: String) -> Result<()> {
         let pc_manager = self
             .pc_managers
             .get(peer)
             .context("PeerConnection not found for peer")?;
 
-        pc_manager.set_remote_description(&sdp, false).await?;
+        pc_manager.set_remote_description(&answer, false).await?;
         Ok(())
     }
 
