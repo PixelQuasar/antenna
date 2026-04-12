@@ -5,7 +5,6 @@ use antenna_protocol::{
     UserMsgPayload,
 };
 use anyhow::{Context, Result};
-use wasm_bindgen::JsValue;
 
 use crate::{
     utils::{Dispatcher, IceServerConfig, RtcCallbacks, RtcEvent},
@@ -20,6 +19,9 @@ where
 {
     /// SansIO-based protocol finite state machine to handle main logic
     fsm: Rc<RefCell<MeshNodeFSM>>,
+
+    /// Weak self-like shared handle for callbacks
+    self_ref: Option<Rc<RefCell<Driver<Msg>>>>,
 
     /// Map of JS RTC peer connection wrappers
     pc_managers: HashMap<PeerID, PeerConnectionManager>,
@@ -45,11 +47,23 @@ where
     ) -> Self {
         Self {
             fsm: Rc::new(RefCell::new(MeshNodeFSM::new(id))),
+            self_ref: None,
             pc_managers: HashMap::new(),
             dc_managers: HashMap::new(),
             ice_servers,
             callbacks,
         }
+    }
+
+    pub fn attach_self(&mut self, self_ref: Rc<RefCell<Driver<Msg>>>) {
+        self.self_ref = Some(self_ref);
+    }
+
+    pub fn self_handle(&self) -> Result<Rc<RefCell<Driver<Msg>>>> {
+        self.self_ref
+            .as_ref()
+            .cloned()
+            .context("Driver self handle is not attached")
     }
 
     pub fn is_connected(&self, peer: &PeerID) -> bool {
@@ -65,6 +79,7 @@ where
             .collect()
     }
 
+    // TODO make sync later
     pub async fn process_input(&mut self, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
         let was_connected = !self.fsm.borrow().connected_peers().is_empty();
         let outputs = self.fsm.borrow_mut().process(input)?;
@@ -82,9 +97,7 @@ where
                         .callbacks
                         .borrow()
                         .emit(RtcEvent::UserMessage(peer_from, data))?,
-                    _ => {
-                        web_sys::console::warn_1(&JsValue::from_str("Unknown message type"));
-                    }
+                    _ => {}
                 },
                 Output::PeerConnected { peer } => self
                     .callbacks

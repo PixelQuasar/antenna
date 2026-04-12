@@ -15,7 +15,7 @@ where
     Msg: UserMsgPayload,
 {
     my_id: PeerID,
-    driver: Driver<Msg>,
+    driver: Rc<RefCell<Driver<Msg>>>,
     callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
 }
 
@@ -29,7 +29,12 @@ where
 
     pub fn with_ice_servers(my_id: PeerID, ice_servers: Vec<IceServerConfig>) -> Self {
         let callbacks = Rc::new(RefCell::new(RtcCallbacks::new()));
-        let driver = Driver::new(my_id.clone(), ice_servers, callbacks.clone());
+        let driver = Rc::new(RefCell::new(Driver::new(
+            my_id.clone(),
+            ice_servers,
+            callbacks.clone(),
+        )));
+        driver.borrow_mut().attach_self(driver.clone());
 
         Self {
             my_id,
@@ -51,14 +56,19 @@ where
     }
 
     pub async fn start_bootstrap(&mut self, peer_id: PeerID) -> Result<String> {
-        self.driver.init_host(peer_id.clone()).await?;
+        {
+            let mut driver = self.driver.borrow_mut();
+            driver.init_host(peer_id.clone()).await?;
+            driver
+                .process_input(Input::Handshake {
+                    from: peer_id.clone(),
+                    event: HandshakeInput::Init,
+                })
+                .await?;
+        }
+
         self.driver
-            .process_input(Input::Handshake {
-                from: peer_id.clone(),
-                event: HandshakeInput::Init,
-            })
-            .await?;
-        self.driver
+            .borrow()
             .fsm()
             .borrow()
             .metadata()
@@ -72,14 +82,19 @@ where
         peer_id: PeerID,
         offer: String,
     ) -> Result<String> {
-        self.driver.init_joiner(peer_id.clone()).await?;
+        {
+            let mut driver = self.driver.borrow_mut();
+            driver.init_joiner(peer_id.clone()).await?;
+            driver
+                .process_input(Input::Handshake {
+                    from: peer_id.clone(),
+                    event: HandshakeInput::Signaling(SignalingPayload::Offer(offer)),
+                })
+                .await?;
+        }
+
         self.driver
-            .process_input(Input::Handshake {
-                from: peer_id.clone(),
-                event: HandshakeInput::Signaling(SignalingPayload::Offer(offer)),
-            })
-            .await?;
-        self.driver
+            .borrow()
             .fsm()
             .borrow()
             .metadata()
@@ -90,6 +105,7 @@ where
 
     pub async fn receive_answer(&mut self, peer_id: PeerID, answer: String) -> Result<()> {
         self.driver
+            .borrow_mut()
             .process_input(Input::Handshake {
                 from: peer_id,
                 event: HandshakeInput::Signaling(SignalingPayload::Answer(answer)),
@@ -101,6 +117,7 @@ where
 
     pub async fn send(&mut self, peer_id: PeerID, data: Msg) -> Result<()> {
         self.driver
+            .borrow_mut()
             .process_input(Input::Send {
                 peer_to: peer_id,
                 data: MsgPayload::User(data),
@@ -111,6 +128,7 @@ where
 
     pub async fn broadcast(&mut self, data: Msg) -> Result<()> {
         self.driver
+            .borrow_mut()
             .process_input(Input::Broadcast {
                 data: MsgPayload::User(data),
             })
@@ -119,11 +137,12 @@ where
     }
 
     pub fn is_connected(&self, peer_id: PeerID) -> bool {
-        self.driver.is_connected(&peer_id)
+        self.driver.borrow().is_connected(&peer_id)
     }
 
     pub fn connected_peers(&self) -> Vec<String> {
         self.driver
+            .borrow()
             .connected_peers()
             .into_iter()
             .map(|p| p.to_string())

@@ -15,34 +15,58 @@
             justify-content: center;
             padding: 40px 20px;
         }
-        .container { max-width: 560px; width: 100%; }
+        .container { max-width: 680px; width: 100%; }
         h1 { margin-bottom: 24px; font-size: 22px; }
         .section { margin-bottom: 20px; }
         label {
-            display: block; font-size: 13px; color: #888;
-            margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+            display: block;
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         textarea, input {
-            width: 100%; padding: 10px; border: 1px solid #333; border-radius: 6px;
-            background: #16213e; color: #eee; font-family: monospace; font-size: 13px;
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #16213e;
+            color: #eee;
+            font-family: monospace;
+            font-size: 13px;
         }
         textarea { resize: vertical; min-height: 80px; }
         textarea:focus, input:focus { outline: none; border-color: #e94560; }
         button {
-            padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer;
-            font-size: 14px; font-weight: 500; color: #fff; background: #e94560;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #fff;
+            background: #e94560;
             transition: opacity 0.2s;
         }
         button:hover { opacity: 0.85; }
         button:disabled { opacity: 0.4; cursor: not-allowed; }
-        .btn-row { display: flex; gap: 8px; }
         .status {
-            padding: 10px; background: #16213e; border-radius: 6px;
-            font-size: 14px; border-left: 3px solid #e94560;
+            padding: 10px;
+            background: #16213e;
+            border-radius: 6px;
+            font-size: 14px;
+            border-left: 3px solid #e94560;
         }
         .log {
-            background: #0f3460; border-radius: 6px; padding: 12px; height: 180px;
-            overflow-y: auto; font-family: monospace; font-size: 13px; white-space: pre-wrap;
+            background: #0f3460;
+            border-radius: 6px;
+            padding: 12px;
+            height: 220px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
         }
         .chat-input { display: flex; gap: 8px; margin-top: 8px; }
         .chat-input input { flex: 1; }
@@ -50,96 +74,106 @@
         .mt { margin-top: 8px; }
         .id-row { display: flex; gap: 8px; }
         .id-row input { flex: 1; }
+        .muted { color: #888; font-size: 12px; }
+        ul.peer-list {
+            list-style: none;
+            padding: 10px;
+            background: #16213e;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        ul.peer-list li + li { margin-top: 6px; }
     </style>
 </head>
 <body>
 <div class="container">
     <h1>Antenna P2P Chat</h1>
 
-    <!-- Step 0: Peer IDs -->
-    <div class="section" id="step-ids">
-        <label>Peer IDs</label>
-         <div class="id-row">
-            <input id="turn" placeholder="TURN addr" />
-           
-        </div>
+    <div class="section" id="setup-section">
+        <label>Local peer</label>
         <div class="id-row">
-            <input id="my-id" placeholder="Your ID (e.g., alice)" />
-            <input id="remote-id" placeholder="Remote ID (e.g., bob)" />
+            <input id="turn" placeholder="TURN addr (optional in UI, demo default is used)" />
         </div>
-        <button class="mt" onclick="setIds()">Set IDs</button>
+        <div class="id-row mt">
+            <input id="my-id" placeholder="Your ID (e.g. alice)" />
+            <button onclick="initApp()">Initialize</button>
+        </div>
+        <div class="muted mt">Initialize once, then reuse the controls below to connect more peers.</div>
     </div>
 
-    <!-- Step 1: Role -->
-    <div class="section hidden" id="step-role">
-        <label>Choose role</label>
-        <div class="btn-row">
-            <button onclick="chooseHost()">Host</button>
-            <button onclick="chooseJoiner()">Joiner</button>
+    <div class="section hidden" id="connect-section">
+        <label>Manual bootstrap</label>
+        <div class="id-row">
+            <input id="target-id" placeholder="Target peer ID (e.g. bob or charlie)" />
+            <button onclick="chooseHost()">Create offer</button>
+            <button onclick="chooseJoiner()">Accept offer</button>
         </div>
     </div>
 
-    <!-- Host flow -->
     <div id="host-flow" class="hidden">
         <div class="section">
-            <label>Your offer (copy → send to peer)</label>
+            <label>Your offer for target peer</label>
             <textarea id="offer-out" readonly></textarea>
         </div>
         <div class="section">
-            <label>Paste answer from peer</label>
+            <label>Paste answer from target peer</label>
             <textarea id="answer-in"></textarea>
-            <button class="mt" onclick="hostAcceptAnswer()">Connect</button>
+            <button class="mt" onclick="hostAcceptAnswer()">Accept answer</button>
         </div>
     </div>
 
-    <!-- Joiner flow -->
     <div id="joiner-flow" class="hidden">
         <div class="section">
-            <label>Paste offer from host</label>
+            <label>Paste offer from target peer</label>
             <textarea id="offer-in"></textarea>
-            <button class="mt" onclick="joinerAcceptOffer()">Accept &amp; generate answer</button>
+            <button class="mt" onclick="joinerAcceptOffer()">Accept offer & generate answer</button>
         </div>
         <div class="section">
-            <label>Your answer (copy → send to host)</label>
+            <label>Your answer for target peer</label>
             <textarea id="answer-out" readonly></textarea>
         </div>
     </div>
 
-    <!-- Status -->
     <div class="section">
-        <div class="status" id="status">Enter peer IDs to start</div>
+        <div class="status" id="status">Initialize local peer to start</div>
     </div>
 
-    <!-- Chat -->
-    <div class="section">
-        <label>Messages</label>
+    <div class="section hidden" id="mesh-section">
+        <label>Connected peers</label>
+        <ul class="peer-list" id="peer-list"></ul>
+    </div>
+
+    <div class="section hidden" id="chat-section">
+        <label>Broadcast messages</label>
         <div class="log" id="log"></div>
         <div class="chat-input">
-            <input id="msg" placeholder="Type a message…" disabled />
-            <button id="send-btn" onclick="sendMsg()" disabled>Send</button>
+            <input id="msg" placeholder="Type a message for the whole mesh…" disabled />
+            <button id="send-btn" onclick="sendMsg()" disabled>Broadcast</button>
         </div>
     </div>
 </div>
-
-<!-- v2/example/minimal-chat/index.html -->
 
 <script type="module">
 import init, { ChatApp } from './pkg/minimal_chat_example.js';
 
 let app;
-let myId, remoteId;
+let myId = '';
 
 await init();
 
 const $ = id => document.getElementById(id);
-function status(t) { $('status').textContent = t; }
-function log(t) {
+
+function status(text) {
+    $('status').textContent = text;
+}
+
+function log(text) {
     const el = $('log');
-    el.textContent += (el.textContent ? '\n' : '') + t;
+    el.textContent += (el.textContent ? '\n' : '') + text;
     el.scrollTop = el.scrollHeight;
 }
 
-// ---- Base64 helpers ----
 function encodeBase64(str) {
     return btoa(str);
 }
@@ -152,82 +186,164 @@ function decodeBase64(str) {
     }
 }
 
-// ---- Set IDs ----
-window.setIds = function() {
-    myId = $('my-id').value.trim();
-    remoteId = $('remote-id').value.trim();
-    //turn = $('turn').value.trim() ?? 'turn:demo-voicechat.quasarity.com:3478';
-    let turn = 'turn:demo-voicechat.quasarity.com:3478';
-    
-    if (!myId || !remoteId) {
-        return alert('Please enter both IDs');
+function currentTargetId() {
+    return $('target-id').value.trim();
+}
+
+function ensureTargetId() {
+    const targetId = currentTargetId();
+    if (!targetId) {
+        throw new Error('Enter target peer ID first');
     }
-    
-    if (myId === remoteId) {
-        return alert('IDs must be different');
+    if (targetId === myId) {
+        throw new Error('Target peer ID must be different from your ID');
     }
-    
+    return targetId;
+}
+
+function updatePeerViews() {
+    if (!app) {
+        $('peer-list').innerHTML = '<li>No app initialized</li>';
+        return;
+    }
+
+    const peers = Array.from(app.connectedPeers());
+    $('mesh-section').classList.remove('hidden');
+    $('chat-section').classList.remove('hidden');
+
+    if (peers.length === 0) {
+        $('peer-list').innerHTML = '<li>No connected peers yet</li>';
+    } else {
+        $('peer-list').innerHTML = peers.map(peer => `<li>${peer}</li>`).join('');
+    }
+
+    const canSend = peers.length > 0;
+    $('msg').disabled = !canSend;
+    $('send-btn').disabled = !canSend;
+}
+
+function schedulePeerViewUpdate() {
+    queueMicrotask(() => {
+        try {
+            updatePeerViews();
+        } catch (_) {}
+    });
+}
+
+function resetHandshakePanels() {
+    $('host-flow').classList.add('hidden');
+    $('joiner-flow').classList.add('hidden');
+    $('offer-out').value = '';
+    $('offer-in').value = '';
+    $('answer-in').value = '';
+    $('answer-out').value = '';
+}
+
+window.initApp = function() {
+    const enteredMyId = $('my-id').value.trim();
+    const turn = $('turn').value.trim() || 'turn:demo-voicechat.quasarity.com:3478';
+
+    if (!enteredMyId) {
+        return alert('Please enter your peer ID');
+    }
+
     try {
+        myId = enteredMyId;
         app = new ChatApp(myId, turn);
-        
+
         app.onConnected(() => {
-            status('Connected to ' + remoteId);
-            log('--- connected ---');
-            $('msg').disabled = false;
-            $('send-btn').disabled = false;
+            status('At least one peer is connected');
+            log('--- mesh connected ---');
+            schedulePeerViewUpdate();
         });
-        
+
         app.onMessage((peer, data) => {
-            const text = new TextDecoder().decode(data);
+            const text = typeof data === 'string'
+                ? data
+                : (data && typeof data.text === 'string' ? data.text : JSON.stringify(data));
             log(peer + ': ' + text);
+            schedulePeerViewUpdate();
         });
-        
+
         app.onDisconnected(() => {
-            status('Disconnected');
-            log('--- disconnected ---');
-            $('msg').disabled = true;
-            $('send-btn').disabled = true;
+            status('All peers disconnected');
+            log('--- mesh disconnected ---');
+            schedulePeerViewUpdate();
         });
-        
-        $('step-ids').classList.add('hidden');
-        $('step-role').classList.remove('hidden');
-        status('IDs set: ' + myId + ' ↔ ' + remoteId);
+
+        app.onPeerConnected((peer) => {
+            status('Peer connected: ' + peer);
+            log('--- peer connected: ' + peer + ' ---');
+            schedulePeerViewUpdate();
+        });
+
+        app.onPeerDisconnected((peer) => {
+            status('Peer disconnected: ' + peer);
+            log('--- peer disconnected: ' + peer + ' ---');
+            schedulePeerViewUpdate();
+        });
+
+        $('setup-section').classList.add('hidden');
+        $('connect-section').classList.remove('hidden');
+        status('Initialized as ' + myId + '. Choose a target peer to bootstrap.');
         log('My ID: ' + myId);
-        log('Remote ID: ' + remoteId);
+        updatePeerViews();
     } catch (e) {
         status('Error: ' + e);
+        console.error(e);
     }
 };
 
 window.chooseHost = async function() {
-    $('step-role').classList.add('hidden');
-    $('host-flow').classList.remove('hidden');
-    status('Generating offer…');
+    resetHandshakePanels();
+    let targetId;
     try {
-        const offer = await app.start_as_host(remoteId);
-        // Кодируем в base64 для отображения
-        console.log(offer);
-        const encoded = encodeBase64(offer);
-        $('offer-out').value = encoded;
-        status('Offer ready (base64) — copy and send to ' + remoteId);
-    } catch (e) { status('Error: ' + e); }
+        targetId = ensureTargetId();
+    } catch (e) {
+        status('Error: ' + e.message);
+        return;
+    }
+
+    $('host-flow').classList.remove('hidden');
+    status('Generating offer for ' + targetId + '…');
+
+    try {
+        const offer = await app.startAsHost(targetId);
+        $('offer-out').value = encodeBase64(offer);
+        status('Offer ready for ' + targetId + ' — copy and send it');
+        log('Prepared host offer for ' + targetId);
+    } catch (e) {
+        status('Error: ' + e);
+        console.error(e);
+    }
 };
 
 window.chooseJoiner = function() {
-    $('step-role').classList.add('hidden');
-    $('joiner-flow').classList.remove('hidden');
-    status('Paste the base64 offer from ' + remoteId);
+    resetHandshakePanels();
+    try {
+        const targetId = ensureTargetId();
+        $('joiner-flow').classList.remove('hidden');
+        status('Paste the offer received from ' + targetId);
+    } catch (e) {
+        status('Error: ' + e.message);
+    }
 };
 
 window.hostAcceptAnswer = async function() {
     const answerBase64 = $('answer-in').value.trim();
-    if (!answerBase64) return alert('Paste the answer first');
-    status('Connecting…');
+    if (!answerBase64) {
+        return alert('Paste the answer first');
+    }
+
+    let targetId;
     try {
-        // Декодируем из base64
+        targetId = ensureTargetId();
+        status('Applying answer from ' + targetId + '…');
         const answer = decodeBase64(answerBase64);
-        await app.accept_answer(answer);
-    } catch (e) { 
+        await app.acceptAnswer(targetId, answer);
+        status('Answer accepted for ' + targetId);
+        log('Accepted answer from ' + targetId);
+    } catch (e) {
         status('Error: ' + e);
         console.error(e);
     }
@@ -235,18 +351,20 @@ window.hostAcceptAnswer = async function() {
 
 window.joinerAcceptOffer = async function() {
     const offerBase64 = $('offer-in').value.trim();
-    if (!offerBase64) return alert('Paste the offer first');
-    status('Generating answer…');
+    if (!offerBase64) {
+        return alert('Paste the offer first');
+    }
+
+    let targetId;
     try {
-        // Декодируем из base64
+        targetId = ensureTargetId();
+        status('Generating answer for ' + targetId + '…');
         const offer = decodeBase64(offerBase64);
-        const answer = await app.accept_offer(remoteId, offer);
-        // Кодируем answer в base64
-        console.log(answer);
-        const encoded = encodeBase64(answer);
-        $('answer-out').value = encoded;
-        status('Answer ready (base64) — copy and send to ' + remoteId);
-    } catch (e) { 
+        const answer = await app.acceptOffer(targetId, offer);
+        $('answer-out').value = encodeBase64(answer);
+        status('Answer ready for ' + targetId + ' — copy and send it back');
+        log('Prepared joiner answer for ' + targetId);
+    } catch (e) {
         status('Error: ' + e);
         console.error(e);
     }
@@ -255,16 +373,24 @@ window.joinerAcceptOffer = async function() {
 window.sendMsg = async function() {
     const input = $('msg');
     const text = input.value.trim();
-    if (!text) return;
+    if (!text) {
+        return;
+    }
+
     try {
-        await app.send(text);
-        log('You: ' + text);
+        await app.broadcast(text);
+        log('You (broadcast): ' + text);
         input.value = '';
-    } catch (e) { status('Send error: ' + e); }
+    } catch (e) {
+        status('Send error: ' + e);
+        console.error(e);
+    }
 };
 
 $('msg').addEventListener('keydown', e => {
-    if (e.key === 'Enter') sendMsg();
+    if (e.key === 'Enter') {
+        sendMsg();
+    }
 });
 
 log('Ready');

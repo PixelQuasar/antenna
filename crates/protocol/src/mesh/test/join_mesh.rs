@@ -11,31 +11,6 @@ thread_local! {
     static CONNECTION_COUNTER: RefCell<usize> = RefCell::new(0);
 }
 
-pub(crate) fn reset_connection_counter() {
-    CONNECTION_COUNTER.with(|c| *c.borrow_mut() = 0);
-}
-
-pub(crate) fn get_connection_count() -> usize {
-    CONNECTION_COUNTER.with(|c| *c.borrow())
-}
-
-fn max_edges_in_complete_graph(n: usize) -> usize {
-    n * (n - 1) / 2
-}
-
-pub(crate) fn assert_connection_count_within_limit(peer_count: usize) {
-    let actual = get_connection_count();
-    let max = max_edges_in_complete_graph(peer_count);
-
-    assert!(
-        actual <= max,
-        "Too many connections established: {} > {} (max for {} nodes in complete graph)",
-        actual,
-        max,
-        peer_count
-    );
-}
-
 pub(crate) fn join_mesh(
     new_peer_id: &PeerID,
     bootstrap_id: &PeerID,

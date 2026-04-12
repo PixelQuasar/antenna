@@ -2,17 +2,17 @@
 
 use crate::{
     driver::Driver,
-    utils::{Dispatcher, RtcCallbacks, RtcEvent},
     webrtc::{DataChannelManager, PeerConnectionManager},
 };
 use antenna_protocol::{
-    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID,
-    SignalingPayload, UserMsgPayload,
+    HandshakeInput, HandshakeOutput, Input, MsgPayload, Output, PeerID, SignalingPayload,
+    UserMsgPayload,
 };
 
 use anyhow::{Context, Result};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::spawn_local;
 
 impl<Msg> Driver<Msg>
 where
@@ -59,24 +59,7 @@ where
         for output in outputs {
             match output {
                 Output::SendMessage { peer_to, data } => self.send(&peer_to, &data).await?,
-                Output::PeerDisconnected { peer } => self
-                    .callbacks
-                    .borrow()
-                    .emit(RtcEvent::PeerDisconnected(peer))?,
-                Output::PeerConnected { peer } => self
-                    .callbacks
-                    .borrow()
-                    .emit(RtcEvent::PeerConnected(peer))?,
-                Output::ReceiveMessage { peer_from, data } => match data {
-                    MsgPayload::User(data) => self
-                        .callbacks
-                        .borrow()
-                        .emit(RtcEvent::UserMessage(peer_from, data))?,
-                    _ => {
-                        web_sys::console::warn_1(&JsValue::from_str("Unknown message type"));
-                    }
-                },
-                Output::PeerAppeared { .. } | Output::Handshake { .. } => {}
+                _ => {}
             }
         }
 
@@ -103,24 +86,7 @@ where
         for output in outputs {
             match output {
                 Output::SendMessage { peer_to, data } => self.send(&peer_to, &data).await?,
-                Output::PeerDisconnected { peer } => self
-                    .callbacks
-                    .borrow()
-                    .emit(RtcEvent::PeerDisconnected(peer))?,
-                Output::PeerConnected { peer } => self
-                    .callbacks
-                    .borrow()
-                    .emit(RtcEvent::PeerConnected(peer))?,
-                Output::ReceiveMessage { peer_from, data } => match data {
-                    MsgPayload::User(data) => self
-                        .callbacks
-                        .borrow()
-                        .emit(RtcEvent::UserMessage(peer_from, data))?,
-                    _ => {
-                        web_sys::console::warn_1(&JsValue::from_str("Unknown message type"));
-                    }
-                },
-                Output::PeerAppeared { .. } | Output::Handshake { .. } => {}
+                _ => {}
             }
         }
 
@@ -157,12 +123,8 @@ where
         pc: &web_sys::RtcPeerConnection,
     ) -> Result<()> {
         let dc_manager = DataChannelManager::new(pc, "data");
-        Self::attach_data_channel_callbacks(
-            peer.clone(),
-            self.fsm.clone(),
-            self.callbacks.clone(),
-            &dc_manager,
-        )?;
+        let driver = self.self_handle()?;
+        Self::attach_data_channel_callbacks(peer.clone(), driver, &dc_manager)?;
 
         let dc = Rc::new(RefCell::new(Some(dc_manager)));
         self.dc_managers.insert(peer.clone(), dc);
@@ -176,8 +138,7 @@ where
         pc: &web_sys::RtcPeerConnection,
     ) -> Result<()> {
         let peer_id = peer.clone();
-        let fsm = self.fsm.clone();
-        let callbacks = self.callbacks.clone();
+        let driver = self.self_handle()?;
         let dc_storage = Rc::new(RefCell::new(None));
         self.dc_managers.insert(peer.clone(), dc_storage.clone());
         let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |evt: JsValue| {
@@ -185,12 +146,8 @@ where
             let channel = event.channel();
             let dc_manager = DataChannelManager::from_existing(channel);
 
-            let result = Self::attach_data_channel_callbacks(
-                peer_id.clone(),
-                fsm.clone(),
-                callbacks.clone(),
-                &dc_manager,
-            );
+            let result =
+                Self::attach_data_channel_callbacks(peer_id.clone(), driver.clone(), &dc_manager);
             if let Err(e) = result {
                 web_sys::console::error_1(&JsValue::from_str(&format!(
                     "Error while attaching data channel callbacks: {:?}",
@@ -206,126 +163,87 @@ where
 
     fn attach_data_channel_callbacks(
         peer: PeerID,
-        fsm: Rc<RefCell<MeshNodeFSM>>,
-        callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
+        driver: Rc<RefCell<Driver<Msg>>>,
         dc_manager: &DataChannelManager,
     ) -> Result<()> {
         {
             let peer = peer.clone();
-            let fsm = fsm.clone();
-            let callbacks = callbacks.clone();
+            let driver = driver.clone();
             dc_manager.setup_on_open(move || {
-                let was_empty = fsm.borrow().connected_peers().is_empty();
-                match fsm.borrow_mut().process(Input::<Msg>::Handshake {
-                    from: peer.clone(),
-                    event: HandshakeInput::DataChannelOpen,
-                }) {
-                    Ok(..) => {}
-                    Err(e) => {
+                let peer = peer.clone();
+                let driver = driver.clone();
+                spawn_local(async move {
+                    if let Err(e) = driver
+                        .borrow_mut()
+                        .process_input(Input::<Msg>::Handshake {
+                            from: peer,
+                            event: HandshakeInput::DataChannelOpen,
+                        })
+                        .await
+                    {
                         web_sys::console::error_1(&JsValue::from_str(&format!(
-                            "Error while emitting Connected: {:?}",
-                            e
-                        )));
-                        return;
-                    }
-                }
-                if was_empty {
-                    if let Err(e) = callbacks.borrow().emit(RtcEvent::Connected) {
-                        web_sys::console::error_1(&JsValue::from_str(&format!(
-                            "Error while emitting Connected: {:?}",
+                            "Error while routing DataChannelOpen through driver: {:?}",
                             e
                         )));
                     }
-                }
-                if let Err(e) = callbacks
-                    .borrow()
-                    .emit(RtcEvent::PeerConnected(peer.clone()))
-                {
-                    web_sys::console::error_1(&JsValue::from_str(&format!(
-                        "Error while emitting PeerConnected: {:?}",
-                        e
-                    )));
-                }
+                });
             });
         }
 
         {
             let peer = peer.clone();
-            let fsm = fsm.clone();
-            let callbacks = callbacks.clone();
+            let driver = driver.clone();
             dc_manager.setup_on_message(move |data| {
-                let data: MsgPayload<Msg> = match serde_json::from_slice(&data) {
-                    Ok(data) => data,
-                    Err(err) => {
-                        web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&format!(
-                            "Failed to deserialize incoming message: {err:#}"
-                        )));
-                        return;
-                    }
-                };
-                let outputs = match fsm.borrow_mut().process(Input::MessageReceived {
-                    peer_from: peer.clone(),
-                    data,
-                }) {
-                    Ok(outputs) => outputs,
-                    Err(err) => {
-                        web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&format!(
-                            "Failed to process incoming message: {err:#}"
-                        )));
-                        return;
-                    }
-                };
-                for output in outputs {
-                    match output {
-                        Output::ReceiveMessage { peer_from, data } => {
-                            if let MsgPayload::User(data) = data {
-                                callbacks
-                                    .borrow()
-                                    .emit(RtcEvent::UserMessage(peer_from, data))
-                                    .ok();
-                            }
+                let peer = peer.clone();
+                let driver = driver.clone();
+                spawn_local(async move {
+                    let data: MsgPayload<Msg> = match serde_json::from_slice(&data) {
+                        Ok(data) => data,
+                        Err(err) => {
+                            web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&format!(
+                                "Failed to deserialize incoming message: {err:#}"
+                            )));
+                            return;
                         }
-                        _ => {}
+                    };
+
+                    if let Err(err) = driver
+                        .borrow_mut()
+                        .process_input(Input::MessageReceived {
+                            peer_from: peer,
+                            data,
+                        })
+                        .await
+                    {
+                        web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&format!(
+                            "Failed to route incoming message through driver: {err:#}"
+                        )));
                     }
-                }
+                });
             });
         }
 
         {
             let peer = peer.clone();
-            let fsm = fsm.clone();
-            let callbacks = callbacks.clone();
+            let driver = driver.clone();
             dc_manager.setup_on_close(move || {
-                match fsm.borrow_mut().process(Input::<Msg>::Handshake {
-                    from: peer.clone(),
-                    event: HandshakeInput::Disconnected,
-                }) {
-                    Ok(..) => {}
-                    Err(e) => {
+                let peer = peer.clone();
+                let driver = driver.clone();
+                spawn_local(async move {
+                    if let Err(e) = driver
+                        .borrow_mut()
+                        .process_input(Input::<Msg>::Handshake {
+                            from: peer,
+                            event: HandshakeInput::Disconnected,
+                        })
+                        .await
+                    {
                         web_sys::console::error_1(&JsValue::from_str(&format!(
-                            "Error while emitting Connected: {:?}",
-                            e
-                        )));
-                        return;
-                    }
-                }
-                if let Err(e) = callbacks
-                    .borrow()
-                    .emit(RtcEvent::PeerDisconnected(peer.clone()))
-                {
-                    web_sys::console::error_1(&JsValue::from_str(&format!(
-                        "Error while emitting PeerDisconnected: {:?}",
-                        e
-                    )));
-                }
-                if fsm.borrow().connected_peers().is_empty() {
-                    if let Err(e) = callbacks.borrow().emit(RtcEvent::Disconnected) {
-                        web_sys::console::error_1(&JsValue::from_str(&format!(
-                            "Error while emitting Disconnected: {:?}",
+                            "Error while routing Disconnected through driver: {:?}",
                             e
                         )));
                     }
-                }
+                });
             });
         }
         Ok(())

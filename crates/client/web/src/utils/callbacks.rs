@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use antenna_protocol::{HandshakeInput, PeerID, UserMsgPayload};
+use antenna_protocol::{PeerID, UserMsgPayload};
 use anyhow::{Result, anyhow};
 use wasm_bindgen::prelude::*;
 

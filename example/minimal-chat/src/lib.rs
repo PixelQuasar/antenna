@@ -10,7 +10,6 @@ struct Message {
 #[wasm_bindgen]
 pub struct ChatApp {
     client: Client<Message>,
-    remote: Option<PeerID>,
 }
 
 #[wasm_bindgen]
@@ -35,65 +34,47 @@ impl ChatApp {
         let mut client = Client::with_ice_servers(PeerID::new(id), ice_servers);
         client.subscribe(Rtc::UserMessage(Self::on_message));
 
-        Ok(ChatApp {
-            client,
-            remote: None,
-        })
+        Ok(ChatApp { client })
     }
 
+    #[wasm_bindgen(js_name = startAsHost)]
     pub async fn start_as_host(&mut self, remote_id: String) -> Result<String, JsValue> {
-        self.remote = Some(PeerID::new(remote_id.clone()));
-        let offer = self
-            .client
+        self.client
             .start_bootstrap(PeerID::new(remote_id))
             .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        Ok(offer)
+            .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
+    #[wasm_bindgen(js_name = acceptOffer)]
     pub async fn accept_offer(
         &mut self,
         remote_id: String,
         offer_sdp: String,
     ) -> Result<String, JsValue> {
-        self.remote = Some(PeerID::new(remote_id.clone()));
-        let answer = self
-            .client
+        self.client
             .receive_bootstrap_offer(PeerID::new(remote_id), offer_sdp)
-            .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        Ok(answer)
-    }
-
-    pub async fn accept_answer(&mut self, answer_sdp: String) -> Result<(), JsValue> {
-        let remote_id = self
-            .remote
-            .clone()
-            .ok_or_else(|| JsValue::from_str("Remote peer ID not set"))?;
-        self.client
-            .receive_answer(remote_id, answer_sdp)
-            .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        Ok(())
-    }
-
-    pub async fn send(&mut self, text: String) -> Result<(), JsValue> {
-        let remote_id = self
-            .remote
-            .clone()
-            .ok_or_else(|| JsValue::from_str("Not connected"))?;
-        self.client
-            .send(remote_id, Message { text })
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
-    pub fn is_connected(&self) -> bool {
-        if let Some(remote_id) = &self.remote {
-            self.client.is_connected(remote_id.clone())
-        } else {
-            false
-        }
+    #[wasm_bindgen(js_name = acceptAnswer)]
+    pub async fn accept_answer(
+        &mut self,
+        remote_id: String,
+        answer_sdp: String,
+    ) -> Result<(), JsValue> {
+        self.client
+            .receive_answer(PeerID::new(remote_id), answer_sdp)
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = broadcast)]
+    pub async fn broadcast(&mut self, text: String) -> Result<(), JsValue> {
+        self.client
+            .broadcast(Message { text })
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
     #[wasm_bindgen(js_name = connectedPeers)]
