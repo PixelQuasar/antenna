@@ -141,4 +141,12 @@ where
     pub fn set_js_on_disconnected(&mut self, cb: js_sys::Function) {
         self.subscribe(Rtc::JsDisconnected(cb));
     }
+
+    pub fn set_js_on_peer_connected(&mut self, cb: js_sys::Function) {
+        self.subscribe(Rtc::JsPeerConnected(cb));
+    }
+
+    pub fn set_js_on_peer_disconnected(&mut self, cb: js_sys::Function) {
+        self.subscribe(Rtc::JsPeerDisconnected(cb));
+    }
 }

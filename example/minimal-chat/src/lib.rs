@@ -96,6 +96,15 @@ impl ChatApp {
         }
     }
 
+    #[wasm_bindgen(js_name = connectedPeers)]
+    pub fn connected_peers(&self) -> js_sys::Array {
+        self.client
+            .connected_peers()
+            .into_iter()
+            .map(JsValue::from)
+            .collect()
+    }
+
     fn on_message(peer: PeerID, data: Message) {
         web_sys::console::log_2(
             &JsValue::from_str(&peer.as_str()),
@@ -116,5 +125,15 @@ impl ChatApp {
     #[wasm_bindgen(js_name = onDisconnected)]
     pub fn js_on_disconnected(&mut self, cb: js_sys::Function) {
         self.client.set_js_on_disconnected(cb);
+    }
+
+    #[wasm_bindgen(js_name = onPeerConnected)]
+    pub fn js_on_peer_connected(&mut self, cb: js_sys::Function) {
+        self.client.set_js_on_peer_connected(cb);
+    }
+
+    #[wasm_bindgen(js_name = onPeerDisconnected)]
+    pub fn js_on_peer_disconnected(&mut self, cb: js_sys::Function) {
+        self.client.set_js_on_peer_disconnected(cb);
     }
 }

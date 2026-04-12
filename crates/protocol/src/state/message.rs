@@ -17,9 +17,7 @@ pub enum RelayPayload {
 #[serde(bound(serialize = "Msg: Serialize", deserialize = "Msg: DeserializeOwned"))]
 pub enum MsgPayload<Msg: UserMsgPayload> {
     User(Msg),
-    PeerJoined(PeerID),
     RelaySignalingTo { dst: PeerID, data: RelayPayload },
     RelaySignalingFrom { src: PeerID, data: RelayPayload },
-    PeerLeft(PeerID),
     Heartbeat,
 }

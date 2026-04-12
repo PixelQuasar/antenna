@@ -49,12 +49,37 @@ where
 
         let full_sdp = pc_manager.wait_for_ice_gathering_complete().await?;
 
-        self.fsm.borrow_mut().process(Input::<Msg>::Handshake {
+        let outputs = self.fsm.borrow_mut().process(Input::<Msg>::Handshake {
             from: peer.clone(),
             event: HandshakeInput::SignalingCreated(SignalingPayload::Offer(full_sdp.clone())),
         })?;
 
         self.pc_managers.insert(peer.clone(), pc_manager);
+
+        for output in outputs {
+            match output {
+                Output::SendMessage { peer_to, data } => self.send(&peer_to, &data).await?,
+                Output::PeerDisconnected { peer } => self
+                    .callbacks
+                    .borrow()
+                    .emit(RtcEvent::PeerDisconnected(peer))?,
+                Output::PeerConnected { peer } => self
+                    .callbacks
+                    .borrow()
+                    .emit(RtcEvent::PeerConnected(peer))?,
+                Output::ReceiveMessage { peer_from, data } => match data {
+                    MsgPayload::User(data) => self
+                        .callbacks
+                        .borrow()
+                        .emit(RtcEvent::UserMessage(peer_from, data))?,
+                    _ => {
+                        web_sys::console::warn_1(&JsValue::from_str("Unknown message type"));
+                    }
+                },
+                Output::PeerAppeared { .. } | Output::Handshake { .. } => {}
+            }
+        }
+
         Ok(())
     }
 
@@ -68,12 +93,37 @@ where
         pc_manager.set_local_description(&answer_sdp, false).await?;
         let full_sdp = pc_manager.wait_for_ice_gathering_complete().await?;
 
-        self.fsm.borrow_mut().process(Input::<Msg>::Handshake {
+        let outputs = self.fsm.borrow_mut().process(Input::<Msg>::Handshake {
             from: peer.clone(),
             event: HandshakeInput::SignalingCreated(SignalingPayload::Answer(full_sdp.clone())),
         })?;
 
         self.pc_managers.insert(peer.clone(), pc_manager);
+
+        for output in outputs {
+            match output {
+                Output::SendMessage { peer_to, data } => self.send(&peer_to, &data).await?,
+                Output::PeerDisconnected { peer } => self
+                    .callbacks
+                    .borrow()
+                    .emit(RtcEvent::PeerDisconnected(peer))?,
+                Output::PeerConnected { peer } => self
+                    .callbacks
+                    .borrow()
+                    .emit(RtcEvent::PeerConnected(peer))?,
+                Output::ReceiveMessage { peer_from, data } => match data {
+                    MsgPayload::User(data) => self
+                        .callbacks
+                        .borrow()
+                        .emit(RtcEvent::UserMessage(peer_from, data))?,
+                    _ => {
+                        web_sys::console::warn_1(&JsValue::from_str("Unknown message type"));
+                    }
+                },
+                Output::PeerAppeared { .. } | Output::Handshake { .. } => {}
+            }
+        }
+
         Ok(())
     }
 

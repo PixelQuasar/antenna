@@ -1,8 +1,8 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use antenna_protocol::{
-    HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MeshNodeFSM, MsgPayload, Output,
-    PeerID, UserMsgPayload,
+    HandshakeMode, HandshakeStrategy, Input, MeshNodeFSM, MsgPayload, Output, PeerID,
+    UserMsgPayload,
 };
 use anyhow::{Context, Result};
 use wasm_bindgen::JsValue;
