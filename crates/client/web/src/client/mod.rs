@@ -60,7 +60,7 @@ where
             let mut driver = self.driver.borrow_mut();
             driver.init_host(peer_id.clone()).await?;
             driver
-                .process_input(Input::Handshake {
+                .execute(Input::Handshake {
                     from: peer_id.clone(),
                     event: HandshakeInput::Init,
                 })
@@ -86,7 +86,7 @@ where
             let mut driver = self.driver.borrow_mut();
             driver.init_joiner(peer_id.clone()).await?;
             driver
-                .process_input(Input::Handshake {
+                .execute(Input::Handshake {
                     from: peer_id.clone(),
                     event: HandshakeInput::Signaling(SignalingPayload::Offer(offer)),
                 })
@@ -106,7 +106,7 @@ where
     pub async fn receive_answer(&mut self, peer_id: PeerID, answer: String) -> Result<()> {
         self.driver
             .borrow_mut()
-            .process_input(Input::Handshake {
+            .execute(Input::Handshake {
                 from: peer_id,
                 event: HandshakeInput::Signaling(SignalingPayload::Answer(answer)),
             })
@@ -118,7 +118,7 @@ where
     pub async fn send(&mut self, peer_id: PeerID, data: Msg) -> Result<()> {
         self.driver
             .borrow_mut()
-            .process_input(Input::Send {
+            .execute(Input::Send {
                 peer_to: peer_id,
                 data: MsgPayload::User(data),
             })
@@ -129,7 +129,7 @@ where
     pub async fn broadcast(&mut self, data: Msg) -> Result<()> {
         self.driver
             .borrow_mut()
-            .process_input(Input::Broadcast {
+            .execute(Input::Broadcast {
                 data: MsgPayload::User(data),
             })
             .await?;

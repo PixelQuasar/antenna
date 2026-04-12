@@ -58,7 +58,7 @@ where
 
         for output in outputs {
             match output {
-                Output::SendMessage { peer_to, data } => self.send(&peer_to, &data).await?,
+                Output::SendMessage { peer_to, data } => self.send(&peer_to, &data)?,
                 _ => {}
             }
         }
@@ -85,7 +85,7 @@ where
 
         for output in outputs {
             match output {
-                Output::SendMessage { peer_to, data } => self.send(&peer_to, &data).await?,
+                Output::SendMessage { peer_to, data } => self.send(&peer_to, &data)?,
                 _ => {}
             }
         }
@@ -175,7 +175,7 @@ where
                 spawn_local(async move {
                     if let Err(e) = driver
                         .borrow_mut()
-                        .process_input(Input::<Msg>::Handshake {
+                        .execute(Input::<Msg>::Handshake {
                             from: peer,
                             event: HandshakeInput::DataChannelOpen,
                         })
@@ -196,30 +196,22 @@ where
             dc_manager.setup_on_message(move |data| {
                 let peer = peer.clone();
                 let driver = driver.clone();
-                spawn_local(async move {
-                    let data: MsgPayload<Msg> = match serde_json::from_slice(&data) {
-                        Ok(data) => data,
-                        Err(err) => {
-                            web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&format!(
-                                "Failed to deserialize incoming message: {err:#}"
-                            )));
-                            return;
-                        }
-                    };
 
-                    if let Err(err) = driver
-                        .borrow_mut()
-                        .process_input(Input::MessageReceived {
-                            peer_from: peer,
-                            data,
-                        })
-                        .await
-                    {
+                let data: MsgPayload<Msg> = match serde_json::from_slice(&data) {
+                    Ok(data) => data,
+                    Err(err) => {
                         web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&format!(
-                            "Failed to route incoming message through driver: {err:#}"
+                            "Failed to deserialize incoming message: {err:#}"
                         )));
+                        return;
                     }
-                });
+                };
+
+                if let Err(err) = driver.borrow_mut().send(&peer, &data) {
+                    web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&format!(
+                        "Failed to route incoming message through driver: {err:#}"
+                    )));
+                }
             });
         }
 
@@ -232,7 +224,7 @@ where
                 spawn_local(async move {
                     if let Err(e) = driver
                         .borrow_mut()
-                        .process_input(Input::<Msg>::Handshake {
+                        .execute(Input::<Msg>::Handshake {
                             from: peer,
                             event: HandshakeInput::Disconnected,
                         })

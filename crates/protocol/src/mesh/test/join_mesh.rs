@@ -1,22 +1,16 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use crate::{
-    HandshakeInput, HandshakeMode, HandshakeOutput, HandshakeStrategy, Input, MeshNodeFSM, Output,
-    PeerID, SignalingPayload, assert_handshake_event,
-    mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake,
+    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID, RelayPayload,
+    SignalingPayload, mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake,
 };
-
-thread_local! {
-    static CONNECTION_COUNTER: RefCell<usize> = RefCell::new(0);
-}
 
 pub(crate) fn join_mesh(
     new_peer_id: &PeerID,
     bootstrap_id: &PeerID,
     all_peers: &mut HashMap<PeerID, MeshNodeFSM>,
 ) {
-    let appeared_peers = {
+    let bootstrap_outputs = {
         let mut bootstrap = all_peers.remove(bootstrap_id).unwrap();
         let mut new_peer = all_peers.remove(new_peer_id).unwrap();
 
@@ -26,135 +20,212 @@ pub(crate) fn join_mesh(
         all_peers.insert(new_peer_id.clone(), new_peer);
 
         outputs
-            .iter()
-            .filter_map(|o| match o {
-                Output::PeerAppeared { peer } => Some(peer.clone()),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
     };
 
+    let appeared_peers = bootstrap_outputs
+        .iter()
+        .filter_map(|o| match o {
+            Output::PeerAppeared { peer } => Some(peer.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    let relay_messages = bootstrap_outputs
+        .into_iter()
+        .filter_map(|o| match o {
+            Output::SendMessage { peer_to, data } => Some((bootstrap_id.clone(), peer_to, data)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
     for existing_peer_id in appeared_peers {
-        establish_direct_connection(all_peers, new_peer_id, &existing_peer_id);
+        establish_relay_connection(
+            all_peers,
+            bootstrap_id,
+            new_peer_id,
+            &existing_peer_id,
+            &relay_messages,
+        );
     }
 }
 
-/// Drives a full direct handshake between two peers that are not yet connected.
-/// The initiator acts as host, the target acts as joiner.
-fn establish_direct_connection(
+fn establish_relay_connection(
     peers: &mut HashMap<PeerID, MeshNodeFSM>,
-    initiator_id: &PeerID,
-    target_id: &PeerID,
+    relay_id: &PeerID,
+    joiner_id: &PeerID,
+    host_id: &PeerID,
+    initial_messages: &[(PeerID, PeerID, MsgPayload<()>)],
 ) {
-    CONNECTION_COUNTER.with(|c| *c.borrow_mut() += 1);
+    let mut queue = VecDeque::new();
 
-    // Create FSMs for both sides
-    peers
-        .get_mut(initiator_id)
-        .unwrap()
-        .process::<()>(Input::InitHandshake {
-            with: target_id.clone(),
-            mode: HandshakeMode::Bootstrap,
-            strategy: HandshakeStrategy::Host,
-        })
-        .unwrap();
+    for (from, to, data) in initial_messages {
+        let is_for_pair = matches!(
+            data,
+            MsgPayload::RelaySignalingFrom { src, .. }
+                if (to == host_id && src == joiner_id) || (to == joiner_id && src == host_id)
+        );
 
-    peers
-        .get_mut(target_id)
-        .unwrap()
-        .process::<()>(Input::InitHandshake {
-            with: initiator_id.clone(),
-            mode: HandshakeMode::Bootstrap,
-            strategy: HandshakeStrategy::Joiner,
-        })
-        .unwrap();
+        if is_for_pair {
+            queue.push_back((from.clone(), to.clone(), data.clone()));
+        }
+    }
 
-    // Initiator: Init → CreatingOffer
-    let outputs = peers
-        .get_mut(initiator_id)
-        .unwrap()
-        .process::<()>(Input::Handshake {
-            from: target_id.clone(),
-            event: HandshakeInput::Init,
-        })
-        .unwrap();
+    let mut host_dc_open = false;
+    let mut joiner_dc_open = false;
 
-    assert_handshake_event!(
-        outputs,
-        peer: target_id.clone(),
-        event: HandshakeOutput::InitSDPOffer
-    );
+    while let Some((from, to, data)) = queue.pop_front() {
+        let outputs = peers
+            .get_mut(&to)
+            .unwrap()
+            .process::<()>(Input::MessageReceived {
+                peer_from: from.clone(),
+                data,
+            })
+            .unwrap();
 
-    // Initiator: SignalingCreated(Offer)
-    peers
-        .get_mut(initiator_id)
-        .unwrap()
-        .process::<()>(Input::Handshake {
-            from: target_id.clone(),
-            event: HandshakeInput::SignalingCreated(SignalingPayload::Offer("offer".into())),
-        })
-        .unwrap();
+        for output in outputs {
+            match output {
+                Output::Handshake { peer, event } => match event {
+                    HandshakeOutput::InitSDPOffer => {
+                        assert_eq!(to, *host_id);
+                        assert_eq!(peer, *joiner_id);
 
-    // Target: Signaling(Offer) → CreatingAnswer
-    let outputs = peers
-        .get_mut(target_id)
-        .unwrap()
-        .process::<()>(Input::Handshake {
-            from: initiator_id.clone(),
-            event: HandshakeInput::Signaling(SignalingPayload::Offer("offer".into())),
-        })
-        .unwrap();
+                        let outputs = peers
+                            .get_mut(host_id)
+                            .unwrap()
+                            .process::<()>(Input::Handshake {
+                                from: joiner_id.clone(),
+                                event: HandshakeInput::SignalingCreated(SignalingPayload::Offer(
+                                    "offer".into(),
+                                )),
+                            })
+                            .unwrap();
 
-    assert_handshake_event!(
-        outputs,
-        peer: initiator_id.clone(),
-        event: HandshakeOutput::RequestSDPAnswer { .. }
-    );
+                        assert_relay_signaling_to(
+                            outputs,
+                            relay_id,
+                            joiner_id,
+                            RelayPayload::Signaling(SignalingPayload::Offer("offer".into())),
+                            &mut queue,
+                            host_id,
+                        );
+                    }
+                    HandshakeOutput::RequestSDPAnswer { .. } => {
+                        assert_eq!(to, *joiner_id);
+                        assert_eq!(peer, *host_id);
 
-    // Target: SignalingCreated(Answer)
-    peers
-        .get_mut(target_id)
-        .unwrap()
-        .process::<()>(Input::Handshake {
-            from: initiator_id.clone(),
-            event: HandshakeInput::SignalingCreated(SignalingPayload::Answer("answer".into())),
-        })
-        .unwrap();
+                        let outputs = peers
+                            .get_mut(joiner_id)
+                            .unwrap()
+                            .process::<()>(Input::Handshake {
+                                from: host_id.clone(),
+                                event: HandshakeInput::SignalingCreated(SignalingPayload::Answer(
+                                    "answer".into(),
+                                )),
+                            })
+                            .unwrap();
 
-    // Initiator: Signaling(Answer) → AcceptSDPAnswer
-    let outputs = peers
-        .get_mut(initiator_id)
-        .unwrap()
-        .process::<()>(Input::Handshake {
-            from: target_id.clone(),
-            event: HandshakeInput::Signaling(SignalingPayload::Answer("answer".into())),
-        })
-        .unwrap();
+                        assert_relay_signaling_to(
+                            outputs,
+                            relay_id,
+                            host_id,
+                            RelayPayload::Signaling(SignalingPayload::Answer("answer".into())),
+                            &mut queue,
+                            joiner_id,
+                        );
+                    }
+                    HandshakeOutput::AcceptSDPAnswer { .. } => {
+                        assert_eq!(to, *host_id);
+                        assert_eq!(peer, *joiner_id);
 
-    assert_handshake_event!(
-        outputs,
-        peer: target_id.clone(),
-        event: HandshakeOutput::AcceptSDPAnswer { .. }
-    );
+                        let _outputs = peers
+                            .get_mut(host_id)
+                            .unwrap()
+                            .process::<()>(Input::Handshake {
+                                from: joiner_id.clone(),
+                                event: HandshakeInput::DataChannelOpen,
+                            })
+                            .unwrap();
+                        host_dc_open = true;
 
-    // Both: DataChannelOpen
-    peers
-        .get_mut(initiator_id)
-        .unwrap()
-        .process::<()>(Input::Handshake {
-            from: target_id.clone(),
-            event: HandshakeInput::DataChannelOpen,
-        })
-        .unwrap();
+                        let _outputs = peers
+                            .get_mut(joiner_id)
+                            .unwrap()
+                            .process::<()>(Input::Handshake {
+                                from: host_id.clone(),
+                                event: HandshakeInput::DataChannelOpen,
+                            })
+                            .unwrap();
+                        joiner_dc_open = true;
+                    }
+                    other => panic!("unexpected handshake output for relay test: {other:?}"),
+                },
+                Output::SendMessage { peer_to, data } => {
+                    queue.push_back((to.clone(), peer_to, data));
+                }
+                Output::PeerAppeared { peer } => {
+                    assert_eq!(to, *joiner_id);
+                    assert_eq!(peer, *host_id);
+                }
+                Output::PeerConnected { peer } => {
+                    if to == *host_id {
+                        assert_eq!(peer, *joiner_id);
+                    } else if to == *joiner_id {
+                        assert_eq!(peer, *host_id);
+                    } else {
+                        panic!("unexpected peer connected emitter: {to:?}");
+                    }
+                }
+                Output::PeerDisconnected { peer } => {
+                    panic!("unexpected disconnect during relay test: {peer:?}");
+                }
+                Output::ReceiveMessage { .. } => {}
+            }
+        }
+    }
 
-    peers
-        .get_mut(target_id)
-        .unwrap()
-        .process::<()>(Input::Handshake {
-            from: initiator_id.clone(),
-            event: HandshakeInput::DataChannelOpen,
-        })
-        .unwrap();
+    assert!(host_dc_open, "host side data channel never opened");
+    assert!(joiner_dc_open, "joiner side data channel never opened");
+    assert!(peers.get(host_id).unwrap().is_connected(joiner_id));
+    assert!(peers.get(joiner_id).unwrap().is_connected(host_id));
+}
+
+fn assert_relay_signaling_to(
+    outputs: Vec<Output<()>>,
+    relay_id: &PeerID,
+    dst: &PeerID,
+    expected_payload: RelayPayload,
+    queue: &mut VecDeque<(PeerID, PeerID, MsgPayload<()>)>,
+    sender_id: &PeerID,
+) {
+    let mut found = false;
+
+    for output in outputs {
+        if let Output::SendMessage { peer_to, data } = output {
+            assert_eq!(peer_to, *relay_id);
+            match data {
+                MsgPayload::RelaySignalingTo {
+                    dst: actual_dst,
+                    data,
+                } => {
+                    assert_eq!(actual_dst, *dst);
+                    assert_eq!(format!("{data:?}"), format!("{expected_payload:?}"));
+                    queue.push_back((
+                        sender_id.clone(),
+                        relay_id.clone(),
+                        MsgPayload::RelaySignalingTo {
+                            dst: actual_dst,
+                            data,
+                        },
+                    ));
+                    found = true;
+                }
+                other => panic!("unexpected send payload in relay test: {other:?}"),
+            }
+        }
+    }
+
+    assert!(found, "expected relay signaling message was not produced");
 }
 
 pub(crate) fn assert_full_mesh_connectivity(peers: &HashMap<PeerID, MeshNodeFSM>) {

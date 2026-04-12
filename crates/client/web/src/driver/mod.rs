@@ -79,8 +79,7 @@ where
             .collect()
     }
 
-    // TODO make sync later
-    pub async fn process_input(&mut self, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
+    pub async fn execute(&mut self, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
         let was_connected = !self.fsm.borrow().connected_peers().is_empty();
         let outputs = self.fsm.borrow_mut().process(input)?;
 
@@ -90,7 +89,7 @@ where
             match output {
                 Output::Handshake { peer, event } => self.execute_handshake(&peer, event).await?,
                 Output::SendMessage { peer_to, data } => {
-                    self.send(&peer_to, &data).await?;
+                    self.send(&peer_to, &data)?;
                 }
                 Output::ReceiveMessage { peer_from, data } => match data {
                     MsgPayload::User(data) => self
@@ -121,7 +120,7 @@ where
         Ok(unhandled)
     }
 
-    async fn send(&self, peer: &PeerID, data: &MsgPayload<Msg>) -> Result<()> {
+    pub fn send(&self, peer: &PeerID, data: &MsgPayload<Msg>) -> Result<()> {
         let dc = self.dc_managers.get(peer).context("Peer not found")?;
         if let Some(dc) = dc.borrow().as_ref() {
             dc.send_data(data)?;
@@ -134,7 +133,7 @@ where
     }
 
     pub async fn init_host(&mut self, peer_id: PeerID) -> Result<Vec<Output<Msg>>> {
-        self.process_input(Input::InitHandshake {
+        self.execute(Input::InitHandshake {
             with: peer_id,
             mode: HandshakeMode::Bootstrap,
             strategy: HandshakeStrategy::Host,
@@ -143,7 +142,7 @@ where
     }
 
     pub async fn init_joiner(&mut self, peer_id: PeerID) -> Result<Vec<Output<Msg>>> {
-        self.process_input(Input::InitHandshake {
+        self.execute(Input::InitHandshake {
             with: peer_id,
             mode: HandshakeMode::Bootstrap,
             strategy: HandshakeStrategy::Joiner,
