@@ -1,142 +1,47 @@
 #[cfg(test)]
 mod test {
     use crate::{
-        HandshakeInput, HandshakeMode, HandshakeOutput, HandshakeStrategy, Input, MeshNodeFSM,
-        MsgPayload, Output, PeerID, SignalingPayload,
+        HandshakeInput, Input, MeshNodeFSM, MsgPayload, Output,
+        mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake,
     };
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     struct TestMsg(String);
 
-    fn alice() -> PeerID {
-        PeerID::new("alice")
-    }
-    fn bob() -> PeerID {
-        PeerID::new("bob")
-    }
-
-    fn drive_host_handshake(fsm: &mut MeshNodeFSM, remote: &PeerID) {
-        // Create host FSM
-        fsm.process::<TestMsg>(Input::InitHandshake {
-            with: remote.clone(),
-            mode: HandshakeMode::Bootstrap,
-            strategy: HandshakeStrategy::Host,
-        })
-        .unwrap();
-
-        let out = fsm
-            .process::<TestMsg>(Input::Handshake {
-                from: remote.clone(),
-                event: HandshakeInput::Init,
-            })
-            .unwrap();
-        assert!(out.iter().any(|o| matches!(
-            o,
-            Output::Handshake {
-                event: HandshakeOutput::InitSDPOffer,
-                ..
-            }
-        )));
-
-        let out = fsm
-            .process::<TestMsg>(Input::Handshake {
-                from: remote.clone(),
-                event: HandshakeInput::SignalingCreated(SignalingPayload::Offer("offer".into())),
-            })
-            .unwrap();
-        assert!(out.is_empty());
-
-        let out = fsm
-            .process::<TestMsg>(Input::Handshake {
-                from: remote.clone(),
-                event: HandshakeInput::Signaling(SignalingPayload::Answer("answer".into())),
-            })
-            .unwrap();
-        assert!(out.iter().any(|o| matches!(
-            o,
-            Output::Handshake {
-                event: HandshakeOutput::AcceptSDPAnswer { .. },
-                ..
-            }
-        )));
-
-        fsm.process::<TestMsg>(Input::Handshake {
-            from: remote.clone(),
-            event: HandshakeInput::DataChannelOpen,
-        })
-        .unwrap();
-
-        assert!(fsm.is_connected(remote));
+    fn connected_pair() -> (MeshNodeFSM, MeshNodeFSM) {
+        let mut a = MeshNodeFSM::new();
+        let mut b = MeshNodeFSM::new();
+        drive_bootstrap_handshake::<TestMsg>(&mut a, &mut b);
+        (a, b)
     }
 
     #[test]
-    fn host_handshake_full_flow() {
-        let mut mesh = MeshNodeFSM::new(alice());
-        drive_host_handshake(&mut mesh, &bob());
-        assert!(mesh.is_connected(&bob()));
-    }
-
-    #[test]
-    fn joiner_handshake_full_flow() {
-        let mut mesh = MeshNodeFSM::new(bob());
-
-        // Create joiner FSM
-        mesh.process::<TestMsg>(Input::InitHandshake {
-            with: alice(),
-            mode: HandshakeMode::Bootstrap,
-            strategy: HandshakeStrategy::Joiner,
-        })
-        .unwrap();
-
-        let out = mesh
-            .process::<TestMsg>(Input::Handshake {
-                from: alice(),
-                event: HandshakeInput::Signaling(SignalingPayload::Offer("offer".into())),
-            })
-            .unwrap();
-        assert!(out.iter().any(|o| matches!(
-            o,
-            Output::Handshake {
-                event: HandshakeOutput::RequestSDPAnswer { .. },
-                ..
-            }
-        )));
-
-        let out = mesh
-            .process::<TestMsg>(Input::Handshake {
-                from: alice(),
-                event: HandshakeInput::SignalingCreated(SignalingPayload::Answer("answer".into())),
-            })
-            .unwrap();
-        assert!(out.is_empty());
-
-        mesh.process::<TestMsg>(Input::Handshake {
-            from: alice(),
-            event: HandshakeInput::DataChannelOpen,
-        })
-        .unwrap();
-
-        assert!(mesh.is_connected(&alice()));
+    fn bootstrap_handshake_establishes_connection() {
+        let (a, b) = connected_pair();
+        assert!(a.is_connected(b.id()));
+        assert!(b.is_connected(a.id()));
     }
 
     #[test]
     fn message_only_when_connected() {
-        let mut mesh = MeshNodeFSM::new(alice());
+        let mut mesh = MeshNodeFSM::new();
+        let mut other = MeshNodeFSM::new();
+        let other_id = other.id().clone();
 
         let out = mesh
             .process(Input::MessageReceived {
-                peer_from: bob(),
+                peer_from: other_id.clone(),
                 data: MsgPayload::User(TestMsg("hello".into())),
             })
             .unwrap();
         assert!(out.is_empty());
 
-        drive_host_handshake(&mut mesh, &bob());
+        drive_bootstrap_handshake::<TestMsg>(&mut mesh, &mut other);
 
         let out = mesh
             .process(Input::MessageReceived {
-                peer_from: bob(),
+                peer_from: other_id.clone(),
                 data: MsgPayload::User(TestMsg("hello".into())),
             })
             .unwrap();
@@ -152,21 +57,23 @@ mod test {
 
     #[test]
     fn send_only_when_connected() {
-        let mut mesh = MeshNodeFSM::new(alice());
+        let mut mesh = MeshNodeFSM::new();
+        let mut other = MeshNodeFSM::new();
+        let other_id = other.id().clone();
 
         let out = mesh
             .process(Input::Send {
-                peer_to: bob(),
+                peer_to: other_id.clone(),
                 data: MsgPayload::User(TestMsg("hello".into())),
             })
             .unwrap();
         assert!(out.is_empty());
 
-        drive_host_handshake(&mut mesh, &bob());
+        drive_bootstrap_handshake::<TestMsg>(&mut mesh, &mut other);
 
         let out = mesh
             .process(Input::Send {
-                peer_to: bob(),
+                peer_to: other_id.clone(),
                 data: MsgPayload::User(TestMsg("hello".into())),
             })
             .unwrap();
@@ -176,27 +83,30 @@ mod test {
 
     #[test]
     fn peer_leaving_cleans_up() {
-        let mut mesh = MeshNodeFSM::new(alice());
-        drive_host_handshake(&mut mesh, &bob());
-        assert!(mesh.is_connected(&bob()));
+        let (mut mesh, other) = connected_pair();
+        let other_id = other.id().clone();
+
+        assert!(mesh.is_connected(&other_id));
 
         let out = mesh
-            .process::<TestMsg>(Input::PeerLeaving { peer: bob() })
+            .process::<TestMsg>(Input::PeerLeaving {
+                peer: other_id.clone(),
+            })
             .unwrap();
         assert!(
             out.iter()
                 .any(|o| matches!(o, Output::PeerDisconnected { .. }))
         );
-        assert!(!mesh.is_connected(&bob()));
+        assert!(!mesh.is_connected(&other_id));
     }
 
     #[test]
     fn unknown_handshake_event_errors() {
-        let mut mesh = MeshNodeFSM::new(alice());
+        let mut mesh = MeshNodeFSM::new();
+        let unknown_id = MeshNodeFSM::new().id().clone();
 
-        // No handshake context for bob → should error
         let result = mesh.process::<TestMsg>(Input::Handshake {
-            from: bob(),
+            from: unknown_id,
             event: HandshakeInput::DataChannelOpen,
         });
         assert!(result.is_err());

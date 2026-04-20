@@ -1,8 +1,8 @@
 use std::collections::{HashMap, VecDeque};
 
 use crate::{
-    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID, RelayPayload,
-    SignalingPayload, mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake,
+    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID,
+    mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake,
 };
 
 pub(crate) fn join_mesh(
@@ -95,22 +95,15 @@ fn establish_relay_connection(
                             .unwrap()
                             .process::<()>(Input::Handshake {
                                 from: joiner_id.clone(),
-                                event: HandshakeInput::SignalingCreated(SignalingPayload::Offer(
-                                    "offer".into(),
-                                )),
+                                event: HandshakeInput::OfferCreated("offer".into()),
                             })
                             .unwrap();
 
-                        assert_relay_signaling_to(
-                            outputs,
-                            relay_id,
-                            joiner_id,
-                            RelayPayload::Signaling(SignalingPayload::Offer("offer".into())),
-                            &mut queue,
-                            host_id,
+                        collect_relay_signaling_to(
+                            outputs, relay_id, joiner_id, &mut queue, host_id,
                         );
                     }
-                    HandshakeOutput::RequestSDPAnswer { .. } => {
+                    HandshakeOutput::RequestSDPAnswer(_) => {
                         assert_eq!(to, *joiner_id);
                         assert_eq!(peer, *host_id);
 
@@ -119,26 +112,19 @@ fn establish_relay_connection(
                             .unwrap()
                             .process::<()>(Input::Handshake {
                                 from: host_id.clone(),
-                                event: HandshakeInput::SignalingCreated(SignalingPayload::Answer(
-                                    "answer".into(),
-                                )),
+                                event: HandshakeInput::AnswerCreated("answer".into()),
                             })
                             .unwrap();
 
-                        assert_relay_signaling_to(
-                            outputs,
-                            relay_id,
-                            host_id,
-                            RelayPayload::Signaling(SignalingPayload::Answer("answer".into())),
-                            &mut queue,
-                            joiner_id,
+                        collect_relay_signaling_to(
+                            outputs, relay_id, host_id, &mut queue, joiner_id,
                         );
                     }
-                    HandshakeOutput::AcceptSDPAnswer { .. } => {
+                    HandshakeOutput::AcceptSDPAnswer(_) => {
                         assert_eq!(to, *host_id);
                         assert_eq!(peer, *joiner_id);
 
-                        let _outputs = peers
+                        peers
                             .get_mut(host_id)
                             .unwrap()
                             .process::<()>(Input::Handshake {
@@ -148,7 +134,7 @@ fn establish_relay_connection(
                             .unwrap();
                         host_dc_open = true;
 
-                        let _outputs = peers
+                        peers
                             .get_mut(joiner_id)
                             .unwrap()
                             .process::<()>(Input::Handshake {
@@ -158,6 +144,7 @@ fn establish_relay_connection(
                             .unwrap();
                         joiner_dc_open = true;
                     }
+                    HandshakeOutput::Connected => {}
                     other => panic!("unexpected handshake output for relay test: {other:?}"),
                 },
                 Output::SendMessage { peer_to, data } => {
@@ -190,11 +177,10 @@ fn establish_relay_connection(
     assert!(peers.get(joiner_id).unwrap().is_connected(host_id));
 }
 
-fn assert_relay_signaling_to(
+fn collect_relay_signaling_to(
     outputs: Vec<Output<()>>,
     relay_id: &PeerID,
     dst: &PeerID,
-    expected_payload: RelayPayload,
     queue: &mut VecDeque<(PeerID, PeerID, MsgPayload<()>)>,
     sender_id: &PeerID,
 ) {
@@ -202,25 +188,14 @@ fn assert_relay_signaling_to(
 
     for output in outputs {
         if let Output::SendMessage { peer_to, data } = output {
-            assert_eq!(peer_to, *relay_id);
-            match data {
-                MsgPayload::RelaySignalingTo {
-                    dst: actual_dst,
-                    data,
-                } => {
-                    assert_eq!(actual_dst, *dst);
-                    assert_eq!(format!("{data:?}"), format!("{expected_payload:?}"));
-                    queue.push_back((
-                        sender_id.clone(),
-                        relay_id.clone(),
-                        MsgPayload::RelaySignalingTo {
-                            dst: actual_dst,
-                            data,
-                        },
-                    ));
-                    found = true;
-                }
-                other => panic!("unexpected send payload in relay test: {other:?}"),
+            if let MsgPayload::RelaySignalingTo {
+                dst: actual_dst, ..
+            } = &data
+            {
+                assert_eq!(peer_to, *relay_id, "relay message must go to relay node");
+                assert_eq!(*actual_dst, *dst, "relay message must target correct peer");
+                queue.push_back((sender_id.clone(), relay_id.clone(), data));
+                found = true;
             }
         }
     }

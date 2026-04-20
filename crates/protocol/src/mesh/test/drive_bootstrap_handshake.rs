@@ -1,9 +1,8 @@
 use crate::{
     HandshakeInput, HandshakeMode, HandshakeOutput, HandshakeStrategy, Input, MeshNodeFSM, Output,
-    SignalingPayload, UserMsgPayload,
+    UserMsgPayload,
 };
 
-/// Drives a complete bootstrap handshake between two peers.
 pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
     host: &mut MeshNodeFSM,
     joiner: &mut MeshNodeFSM,
@@ -11,7 +10,6 @@ pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
     let host_id = host.id().clone();
     let joiner_id = joiner.id().clone();
 
-    // Create handshake FSMs
     host.process::<Msg>(Input::InitHandshake {
         with: joiner_id.clone(),
         mode: HandshakeMode::Bootstrap,
@@ -27,7 +25,6 @@ pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
         })
         .unwrap();
 
-    // Host: Init → CreatingOffer
     let out = host
         .process::<Msg>(Input::Handshake {
             from: joiner_id.clone(),
@@ -42,52 +39,51 @@ pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
         }
     )));
 
-    // Host: SignalingCreated(Offer) → WaitingForAnswer
     host.process::<Msg>(Input::Handshake {
         from: joiner_id.clone(),
-        event: HandshakeInput::SignalingCreated(SignalingPayload::Offer("offer".into())),
+        event: HandshakeInput::OfferCreated("offer".into()),
     })
     .unwrap();
 
-    // Joiner: Signaling(Offer) → CreatingAnswer
+    let offer_payload = host.metadata().offer.clone().unwrap();
+
     let out = joiner
         .process::<Msg>(Input::Handshake {
             from: host_id.clone(),
-            event: HandshakeInput::Signaling(SignalingPayload::Offer("offer".into())),
+            event: HandshakeInput::Offer(offer_payload),
         })
         .unwrap();
     assert!(out.iter().any(|o| matches!(
         o,
         Output::Handshake {
-            event: HandshakeOutput::RequestSDPAnswer { .. },
+            event: HandshakeOutput::RequestSDPAnswer(_),
             ..
         }
     )));
 
-    // Joiner: SignalingCreated(Answer) → WaitingForDataChannel
     joiner
         .process::<Msg>(Input::Handshake {
             from: host_id.clone(),
-            event: HandshakeInput::SignalingCreated(SignalingPayload::Answer("answer".into())),
+            event: HandshakeInput::AnswerCreated("answer".into()),
         })
         .unwrap();
 
-    // Host: Signaling(Answer) → WaitingForDataChannel
+    let answer_payload = joiner.metadata().answer.clone().unwrap();
+
     let out = host
         .process::<Msg>(Input::Handshake {
             from: joiner_id.clone(),
-            event: HandshakeInput::Signaling(SignalingPayload::Answer("answer".into())),
+            event: HandshakeInput::Answer(answer_payload),
         })
         .unwrap();
     assert!(out.iter().any(|o| matches!(
         o,
         Output::Handshake {
-            event: HandshakeOutput::AcceptSDPAnswer { .. },
+            event: HandshakeOutput::AcceptSDPAnswer(_),
             ..
         }
     )));
 
-    // Both: DataChannelOpen → Connected
     joiner
         .process::<Msg>(Input::Handshake {
             from: host_id.clone(),

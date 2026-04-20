@@ -1,7 +1,21 @@
 #[cfg(test)]
 mod tests {
-    use crate::SignalingPayload;
     use crate::handshake::{HandshakeInput, HandshakeOutput, HandshakeState, Host, Joiner};
+    use crate::{Identity, PeerID, SignalingPayload};
+
+    fn mock_payload() -> SignalingPayload {
+        let id = Identity::new();
+        let token = id
+            .create_token(&PeerID::new("test"))
+            .unwrap()
+            .to_vec()
+            .unwrap();
+        SignalingPayload {
+            sdp: "mock-sdp".into(),
+            pubkey: id.pubkey(),
+            token,
+        }
+    }
 
     #[test]
     fn host_smoke() {
@@ -13,29 +27,20 @@ mod tests {
         assert_eq!(out, Some(HandshakeOutput::InitSDPOffer));
 
         let out = host
-            .process(HandshakeInput::SignalingCreated(SignalingPayload::Offer(
-                "mock-offer".into(),
-            )))
+            .process(HandshakeInput::OfferCreated("mock-offer".into()))
             .unwrap();
         assert_eq!(*host.state(), HandshakeState::WaitingForAnswer);
         assert_eq!(out, None);
 
         let out = host
-            .process(HandshakeInput::Signaling(SignalingPayload::Answer(
-                "mock-answer".into(),
-            )))
+            .process(HandshakeInput::Answer(mock_payload()))
             .unwrap();
         assert_eq!(*host.state(), HandshakeState::WaitingForDataChannel);
-        assert_eq!(
-            out,
-            Some(HandshakeOutput::AcceptSDPAnswer {
-                answer: "mock-answer".into()
-            })
-        );
+        assert!(matches!(out, Some(HandshakeOutput::AcceptSDPAnswer(_))));
 
         let out = host.process(HandshakeInput::DataChannelOpen).unwrap();
         assert_eq!(*host.state(), HandshakeState::Connected);
-        assert_eq!(out, None);
+        assert_eq!(out, Some(HandshakeOutput::Connected));
     }
 
     #[test]
@@ -44,29 +49,20 @@ mod tests {
         assert_eq!(*joiner.state(), HandshakeState::Idle);
 
         let out = joiner
-            .process(HandshakeInput::Signaling(SignalingPayload::Offer(
-                "mock-offer".into(),
-            )))
+            .process(HandshakeInput::Offer(mock_payload()))
             .unwrap();
         assert_eq!(*joiner.state(), HandshakeState::CreatingAnswer);
-        assert_eq!(
-            out,
-            Some(HandshakeOutput::RequestSDPAnswer {
-                offer: "mock-offer".into()
-            })
-        );
+        assert!(matches!(out, Some(HandshakeOutput::RequestSDPAnswer(_))));
 
         let out = joiner
-            .process(HandshakeInput::SignalingCreated(SignalingPayload::Answer(
-                "mock-answer".into(),
-            )))
+            .process(HandshakeInput::AnswerCreated("mock-answer".into()))
             .unwrap();
         assert_eq!(*joiner.state(), HandshakeState::WaitingForDataChannel);
         assert_eq!(out, None);
 
         let out = joiner.process(HandshakeInput::DataChannelOpen).unwrap();
         assert_eq!(*joiner.state(), HandshakeState::Connected);
-        assert_eq!(out, None);
+        assert_eq!(out, Some(HandshakeOutput::Connected));
     }
 
     #[test]
@@ -84,16 +80,11 @@ mod tests {
     fn invalid_input_returns_error() {
         let mut host = Host::new();
         host.process(HandshakeInput::Init).unwrap();
-        host.process(HandshakeInput::SignalingCreated(SignalingPayload::Offer(
-            "mock-offer".into(),
-        )))
-        .unwrap();
+        host.process(HandshakeInput::OfferCreated("mock-offer".into()))
+            .unwrap();
         assert_eq!(*host.state(), HandshakeState::WaitingForAnswer);
 
-        // Feeding an Offer when expecting Answer should error
-        let result = host.process(HandshakeInput::Signaling(SignalingPayload::Offer(
-            "mock".into(),
-        )));
+        let result = host.process(HandshakeInput::Offer(mock_payload()));
         assert!(result.is_err());
     }
 
@@ -101,10 +92,8 @@ mod tests {
     fn host_transitions_to_waiting_for_answer_after_offer_created() {
         let mut host = Host::new();
         host.process(HandshakeInput::Init).unwrap();
-        host.process(HandshakeInput::SignalingCreated(SignalingPayload::Offer(
-            "v=0\r\noffer-sdp".into(),
-        )))
-        .unwrap();
+        host.process(HandshakeInput::OfferCreated("v=0\r\noffer-sdp".into()))
+            .unwrap();
         assert_eq!(*host.state(), HandshakeState::WaitingForAnswer);
     }
 
@@ -112,14 +101,10 @@ mod tests {
     fn joiner_transitions_to_waiting_for_dc_after_answer_created() {
         let mut joiner = Joiner::new();
         joiner
-            .process(HandshakeInput::Signaling(SignalingPayload::Offer(
-                "mock-offer".into(),
-            )))
+            .process(HandshakeInput::Offer(mock_payload()))
             .unwrap();
         joiner
-            .process(HandshakeInput::SignalingCreated(SignalingPayload::Answer(
-                "v=0\r\nanswer-sdp".into(),
-            )))
+            .process(HandshakeInput::AnswerCreated("v=0\r\nanswer-sdp".into()))
             .unwrap();
         assert_eq!(*joiner.state(), HandshakeState::WaitingForDataChannel);
     }

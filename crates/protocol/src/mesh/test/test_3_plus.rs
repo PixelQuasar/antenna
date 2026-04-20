@@ -12,14 +12,12 @@ mod test {
 
     #[test]
     fn three_peer_mesh() {
-        let alice_id = PeerID::new("alice");
-        let bob_id = PeerID::new("bob");
-        let charlie_id = PeerID::new("charlie");
+        let mut alice = MeshNodeFSM::new();
+        let alice_id = alice.id().clone();
+        let mut bob = MeshNodeFSM::new();
+        let bob_id = bob.id().clone();
 
-        let mut peers = HashMap::new();
-
-        let mut alice = MeshNodeFSM::new(alice_id.clone());
-        let mut bob = MeshNodeFSM::new(bob_id.clone());
+        let mut peers: HashMap<PeerID, MeshNodeFSM> = HashMap::new();
 
         drive_bootstrap_handshake::<()>(&mut alice, &mut bob);
 
@@ -29,7 +27,8 @@ mod test {
         assert_full_mesh_connectivity(&peers);
         assert_eq!(peers.len(), 2);
 
-        let charlie = MeshNodeFSM::new(charlie_id.clone());
+        let charlie = MeshNodeFSM::new();
+        let charlie_id = charlie.id().clone();
         peers.insert(charlie_id.clone(), charlie);
 
         join_mesh(&charlie_id, &bob_id, &mut peers);
@@ -44,16 +43,12 @@ mod test {
 
     #[test]
     fn incremental() {
-        let alice_id = PeerID::new("alice");
-        let bob_id = PeerID::new("bob");
-        let charlie_id = PeerID::new("charlie");
-        let dave_id = PeerID::new("dave");
-        let eve_id = PeerID::new("eve");
+        let mut alice = MeshNodeFSM::new();
+        let alice_id = alice.id().clone();
+        let mut bob = MeshNodeFSM::new();
+        let bob_id = bob.id().clone();
 
-        let mut peers = HashMap::new();
-
-        let mut alice = MeshNodeFSM::new(alice_id.clone());
-        let mut bob = MeshNodeFSM::new(bob_id.clone());
+        let mut peers: HashMap<PeerID, MeshNodeFSM> = HashMap::new();
 
         drive_bootstrap_handshake::<()>(&mut alice, &mut bob);
 
@@ -63,7 +58,8 @@ mod test {
         assert_full_mesh_connectivity(&peers);
         assert_eq!(peers.len(), 2);
 
-        let charlie = MeshNodeFSM::new(charlie_id.clone());
+        let charlie = MeshNodeFSM::new();
+        let charlie_id = charlie.id().clone();
         peers.insert(charlie_id.clone(), charlie);
 
         join_mesh(&charlie_id, &bob_id, &mut peers);
@@ -71,7 +67,8 @@ mod test {
         assert_full_mesh_connectivity(&peers);
         assert_eq!(peers.len(), 3);
 
-        let dave = MeshNodeFSM::new(dave_id.clone());
+        let dave = MeshNodeFSM::new();
+        let dave_id = dave.id().clone();
         peers.insert(dave_id.clone(), dave);
 
         join_mesh(&dave_id, &alice_id, &mut peers);
@@ -79,7 +76,8 @@ mod test {
         assert_full_mesh_connectivity(&peers);
         assert_eq!(peers.len(), 4);
 
-        let eve = MeshNodeFSM::new(eve_id.clone());
+        let eve = MeshNodeFSM::new();
+        let eve_id = eve.id().clone();
         peers.insert(eve_id.clone(), eve);
 
         join_mesh(&eve_id, &charlie_id, &mut peers);
