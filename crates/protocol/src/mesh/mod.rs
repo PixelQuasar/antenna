@@ -9,6 +9,7 @@ use crate::{
     UserMsgPayload,
 };
 use anyhow::Result;
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use std::collections::{HashMap, HashSet};
 
 ///
@@ -29,6 +30,9 @@ pub struct HandshakeContext {
 /// Core FSM of antenna client, handles negotiation handshakes (but not signaling!!)
 /// and abstract mesh logic
 pub struct MeshNodeFSM {
+    /// current peer ID
+    id: PeerID,
+
     /// identity of current peer: id and key pair
     identity: Identity,
 
@@ -41,15 +45,20 @@ pub struct MeshNodeFSM {
 
 impl MeshNodeFSM {
     pub fn new() -> Self {
+        Self::with_identity(Identity::new())
+    }
+
+    pub fn with_identity(identity: Identity) -> Self {
         Self {
-            identity: Identity::new(),
+            id: PeerID::new(BASE64_URL_SAFE_NO_PAD.encode(identity.pubkey().to_bytes())),
+            identity,
             connections: HashMap::new(),
             metadata: MeshMetadata::default(),
         }
     }
 
     pub fn id(&self) -> &PeerID {
-        &self.identity.id()
+        &self.id
     }
 
     pub fn is_connected(&self, peer: &PeerID) -> bool {
@@ -122,6 +131,10 @@ impl MeshNodeFSM {
 
     pub fn metadata(&self) -> &MeshMetadata {
         &self.metadata
+    }
+
+    pub fn identity(&self) -> &Identity {
+        &self.identity
     }
 
     fn handle_peer_leaving<Msg: UserMsgPayload>(

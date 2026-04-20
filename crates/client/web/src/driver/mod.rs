@@ -1,20 +1,18 @@
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet, VecDeque},
-    rc::Rc,
+use crate::{
+    DataChannelManager, Dispatcher, EXECUTE_FUEL, IceServerConfig, PeerConnectionManager,
+    RtcCallbacks, RtcEvent, Storage,
 };
-
 use antenna_protocol::{
     HandshakeMode, HandshakeStrategy, Input, MeshNodeFSM, MsgPayload, Output, PeerID,
     UserMsgPayload,
 };
 use anyhow::{Context, Result};
-
-use crate::{
-    EXECUTE_FUEL,
-    utils::{Dispatcher, IceServerConfig, RtcCallbacks, RtcEvent},
-    webrtc::{DataChannelManager, PeerConnectionManager},
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet, VecDeque},
+    rc::Rc,
 };
+use wasm_bindgen::JsValue;
 
 mod execute_handshake;
 
@@ -49,8 +47,13 @@ where
         ice_servers: Vec<IceServerConfig>,
         callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
     ) -> Self {
+        let identity = Storage::load_identity();
+        let fsm = match identity {
+            Some(id) => MeshNodeFSM::with_identity(id),
+            None => MeshNodeFSM::new(),
+        };
         Self {
-            fsm: Rc::new(RefCell::new(MeshNodeFSM::new())),
+            fsm: Rc::new(RefCell::new(fsm)),
             self_ref: None,
             pc_managers: HashMap::new(),
             dc_managers: HashMap::new(),
@@ -100,6 +103,12 @@ where
                     vec![]
                 }
                 Output::PeerConnected { peer } => {
+                    if let Err(err) = Storage::save_identity(self.fsm.borrow().identity()) {
+                        web_sys::console::log_1(&JsValue::from_str(&format!(
+                            "Error during identity save: {:?}",
+                            err
+                        )));
+                    }
                     self.callbacks
                         .borrow()
                         .emit(RtcEvent::PeerConnected(peer))?;

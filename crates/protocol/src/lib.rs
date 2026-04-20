@@ -3,11 +3,16 @@ mod identity;
 mod mesh;
 mod state;
 mod test;
+mod utils;
 
-pub use crate::handshake::{
+pub use handshake::{
     HandshakeFSM, HandshakeInput, HandshakeMode, HandshakeOutput, HandshakeState,
     HandshakeStrategy, Host, Joiner, SignalingPayload,
 };
-pub use crate::identity::{Identity, PeerID};
-pub use crate::mesh::MeshNodeFSM;
-pub use crate::state::{Input, MsgPayload, Output, RelayPayload, UserMsgPayload};
+pub use identity::{Identity, PeerID};
+pub use mesh::MeshNodeFSM;
+pub use state::{Input, MsgPayload, Output, RelayPayload, UserMsgPayload};
+pub(crate) use utils::{
+    deserialize_base64_keypair, deserialize_base64_pubkey, deserialize_base64_vec,
+    serialize_base64_keypair, serialize_base64_pubkey, serialize_base64_vec,
+};

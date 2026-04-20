@@ -1,9 +1,6 @@
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use crate::{
-    driver::Driver,
-    utils::{CallbackId, IceServerConfig, Rtc, RtcCallbacks},
-};
+use crate::{CallbackId, Driver, IceServerConfig, Rtc, RtcCallbacks};
 use antenna_protocol::{
     HandshakeInput, Input, MsgPayload, PeerID, SignalingPayload, UserMsgPayload,
 };

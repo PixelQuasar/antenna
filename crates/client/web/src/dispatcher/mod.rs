@@ -1,10 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::utils::to_js_object;
 use antenna_protocol::{PeerID, UserMsgPayload};
 use anyhow::{Result, anyhow};
 use wasm_bindgen::prelude::*;
-
-use crate::utils::to_js_object;
 
 pub type CallbackId = u64;
 

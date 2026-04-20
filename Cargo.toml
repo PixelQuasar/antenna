@@ -89,6 +89,8 @@ features = [
     "MessageEvent",
     "ErrorEvent",
     "console",
+    "Window",
+    "Storage",
 ]
 
 [profile.release]

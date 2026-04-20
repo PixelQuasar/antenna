@@ -1,8 +1,4 @@
-use crate::{
-    driver::Driver,
-    utils::{Dispatcher, RtcEvent},
-    webrtc::{DataChannelManager, PeerConnectionManager},
-};
+use crate::{DataChannelManager, Dispatcher, Driver, PeerConnectionManager, RtcEvent};
 use antenna_protocol::{
     HandshakeInput, HandshakeOutput, Input, MsgPayload, Output, PeerID, SignalingPayload,
     UserMsgPayload,

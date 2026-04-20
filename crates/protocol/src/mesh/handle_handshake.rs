@@ -40,6 +40,8 @@ impl MeshNodeFSM {
         if let Some(ctx) = ctx {
             match ctx.fsm.state() {
                 HandshakeState::Connected => {
+                    self.identity.add_known_peer(peer.clone());
+                    outputs.push(Output::PeerConnected { peer: peer.clone() });
                     for (existing, _) in &self.connections {
                         if !self.is_connected(existing) || *existing == peer {
                             continue;

@@ -1,52 +1,49 @@
 mod peer_id;
 
-use std::collections::HashSet;
-
-pub use peer_id::PeerID;
-
-use anyhow::Result;
-use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use crate::{SignalingPayload, deserialize_base64_keypair, serialize_base64_keypair};
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use biscuit_auth::{
     AuthorizerBuilder, Biscuit, KeyPair, PublicKey, builder::fact, builder::string,
 };
+pub use peer_id::PeerID;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
-use crate::SignalingPayload;
-
+#[derive(Serialize, Deserialize)]
 pub struct Identity {
+    #[serde(
+        serialize_with = "serialize_base64_keypair",
+        deserialize_with = "deserialize_base64_keypair"
+    )]
     keypair: KeyPair,
-    id: PeerID,
     known_peers: HashSet<PeerID>,
 }
 
 impl Identity {
     pub fn new() -> Self {
-        let keypair = KeyPair::new();
-        let pubkey = keypair.public().clone();
         Self {
-            keypair,
-            id: PeerID::new(URL_SAFE_NO_PAD.encode(pubkey.to_bytes())),
+            keypair: KeyPair::new(),
             known_peers: HashSet::new(),
         }
-    }
-
-    pub fn id(&self) -> &PeerID {
-        &self.id
     }
 
     pub fn pubkey(&self) -> PublicKey {
         self.keypair.public()
     }
 
-    pub fn create_token(&self, for_peer: &PeerID) -> Result<Biscuit> {
+    pub fn create_token(&self, for_peer: &PeerID) -> anyhow::Result<Biscuit> {
         let token = Biscuit::builder()
             .fact(fact("for_peer", &[string(for_peer.as_str())]))?
             .build(&self.keypair)?;
         Ok(token)
     }
 
-    pub fn verify(&self, payload: &SignalingPayload, expected_sender: &PeerID) -> Result<()> {
-        let derived_id = URL_SAFE_NO_PAD.encode(payload.pubkey.to_bytes());
+    pub fn verify(
+        &self,
+        payload: &SignalingPayload,
+        expected_sender: &PeerID,
+    ) -> anyhow::Result<()> {
+        let derived_id = BASE64_URL_SAFE_NO_PAD.encode(payload.pubkey.to_bytes());
         anyhow::ensure!(
             derived_id == expected_sender.as_str(),
             "pubkey does not match sender PeerID"
@@ -55,7 +52,14 @@ impl Identity {
         let token = Biscuit::from(&payload.token, &payload.pubkey)?;
 
         AuthorizerBuilder::new()
-            .fact(fact("my_peer_id", &[string(self.id.as_str())]))?
+            .fact(fact(
+                "my_peer_id",
+                &[string(
+                    BASE64_URL_SAFE_NO_PAD
+                        .encode(self.pubkey().to_bytes())
+                        .as_str(),
+                )],
+            ))?
             .policy("allow if for_peer($p), my_peer_id($p)")?
             .build(&token)?
             .authorize()?;
