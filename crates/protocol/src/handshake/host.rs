@@ -1,4 +1,3 @@
-use crate::SignalingPayload;
 use crate::handshake::{HandshakeInput, HandshakeOutput, HandshakeState};
 use anyhow::{Result, anyhow};
 
@@ -24,23 +23,17 @@ impl Host {
                 self.state = HandshakeState::CreatingOffer;
                 Ok(Some(HandshakeOutput::InitSDPOffer))
             }
-            (
-                HandshakeState::CreatingOffer,
-                HandshakeInput::SignalingCreated(SignalingPayload::Offer(_)),
-            ) => {
+            (HandshakeState::CreatingOffer, HandshakeInput::OfferCreated(_)) => {
                 self.state = HandshakeState::WaitingForAnswer;
                 Ok(None)
             }
-            (
-                HandshakeState::WaitingForAnswer,
-                HandshakeInput::Signaling(SignalingPayload::Answer(answer)),
-            ) => {
+            (HandshakeState::WaitingForAnswer, HandshakeInput::Answer(answer)) => {
                 self.state = HandshakeState::WaitingForDataChannel;
-                Ok(Some(HandshakeOutput::AcceptSDPAnswer { answer }))
+                Ok(Some(HandshakeOutput::AcceptSDPAnswer(answer)))
             }
             (HandshakeState::WaitingForDataChannel, HandshakeInput::DataChannelOpen) => {
                 self.state = HandshakeState::Connected;
-                Ok(None)
+                Ok(Some(HandshakeOutput::Connected))
             }
             (_, HandshakeInput::Disconnected) => {
                 self.state = HandshakeState::Closed;

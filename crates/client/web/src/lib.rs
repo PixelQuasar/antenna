@@ -1,7 +1,7 @@
-mod client;
 mod driver;
+mod peer;
 mod utils;
 mod webrtc;
 
-pub use client::Client;
-pub use utils::{IceServerConfig, Rtc};
+pub use peer::Peer;
+pub use utils::{EXECUTE_FUEL, IceServerConfig, Rtc};

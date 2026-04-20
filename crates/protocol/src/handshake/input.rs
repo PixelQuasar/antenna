@@ -8,11 +8,17 @@ pub enum HandshakeInput {
     ///
     Init,
 
-    ///
-    Signaling(SignalingPayload),
-
     /// Driver sends when it creates offer/answer
-    SignalingCreated(SignalingPayload),
+    OfferCreated(String),
+
+    ///
+    AnswerCreated(String),
+
+    ///
+    Offer(SignalingPayload),
+
+    ///
+    Answer(SignalingPayload),
 
     /// Input event signalizing about opening of data channel with peer
     DataChannelOpen,

@@ -10,7 +10,7 @@ impl MeshNodeFSM {
         peer: PeerID,
         msg: MsgPayload<Msg>,
     ) -> Result<Vec<Output<Msg>>> {
-        if !self.connected.contains(&peer) {
+        if !self.is_connected(&peer) {
             return Ok(vec![]);
         }
 
@@ -48,8 +48,8 @@ impl MeshNodeFSM {
         data: RelayPayload,
     ) -> Result<Vec<Output<Msg>>> {
         match data {
-            RelayPayload::InitHost => {
-                if self.handshakes.contains_key(&src) || self.connected.contains(&src) {
+            RelayPayload::InitHost(_) => {
+                if self.connections.contains_key(&src) {
                     return Ok(vec![]);
                 }
                 self.process::<Msg>(Input::InitHandshake {
@@ -62,8 +62,8 @@ impl MeshNodeFSM {
                     event: HandshakeInput::Init,
                 })
             }
-            RelayPayload::InitJoiner => {
-                if self.handshakes.contains_key(&src) || self.connected.contains(&src) {
+            RelayPayload::InitJoiner(_) => {
+                if self.connections.contains_key(&src) {
                     return Ok(vec![]);
                 }
                 self.process::<Msg>(Input::InitHandshake {
@@ -72,9 +72,13 @@ impl MeshNodeFSM {
                     strategy: HandshakeStrategy::Joiner,
                 })
             }
-            RelayPayload::Signaling(payload) => self.process::<Msg>(Input::Handshake {
+            RelayPayload::Offer(offer) => self.process::<Msg>(Input::Handshake {
                 from: src,
-                event: HandshakeInput::Signaling(payload),
+                event: HandshakeInput::Offer(offer),
+            }),
+            RelayPayload::Answer(answer) => self.process::<Msg>(Input::Handshake {
+                from: src,
+                event: HandshakeInput::Answer(answer),
             }),
         }
     }

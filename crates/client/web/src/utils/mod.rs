@@ -13,3 +13,5 @@ fn to_js_object<T: serde::Serialize>(value: &T) -> Result<js_sys::Object, wasm_b
 
     js.dyn_into::<js_sys::Object>()
 }
+
+pub const EXECUTE_FUEL: u64 = 1024;

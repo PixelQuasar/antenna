@@ -30,6 +30,7 @@ Thumbs.db
 coverage/
 tarpaulin-report.html
 lcov.info
+CLAUDE.md
 
 # Build artifacts / binaries (optional)
 *.exe

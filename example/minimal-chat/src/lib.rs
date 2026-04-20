@@ -1,4 +1,4 @@
-use antenna::web::{Client, IceServerConfig, PeerID, Rtc};
+use antenna::web::{IceServerConfig, Peer, PeerID, Rtc};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -9,13 +9,13 @@ struct Message {
 
 #[wasm_bindgen]
 pub struct ChatApp {
-    client: Client<Message>,
+    peer: Peer<Message>,
 }
 
 #[wasm_bindgen]
 impl ChatApp {
     #[wasm_bindgen(constructor)]
-    pub fn new(id: String, turn_url: String) -> Result<ChatApp, JsValue> {
+    pub fn new(turn_url: String) -> Result<ChatApp, JsValue> {
         console_error_panic_hook::set_once();
 
         let mut ice_servers = vec![IceServerConfig::new(vec![
@@ -31,16 +31,16 @@ impl ChatApp {
             pass.into(),
         ));
 
-        let mut client = Client::with_ice_servers(PeerID::new(id), ice_servers);
-        client.subscribe(Rtc::UserMessage(Self::on_message));
+        let mut peer = Peer::with_ice_servers(ice_servers);
+        peer.subscribe(Rtc::UserMessage(Self::on_message));
 
-        Ok(ChatApp { client })
+        Ok(ChatApp { peer })
     }
 
     #[wasm_bindgen(js_name = startAsHost)]
     pub async fn start_as_host(&mut self, remote_id: String) -> Result<String, JsValue> {
-        self.client
-            .start_bootstrap(PeerID::new(remote_id))
+        self.peer
+            .start(PeerID::new(remote_id))
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
@@ -51,8 +51,8 @@ impl ChatApp {
         remote_id: String,
         offer_sdp: String,
     ) -> Result<String, JsValue> {
-        self.client
-            .receive_bootstrap_offer(PeerID::new(remote_id), offer_sdp)
+        self.peer
+            .receive_offer(PeerID::new(remote_id), offer_sdp)
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
@@ -63,7 +63,7 @@ impl ChatApp {
         remote_id: String,
         answer_sdp: String,
     ) -> Result<(), JsValue> {
-        self.client
+        self.peer
             .receive_answer(PeerID::new(remote_id), answer_sdp)
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))
@@ -71,19 +71,10 @@ impl ChatApp {
 
     #[wasm_bindgen(js_name = broadcast)]
     pub async fn broadcast(&mut self, text: String) -> Result<(), JsValue> {
-        self.client
+        self.peer
             .broadcast(Message { text })
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))
-    }
-
-    #[wasm_bindgen(js_name = connectedPeers)]
-    pub fn connected_peers(&self) -> js_sys::Array {
-        self.client
-            .connected_peers()
-            .into_iter()
-            .map(JsValue::from)
-            .collect()
     }
 
     fn on_message(peer: PeerID, data: Message) {
@@ -95,26 +86,26 @@ impl ChatApp {
 
     #[wasm_bindgen(js_name = onMessage)]
     pub fn js_on_message(&mut self, cb: js_sys::Function) {
-        self.client.set_js_on_message(cb);
+        self.peer.set_js_on_message(cb);
     }
 
     #[wasm_bindgen(js_name = onConnected)]
     pub fn js_on_connected(&mut self, cb: js_sys::Function) {
-        self.client.set_js_on_connected(cb);
+        self.peer.set_js_on_connected(cb);
     }
 
     #[wasm_bindgen(js_name = onDisconnected)]
     pub fn js_on_disconnected(&mut self, cb: js_sys::Function) {
-        self.client.set_js_on_disconnected(cb);
+        self.peer.set_js_on_disconnected(cb);
     }
 
     #[wasm_bindgen(js_name = onPeerConnected)]
     pub fn js_on_peer_connected(&mut self, cb: js_sys::Function) {
-        self.client.set_js_on_peer_connected(cb);
+        self.peer.set_js_on_peer_connected(cb);
     }
 
     #[wasm_bindgen(js_name = onPeerDisconnected)]
     pub fn js_on_peer_disconnected(&mut self, cb: js_sys::Function) {
-        self.client.set_js_on_peer_disconnected(cb);
+        self.peer.set_js_on_peer_disconnected(cb);
     }
 }

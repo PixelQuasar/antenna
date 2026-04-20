@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::SignalingPayload;
+
 /// Commands emitted by the handshake FSM for the driver to execute.
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
 pub enum HandshakeOutput {
@@ -7,10 +9,13 @@ pub enum HandshakeOutput {
     InitSDPOffer,
 
     /// Initiate creating, applying and sending answer to other peer (to host)
-    RequestSDPAnswer { offer: String },
+    RequestSDPAnswer(SignalingPayload),
 
     /// Apply received answer from other peer (from joiner)
-    AcceptSDPAnswer { answer: String },
+    AcceptSDPAnswer(SignalingPayload),
+
+    ///
+    Connected,
 
     /// Close RTC connection
     Close,

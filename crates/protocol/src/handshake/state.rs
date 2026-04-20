@@ -1,9 +1,7 @@
-use serde::{Deserialize, Serialize};
-
 /// Handshake-level state of the client handshake FSM.
 #[derive(Debug, PartialEq, Eq)]
 pub enum HandshakeState {
-    /// Client created but negotiation hasn't started yet
+    /// Peer created but negotiation hasn't started yet
     Idle,
 
     /// Host is creating offer
@@ -18,15 +16,9 @@ pub enum HandshakeState {
     /// Joiner sent answer and waiting to establish data channel with host
     WaitingForDataChannel,
 
-    /// Client has established connection with other peer
+    /// Peer has established connection with other peer
     Connected,
 
     /// Connection is closed
     Closed,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub enum SignalingPayload {
-    Offer(String),
-    Answer(String),
 }

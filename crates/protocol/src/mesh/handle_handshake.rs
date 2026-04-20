@@ -11,16 +11,23 @@ impl MeshNodeFSM {
         peer: PeerID,
         event: HandshakeInput,
     ) -> Result<Vec<Output<Msg>>> {
-        if !self.handshakes.contains_key(&peer) {
+        if !self.connections.contains_key(&peer) {
             return Err(anyhow!("Handshake instance with peer not found"));
         }
 
-        let ctx = self.handshakes.get_mut(&peer).unwrap();
-        let handshake_out = ctx.fsm.process(event.clone())?;
-        let state = ctx.fsm.state();
-        let mode = ctx.mode.clone();
-
         let mut outputs: Vec<Output<Msg>> = vec![];
+
+        let side_effects_outs = self.handle_side_effects(&peer, &event)?;
+        outputs.extend(side_effects_outs);
+
+        let handshake_out = {
+            let ctx = self.connections.get_mut(&peer);
+            if let Some(ctx) = ctx {
+                ctx.fsm.process(event.clone())?
+            } else {
+                None
+            }
+        };
 
         if let Some(event) = handshake_out {
             outputs.push(Output::Handshake {
@@ -29,66 +36,99 @@ impl MeshNodeFSM {
             });
         }
 
-        match &event {
-            HandshakeInput::SignalingCreated(payload) => match &mode {
-                HandshakeMode::Bootstrap => match payload {
-                    SignalingPayload::Offer(offer) => {
-                        self.metadata.sdp_offer = Some(offer.clone());
-                    }
-                    SignalingPayload::Answer(answer) => {
-                        self.metadata.sdp_answer = Some(answer.clone());
-                    }
-                },
-                HandshakeMode::Relay(via) => {
-                    outputs.push(Output::SendMessage {
-                        peer_to: via.clone(),
-                        data: MsgPayload::RelaySignalingTo {
-                            dst: peer.clone(),
-                            data: RelayPayload::Signaling(payload.clone()),
-                        },
-                    });
-                }
-            },
-            _ => {}
-        }
+        let ctx = self.connections.get(&peer);
+        if let Some(ctx) = ctx {
+            match ctx.fsm.state() {
+                HandshakeState::Connected => {
+                    for (existing, _) in &self.connections {
+                        if !self.is_connected(existing) || *existing == peer {
+                            continue;
+                        }
 
-        match state {
-            HandshakeState::Connected => {
-                self.handshakes.remove(&peer);
-                self.connected.insert(peer.clone());
-
-                for existing in &self.connected {
-                    if existing != &peer {
                         outputs.push(Output::PeerAppeared {
                             peer: existing.clone(),
                         });
 
-                        if mode == HandshakeMode::Bootstrap {
+                        if ctx.mode == HandshakeMode::Bootstrap {
                             outputs.push(Output::SendMessage {
                                 peer_to: existing.clone(),
                                 data: MsgPayload::RelaySignalingFrom {
                                     src: peer.clone(),
-                                    data: RelayPayload::InitHost,
+                                    data: RelayPayload::InitHost(peer.clone()),
                                 },
                             });
                             outputs.push(Output::SendMessage {
                                 peer_to: peer.clone(),
                                 data: MsgPayload::RelaySignalingFrom {
                                     src: existing.clone(),
-                                    data: RelayPayload::InitJoiner,
+                                    data: RelayPayload::InitJoiner(existing.clone()),
                                 },
                             });
                         }
                     }
                 }
+                HandshakeState::Closed => {
+                    self.connections.remove(&peer);
+                    outputs.push(Output::PeerDisconnected { peer: peer.clone() });
+                }
+                _ => {}
             }
-            HandshakeState::Closed => {
-                self.handshakes.remove(&peer);
-                outputs.push(Output::PeerDisconnected { peer: peer.clone() });
+        }
+
+        Ok(outputs)
+    }
+
+    fn handle_side_effects<Msg: UserMsgPayload>(
+        &mut self,
+        peer: &PeerID,
+        event: &HandshakeInput,
+    ) -> Result<Vec<Output<Msg>>> {
+        let ctx = self.connections.get(&peer).unwrap();
+        let mut outputs: Vec<Output<Msg>> = vec![];
+        match &event {
+            HandshakeInput::Offer(payload) | HandshakeInput::Answer(payload) => {
+                self.identity.verify(payload, &peer)?;
+            }
+            HandshakeInput::AnswerCreated(answer) => {
+                let answer = SignalingPayload {
+                    sdp: answer.clone(),
+                    pubkey: self.identity.pubkey(),
+                    token: self.identity.create_token(&peer)?.to_vec()?,
+                };
+                match &ctx.mode {
+                    HandshakeMode::Bootstrap => self.metadata.answer = Some(answer),
+                    HandshakeMode::Relay(via) => {
+                        outputs.push(Output::SendMessage {
+                            peer_to: via.clone(),
+                            data: MsgPayload::RelaySignalingTo {
+                                dst: peer.clone(),
+                                data: RelayPayload::Answer(answer),
+                            },
+                        });
+                    }
+                }
+            }
+            HandshakeInput::OfferCreated(offer) => {
+                let offer = SignalingPayload {
+                    sdp: offer.clone(),
+                    pubkey: self.identity.pubkey(),
+                    token: self.identity.create_token(&peer)?.to_vec()?,
+                };
+                match &ctx.mode {
+                    HandshakeMode::Bootstrap => self.metadata.offer = Some(offer),
+                    HandshakeMode::Relay(via) => {
+                        outputs.push(Output::SendMessage {
+                            peer_to: via.clone(),
+                            data: MsgPayload::RelaySignalingTo {
+                                dst: peer.clone(),
+                                data: RelayPayload::Offer(offer),
+                            },
+                        });
+                    }
+                }
             }
             _ => {}
         }
-
         Ok(outputs)
     }
 }

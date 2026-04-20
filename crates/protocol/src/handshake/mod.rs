@@ -2,6 +2,7 @@ mod host;
 mod input;
 mod joiner;
 mod output;
+mod signaling;
 mod state;
 mod strategy;
 mod test;
@@ -13,7 +14,8 @@ pub use host::Host;
 pub use input::HandshakeInput;
 pub use joiner::Joiner;
 pub use output::HandshakeOutput;
-pub use state::{HandshakeState, SignalingPayload};
+pub use signaling::SignalingPayload;
+pub use state::HandshakeState;
 pub use strategy::{HandshakeStrategy, StrategyFSM};
 
 use crate::PeerID;

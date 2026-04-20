@@ -233,12 +233,12 @@ pub(crate) fn assert_full_mesh_connectivity(peers: &HashMap<PeerID, MeshNodeFSM>
 
     for (peer_id, mesh) in peers {
         assert_eq!(
-            mesh.connected_peers().len(),
+            mesh.connected_number(),
             n - 1,
             "Peer {:?} should have {} connections, but has {}",
             peer_id,
             n - 1,
-            mesh.connected_peers().len()
+            mesh.connected_number()
         );
 
         for (other_id, _) in peers {

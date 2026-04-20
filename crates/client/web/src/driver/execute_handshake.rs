@@ -1,7 +1,6 @@
-// v2/web/src/driver/execute_handshake.rs
-
 use crate::{
     driver::Driver,
+    utils::{Dispatcher, RtcEvent},
     webrtc::{DataChannelManager, PeerConnectionManager},
 };
 use antenna_protocol::{
@@ -22,24 +21,19 @@ where
         &mut self,
         peer: &PeerID,
         output: HandshakeOutput,
-    ) -> Result<()> {
+    ) -> Result<Vec<Output<Msg>>> {
         match output {
             HandshakeOutput::InitSDPOffer => self.execute_init_offer(peer).await,
-            HandshakeOutput::RequestSDPAnswer { offer } => {
-                self.execute_init_answer(peer, offer).await
+            HandshakeOutput::RequestSDPAnswer(offer) => self.execute_init_answer(peer, offer).await,
+            HandshakeOutput::AcceptSDPAnswer(answer) => {
+                self.execute_accept_answer(peer, answer).await
             }
-            HandshakeOutput::AcceptSDPAnswer { answer } => {
-                self.execute_accept_answer(peer, answer).await?;
-                Ok(())
-            }
-            HandshakeOutput::Close => {
-                self.execute_close(peer)?;
-                Ok(())
-            }
+            HandshakeOutput::Close => self.execute_close(peer),
+            HandshakeOutput::Connected => self.execute_connected(),
         }
     }
 
-    async fn execute_init_offer(&mut self, peer: &PeerID) -> Result<()> {
+    async fn execute_init_offer(&mut self, peer: &PeerID) -> Result<Vec<Output<Msg>>> {
         let pc_manager = PeerConnectionManager::from_ice_config(&self.ice_servers)?;
 
         self.setup_host_data_channel(peer, pc_manager.peer_connection())?;
@@ -47,63 +41,60 @@ where
         let offer_sdp = pc_manager.create_offer().await?;
         pc_manager.set_local_description(&offer_sdp, true).await?;
 
-        let full_sdp = pc_manager.wait_for_ice_gathering_complete().await?;
+        let sdp = pc_manager.wait_for_ice_gathering_complete().await?;
 
         let outputs = self.fsm.borrow_mut().process(Input::<Msg>::Handshake {
             from: peer.clone(),
-            event: HandshakeInput::SignalingCreated(SignalingPayload::Offer(full_sdp.clone())),
+            event: HandshakeInput::OfferCreated(sdp),
         })?;
 
         self.pc_managers.insert(peer.clone(), pc_manager);
 
-        for output in outputs {
-            match output {
-                Output::SendMessage { peer_to, data } => self.send(&peer_to, &data)?,
-                _ => {}
-            }
-        }
-
-        Ok(())
+        Ok(outputs)
     }
 
-    async fn execute_init_answer(&mut self, peer: &PeerID, offer_sdp: String) -> Result<()> {
+    async fn execute_init_answer(
+        &mut self,
+        peer: &PeerID,
+        offer: SignalingPayload,
+    ) -> Result<Vec<Output<Msg>>> {
         let pc_manager = PeerConnectionManager::from_ice_config(&self.ice_servers)?;
 
         self.setup_joiner_data_channel(peer, pc_manager.peer_connection())?;
 
-        pc_manager.set_remote_description(&offer_sdp, true).await?;
+        pc_manager.set_remote_description(&offer.sdp, true).await?;
         let answer_sdp = pc_manager.create_answer().await?;
         pc_manager.set_local_description(&answer_sdp, false).await?;
-        let full_sdp = pc_manager.wait_for_ice_gathering_complete().await?;
+
+        let sdp = pc_manager.wait_for_ice_gathering_complete().await?;
 
         let outputs = self.fsm.borrow_mut().process(Input::<Msg>::Handshake {
             from: peer.clone(),
-            event: HandshakeInput::SignalingCreated(SignalingPayload::Answer(full_sdp.clone())),
+            event: HandshakeInput::AnswerCreated(sdp),
         })?;
 
         self.pc_managers.insert(peer.clone(), pc_manager);
 
-        for output in outputs {
-            match output {
-                Output::SendMessage { peer_to, data } => self.send(&peer_to, &data)?,
-                _ => {}
-            }
-        }
-
-        Ok(())
+        Ok(outputs)
     }
 
-    async fn execute_accept_answer(&mut self, peer: &PeerID, answer: String) -> Result<()> {
+    async fn execute_accept_answer(
+        &mut self,
+        peer: &PeerID,
+        answer: SignalingPayload,
+    ) -> Result<Vec<Output<Msg>>> {
         let pc_manager = self
             .pc_managers
             .get(peer)
             .context("PeerConnection not found for peer")?;
 
-        pc_manager.set_remote_description(&answer, false).await?;
-        Ok(())
+        pc_manager
+            .set_remote_description(&answer.sdp, false)
+            .await?;
+        Ok(vec![])
     }
 
-    fn execute_close(&mut self, peer: &PeerID) -> Result<()> {
+    fn execute_close(&mut self, peer: &PeerID) -> Result<Vec<Output<Msg>>> {
         if let Some(dc_ref) = self.dc_managers.get(peer) {
             if let Some(dc) = dc_ref.borrow().as_ref() {
                 dc.close();
@@ -114,7 +105,13 @@ where
         }
         self.pc_managers.remove(peer);
         self.dc_managers.remove(peer);
-        Ok(())
+        self.callbacks.borrow().emit(RtcEvent::Disconnected)?;
+        Ok(vec![])
+    }
+
+    fn execute_connected(&mut self) -> Result<Vec<Output<Msg>>> {
+        self.callbacks.borrow().emit(RtcEvent::Connected)?;
+        Ok(vec![])
     }
 
     fn setup_host_data_channel(

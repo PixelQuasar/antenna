@@ -38,7 +38,7 @@ mod test {
         assert_eq!(peers.len(), 3);
 
         for mesh in peers.values() {
-            assert_eq!(mesh.connected_peers().len(), 2);
+            assert_eq!(mesh.connected_number(), 2);
         }
     }
 
@@ -88,7 +88,7 @@ mod test {
         assert_eq!(peers.len(), 5);
 
         for mesh in peers.values() {
-            assert_eq!(mesh.connected_peers().len(), 4);
+            assert_eq!(mesh.connected_number(), 4);
         }
     }
 }

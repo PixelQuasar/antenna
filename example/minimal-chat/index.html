@@ -248,8 +248,7 @@ window.initApp = function() {
     }
 
     try {
-        myId = enteredMyId;
-        app = new ChatApp(myId, turn);
+        app = new ChatApp(turn);
 
         app.onConnected(() => {
             status('At least one peer is connected');

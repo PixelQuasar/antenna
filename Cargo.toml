@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/protocol",
     "crates/antenna",
+    "crates/shared",
     "crates/client/*",
     "crates/signaling-server",
     "example/*",
@@ -16,6 +17,9 @@ path = "crates/antenna"
 
 [workspace.dependencies.antenna-protocol]
 path = "crates/protocol"
+
+[workspace.dependencies.antenna-shared]
+path = "crates/shared"
 
 [workspace.dependencies.antenna-client-web]
 path = "crates/client/web"
@@ -54,6 +58,16 @@ version = "0.3"
 
 [workspace.dependencies.serde-wasm-bindgen]
 version = "0.6"
+
+[workspace.dependencies.biscuit-auth]
+version = "6.0.0"
+features = ["wasm"]
+
+[workspace.dependencies.base64]
+version = "0.22"
+
+[workspace.dependencies.rand]
+version = "0.8"
 
 [workspace.dependencies.web-sys]
 version = "0.3"

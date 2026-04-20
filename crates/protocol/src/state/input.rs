@@ -1,5 +1,5 @@
 use crate::{
-    HandshakeMode, HandshakeStrategy, UserMsgPayload, handshake::HandshakeInput, mesh::PeerID,
+    HandshakeMode, HandshakeStrategy, PeerID, UserMsgPayload, handshake::HandshakeInput,
     state::MsgPayload,
 };
 

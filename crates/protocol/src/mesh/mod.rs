@@ -1,22 +1,24 @@
 mod handle_handshake;
 mod handle_message;
-mod peer_id;
+
 #[cfg(test)]
 mod test;
 
-use crate::{HandshakeFSM, HandshakeMode, Input, Output, UserMsgPayload};
+use crate::{
+    HandshakeFSM, HandshakeMode, HandshakeState, Identity, Input, Output, PeerID, SignalingPayload,
+    UserMsgPayload,
+};
 use anyhow::Result;
-pub use peer_id::PeerID;
 use std::collections::{HashMap, HashSet};
 
 ///
 #[derive(Default, Clone)]
 pub struct MeshMetadata {
     ///
-    pub sdp_offer: Option<String>,
+    pub offer: Option<SignalingPayload>,
 
     ///
-    pub sdp_answer: Option<String>,
+    pub answer: Option<SignalingPayload>,
 }
 
 pub struct HandshakeContext {
@@ -27,39 +29,50 @@ pub struct HandshakeContext {
 /// Core FSM of antenna client, handles negotiation handshakes (but not signaling!!)
 /// and abstract mesh logic
 pub struct MeshNodeFSM {
-    /// ID of current peer, must be globally unique
-    id: PeerID,
+    /// identity of current peer: id and key pair
+    identity: Identity,
 
     /// Map of handshake automati, contains state of current handshakes with other sessions
-    handshakes: HashMap<PeerID, HandshakeContext>,
-
-    /// Map of peers with established connection
-    connected: HashSet<PeerID>,
+    connections: HashMap<PeerID, HandshakeContext>,
 
     ///
     metadata: MeshMetadata,
 }
 
 impl MeshNodeFSM {
-    pub fn new(id: PeerID) -> Self {
+    pub fn new() -> Self {
         Self {
-            id,
-            handshakes: HashMap::new(),
-            connected: HashSet::new(),
+            identity: Identity::new(),
+            connections: HashMap::new(),
             metadata: MeshMetadata::default(),
         }
     }
 
     pub fn id(&self) -> &PeerID {
-        &self.id
+        &self.identity.id()
     }
 
     pub fn is_connected(&self, peer: &PeerID) -> bool {
-        self.connected.contains(peer)
+        self.connections.contains_key(peer)
+            && *self.connections.get(peer).unwrap().fsm.state() == HandshakeState::Connected
     }
 
-    pub fn connected_peers(&self) -> &HashSet<PeerID> {
-        &self.connected
+    pub fn connected_peers(&self) -> HashSet<PeerID> {
+        self.connections
+            .iter()
+            .filter(|x| *x.1.fsm.state() == HandshakeState::Connected)
+            .map(|x| x.0.clone())
+            .collect()
+    }
+
+    pub fn connected_number(&self) -> usize {
+        self.connections.iter().fold(0, |a, x| {
+            if *x.1.fsm.state() == HandshakeState::Connected {
+                a + 1
+            } else {
+                a
+            }
+        })
     }
 
     pub fn process<Msg: UserMsgPayload>(&mut self, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
@@ -69,7 +82,7 @@ impl MeshNodeFSM {
                 mode,
                 strategy,
             } => {
-                self.handshakes.insert(
+                self.connections.insert(
                     with,
                     HandshakeContext {
                         fsm: HandshakeFSM::new(strategy),
@@ -82,7 +95,7 @@ impl MeshNodeFSM {
             Input::PeerLeaving { peer } => self.handle_peer_leaving(peer),
             Input::MessageReceived { peer_from, data } => self.handle_message(peer_from, data),
             Input::Send { peer_to, data } => {
-                if self.connected.contains(&peer_to) {
+                if self.is_connected(&peer_to) {
                     Ok(vec![Output::SendMessage {
                         peer_to,
                         data: data,
@@ -93,7 +106,10 @@ impl MeshNodeFSM {
             }
             Input::Broadcast { data } => {
                 let mut out = vec![];
-                for peer in &self.connected {
+                for (peer, _) in &self.connections {
+                    if !self.is_connected(peer) {
+                        continue;
+                    }
                     out.push(Output::SendMessage {
                         peer_to: peer.clone(),
                         data: data.clone(),
@@ -112,11 +128,10 @@ impl MeshNodeFSM {
         &mut self,
         peer: PeerID,
     ) -> Result<Vec<Output<Msg>>> {
-        self.handshakes.remove(&peer);
-        let was_connected = self.connected.remove(&peer);
+        let was_connected = self.connections.remove(&peer);
 
         let mut out = Vec::new();
-        if was_connected {
+        if was_connected.is_some() {
             out.push(Output::PeerDisconnected { peer });
         }
         Ok(out)
