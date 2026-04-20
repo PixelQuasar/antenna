@@ -3,6 +3,8 @@ use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use biscuit_auth::{Algorithm, PublicKey};
 use serde::{Deserialize, ser::SerializeStruct};
 
+use crate::PeerID;
+
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize)]
 pub struct SignalingPayload {
     pub sdp: String,
@@ -21,6 +23,10 @@ impl SignalingPayload {
     pub fn to_base64(&self) -> anyhow::Result<String> {
         let json = serde_json::to_string(&self).map_err(|e| anyhow!(e))?;
         Ok(BASE64_URL_SAFE_NO_PAD.encode(json))
+    }
+
+    pub fn peer_id(&self) -> PeerID {
+        PeerID::new(BASE64_URL_SAFE_NO_PAD.encode(self.pubkey.to_bytes()))
     }
 }
 

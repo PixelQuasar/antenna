@@ -33,6 +33,7 @@ impl HandshakeFSM {
         }
     }
 
+    /// Host created in relay flow, knows its joiner from the initiation
     pub fn host() -> Self {
         Self {
             strategy: HandshakeStrategy::Host,

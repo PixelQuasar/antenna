@@ -37,34 +37,31 @@ impl ChatApp {
         Ok(ChatApp { peer })
     }
 
+    #[wasm_bindgen(js_name = myId)]
+    pub fn my_id(&self) -> String {
+        self.peer.my_id().to_string()
+    }
+
     #[wasm_bindgen(js_name = startAsHost)]
     pub async fn start_as_host(&mut self, remote_id: String) -> Result<String, JsValue> {
         self.peer
-            .start(PeerID::new(remote_id))
+            .start(remote_id)
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
     #[wasm_bindgen(js_name = acceptOffer)]
-    pub async fn accept_offer(
-        &mut self,
-        remote_id: String,
-        offer_sdp: String,
-    ) -> Result<String, JsValue> {
+    pub async fn accept_offer(&mut self, offer_sdp: String) -> Result<String, JsValue> {
         self.peer
-            .receive_offer(PeerID::new(remote_id), offer_sdp)
+            .receive_offer(offer_sdp)
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
     #[wasm_bindgen(js_name = acceptAnswer)]
-    pub async fn accept_answer(
-        &mut self,
-        remote_id: String,
-        answer_sdp: String,
-    ) -> Result<(), JsValue> {
+    pub async fn accept_answer(&mut self, answer_sdp: String) -> Result<(), JsValue> {
         self.peer
-            .receive_answer(PeerID::new(remote_id), answer_sdp)
+            .receive_answer(answer_sdp)
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }

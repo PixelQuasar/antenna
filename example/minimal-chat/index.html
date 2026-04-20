@@ -94,20 +94,28 @@
         <label>Local peer</label>
         <div class="id-row">
             <input id="turn" placeholder="TURN addr (optional in UI, demo default is used)" />
-        </div>
-        <div class="id-row mt">
-            <input id="my-id" placeholder="Your ID (e.g. alice)" />
             <button onclick="initApp()">Initialize</button>
         </div>
         <div class="muted mt">Initialize once, then reuse the controls below to connect more peers.</div>
     </div>
 
+    <div class="section hidden" id="my-id-section">
+        <label>Your Peer ID</label>
+        <div class="id-row">
+            <input id="my-id-display" readonly />
+            <button onclick="copyMyId()">Copy</button>
+        </div>
+        <div class="muted mt">Share this ID with the peer you want to connect to.</div>
+    </div>
+
     <div class="section hidden" id="connect-section">
         <label>Manual bootstrap</label>
         <div class="id-row">
-            <input id="target-id" placeholder="Target peer ID (e.g. bob or charlie)" />
+            <input id="target-id" placeholder="Target peer ID" />
             <button onclick="chooseHost()">Create offer</button>
-            <button onclick="chooseJoiner()">Accept offer</button>
+        </div>
+        <div class="id-row mt">
+            <button onclick="chooseJoiner()" style="width:100%">Accept offer from peer</button>
         </div>
     </div>
 
@@ -158,7 +166,7 @@
 import init, { ChatApp } from './pkg/minimal_chat_example.js';
 
 let app;
-let myId = '';
+let pendingTargetId = '';
 
 await init();
 
@@ -186,17 +194,10 @@ function decodeBase64(str) {
     }
 }
 
-function currentTargetId() {
-    return $('target-id').value.trim();
-}
-
 function ensureTargetId() {
-    const targetId = currentTargetId();
+    const targetId = $('target-id').value.trim();
     if (!targetId) {
         throw new Error('Enter target peer ID first');
-    }
-    if (targetId === myId) {
-        throw new Error('Target peer ID must be different from your ID');
     }
     return targetId;
 }
@@ -240,15 +241,13 @@ function resetHandshakePanels() {
 }
 
 window.initApp = function() {
-    const enteredMyId = $('my-id').value.trim();
     const turn = $('turn').value.trim() || 'turn:demo-voicechat.quasarity.com:3478';
-
-    if (!enteredMyId) {
-        return alert('Please enter your peer ID');
-    }
 
     try {
         app = new ChatApp(turn);
+
+        const myId = app.myId();
+        $('my-id-display').value = myId;
 
         app.onConnected(() => {
             status('At least one peer is connected');
@@ -283,8 +282,9 @@ window.initApp = function() {
         });
 
         $('setup-section').classList.add('hidden');
+        $('my-id-section').classList.remove('hidden');
         $('connect-section').classList.remove('hidden');
-        status('Initialized as ' + myId + '. Choose a target peer to bootstrap.');
+        status('Initialized. Share your Peer ID, then bootstrap with a peer.');
         log('My ID: ' + myId);
         updatePeerViews();
     } catch (e) {
@@ -295,22 +295,21 @@ window.initApp = function() {
 
 window.chooseHost = async function() {
     resetHandshakePanels();
-    let targetId;
     try {
-        targetId = ensureTargetId();
+        pendingTargetId = ensureTargetId();
     } catch (e) {
         status('Error: ' + e.message);
         return;
     }
 
     $('host-flow').classList.remove('hidden');
-    status('Generating offer for ' + targetId + '…');
+    status('Generating offer for ' + pendingTargetId + '…');
 
     try {
-        const offer = await app.startAsHost(targetId);
+        const offer = await app.startAsHost(pendingTargetId);
         $('offer-out').value = encodeBase64(offer);
-        status('Offer ready for ' + targetId + ' — copy and send it');
-        log('Prepared host offer for ' + targetId);
+        status('Offer ready for ' + pendingTargetId + ' — copy and send it');
+        log('Prepared host offer for ' + pendingTargetId);
     } catch (e) {
         status('Error: ' + e);
         console.error(e);
@@ -319,13 +318,8 @@ window.chooseHost = async function() {
 
 window.chooseJoiner = function() {
     resetHandshakePanels();
-    try {
-        const targetId = ensureTargetId();
-        $('joiner-flow').classList.remove('hidden');
-        status('Paste the offer received from ' + targetId);
-    } catch (e) {
-        status('Error: ' + e.message);
-    }
+    $('joiner-flow').classList.remove('hidden');
+    status('Paste the offer received from your peer');
 };
 
 window.hostAcceptAnswer = async function() {
@@ -334,14 +328,12 @@ window.hostAcceptAnswer = async function() {
         return alert('Paste the answer first');
     }
 
-    let targetId;
     try {
-        targetId = ensureTargetId();
-        status('Applying answer from ' + targetId + '…');
+        status('Applying answer from ' + pendingTargetId + '…');
         const answer = decodeBase64(answerBase64);
-        await app.acceptAnswer(targetId, answer);
-        status('Answer accepted for ' + targetId);
-        log('Accepted answer from ' + targetId);
+        await app.acceptAnswer(answer);
+        status('Answer accepted from ' + pendingTargetId);
+        log('Accepted answer from ' + pendingTargetId);
     } catch (e) {
         status('Error: ' + e);
         console.error(e);
@@ -354,15 +346,13 @@ window.joinerAcceptOffer = async function() {
         return alert('Paste the offer first');
     }
 
-    let targetId;
     try {
-        targetId = ensureTargetId();
-        status('Generating answer for ' + targetId + '…');
+        status('Generating answer…');
         const offer = decodeBase64(offerBase64);
-        const answer = await app.acceptOffer(targetId, offer);
+        const answer = await app.acceptOffer(offer);
         $('answer-out').value = encodeBase64(answer);
-        status('Answer ready for ' + targetId + ' — copy and send it back');
-        log('Prepared joiner answer for ' + targetId);
+        status('Answer ready — copy and send it back');
+        log('Prepared joiner answer');
     } catch (e) {
         status('Error: ' + e);
         console.error(e);
@@ -384,6 +374,10 @@ window.sendMsg = async function() {
         status('Send error: ' + e);
         console.error(e);
     }
+};
+
+window.copyMyId = function() {
+    navigator.clipboard.writeText($('my-id-display').value);
 };
 
 $('msg').addEventListener('keydown', e => {

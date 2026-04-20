@@ -58,13 +58,14 @@ where
         self.callbacks.borrow_mut().unsubscribe(id)
     }
 
-    pub async fn start(&mut self, peer_id: PeerID) -> Result<String> {
+    pub async fn start(&mut self, remote_id: String) -> Result<String> {
         {
+            let remote_id = PeerID::new(remote_id);
             let mut driver = self.driver.borrow_mut();
-            driver.init_host(peer_id.clone()).await?;
+            driver.init_host(remote_id.clone()).await?;
             driver
                 .execute(Input::Handshake {
-                    from: peer_id.clone(),
+                    from: remote_id,
                     event: HandshakeInput::Init,
                 })
                 .await?;
@@ -83,10 +84,11 @@ where
         offer.to_base64()
     }
 
-    pub async fn receive_offer(&mut self, peer_id: PeerID, offer: String) -> Result<String> {
+    pub async fn receive_offer(&mut self, offer: String) -> Result<String> {
         {
             let offer = SignalingPayload::from_base64(&offer)?;
             let mut driver = self.driver.borrow_mut();
+            let peer_id = offer.peer_id();
             driver.init_joiner(peer_id.clone()).await?;
             driver
                 .execute(Input::Handshake {
@@ -109,12 +111,12 @@ where
         answer.to_base64()
     }
 
-    pub async fn receive_answer(&mut self, peer_id: PeerID, answer: String) -> Result<()> {
+    pub async fn receive_answer(&mut self, answer: String) -> Result<()> {
         let answer = SignalingPayload::from_base64(&answer)?;
         self.driver
             .borrow_mut()
             .execute(Input::Handshake {
-                from: peer_id,
+                from: answer.peer_id(),
                 event: HandshakeInput::Answer(answer),
             })
             .await?;

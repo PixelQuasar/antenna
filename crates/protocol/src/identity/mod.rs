@@ -35,7 +35,7 @@ impl Identity {
     }
 
     pub fn pubkey(&self) -> PublicKey {
-        self.keypair.public().clone()
+        self.keypair.public()
     }
 
     pub fn create_token(&self, for_peer: &PeerID) -> Result<Biscuit> {
