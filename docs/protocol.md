@@ -33,7 +33,7 @@ sequenceDiagram
         BD ->> B: HandshakeInput::Offer
         B ->> BD: HandshakeOutput::RequestSDPAnswer
         BD ->> B: HandshakeInput::AnswerCreated
-        B ->> B: write offer to metadata containing SDP, public key and biscuit token
+        B ->> B: write answer to metadata containing SDP, public key and biscuit token
     end
 
     BD ->> AD: get answer from FSM metadata and transfer it back to A
