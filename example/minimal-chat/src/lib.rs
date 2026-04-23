@@ -106,6 +106,11 @@ impl ChatApp {
         self.peer.set_js_on_peer_disconnected(cb);
     }
 
+    #[wasm_bindgen(js_name = onPeerAvailable)]
+    pub fn js_on_peer_available(&mut self, cb: js_sys::Function) {
+        self.peer.set_js_on_peer_available(cb);
+    }
+
     #[wasm_bindgen(js_name = connectedPeers)]
     pub fn connected_peers(&self) -> js_sys::Array {
         self.peer

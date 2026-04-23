@@ -12,15 +12,16 @@ type MessageCallback<Msg> = fn(PeerID, Msg);
 type DisconnectedCallback = fn();
 type PeerConnectedCallback = fn(PeerID);
 type PeerDisconnectedCallback = fn(PeerID);
+type PeerAvailableCallback = fn();
 
 #[derive(Clone)]
 pub enum RtcEvent<Msg: UserMsgPayload> {
     Connected,
     UserMessage(PeerID, Msg),
-
     Disconnected,
     PeerConnected(PeerID),
     PeerDisconnected(PeerID),
+    PeerAvailable,
 }
 
 pub enum Rtc<Msg: UserMsgPayload> {
@@ -29,11 +30,13 @@ pub enum Rtc<Msg: UserMsgPayload> {
     Disconnected(DisconnectedCallback),
     PeerConnected(PeerConnectedCallback),
     PeerDisconnected(PeerDisconnectedCallback),
+    PeerAvailable(PeerAvailableCallback),
     JsConnected(js_sys::Function),
     JsUserMessage(js_sys::Function),
     JsDisconnected(js_sys::Function),
     JsPeerConnected(js_sys::Function),
     JsPeerDisconnected(js_sys::Function),
+    JsPeerAvailable(js_sys::Function),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -43,6 +46,7 @@ enum SubscriptionKind {
     Disconnected,
     PeerConnected,
     PeerDisconnected,
+    PeerAvailable,
 }
 
 impl<Msg: UserMsgPayload> Rtc<Msg> {
@@ -55,6 +59,7 @@ impl<Msg: UserMsgPayload> Rtc<Msg> {
             Self::PeerDisconnected(_) | Self::JsPeerDisconnected(_) => {
                 SubscriptionKind::PeerDisconnected
             }
+            Self::PeerAvailable(_) | Self::JsPeerAvailable(_) => SubscriptionKind::PeerAvailable,
         }
     }
 }
@@ -67,6 +72,7 @@ impl<Msg: UserMsgPayload> RtcEvent<Msg> {
             Self::Disconnected => SubscriptionKind::Disconnected,
             Self::PeerConnected(_) => SubscriptionKind::PeerConnected,
             Self::PeerDisconnected(_) => SubscriptionKind::PeerDisconnected,
+            Self::PeerAvailable => SubscriptionKind::PeerAvailable,
         }
     }
 }
@@ -177,6 +183,10 @@ where
                 (Rtc::JsPeerDisconnected(cb), RtcEvent::PeerDisconnected(peer)) => {
                     let peer = js_sys::JsString::from(peer.as_str());
                     cb.call1(&JsValue::NULL, &peer).ok();
+                }
+                (Rtc::PeerAvailable(cb), RtcEvent::PeerAvailable) => cb(),
+                (Rtc::JsPeerAvailable(cb), RtcEvent::PeerAvailable) => {
+                    cb.call0(&JsValue::NULL).ok();
                 }
                 _ => {}
             }

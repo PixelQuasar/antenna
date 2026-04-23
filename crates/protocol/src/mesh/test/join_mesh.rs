@@ -168,6 +168,7 @@ fn establish_relay_connection(
                 }
                 Output::ReceiveMessage { .. } => {}
                 Output::InitOpenOffer => {}
+                Output::PeerAvailable => {}
             }
         }
     }

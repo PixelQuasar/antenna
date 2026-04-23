@@ -32,4 +32,7 @@ pub enum Output<Msg: UserMsgPayload> {
 
     /// Notify about new peer disconnected to mesh
     PeerDisconnected { peer: PeerID },
+
+    /// All relay handshakes complete — this peer is fully meshed and may send messages
+    PeerAvailable,
 }

@@ -116,6 +116,14 @@ impl<Msg: UserMsgPayload> Driver<Msg> {
                     vec![]
                 }
                 Output::PeerAppeared { .. } => vec![],
+                Output::PeerAvailable => {
+                    driver
+                        .borrow()
+                        .callbacks
+                        .borrow()
+                        .emit(RtcEvent::PeerAvailable)?;
+                    vec![]
+                }
             };
             queue.extend(new_outputs);
         }

@@ -196,9 +196,6 @@ function updatePeerViews() {
         $('peer-list').innerHTML = peers.map(peer => `<li>${peer}</li>`).join('');
     }
 
-    const canSend = peers.length > 0;
-    $('msg').disabled = !canSend;
-    $('send-btn').disabled = !canSend;
 }
 
 function schedulePeerViewUpdate() {
@@ -254,6 +251,11 @@ window.initApp = function() {
             status('Peer disconnected: ' + peer);
             log('--- peer disconnected: ' + peer + ' ---');
             schedulePeerViewUpdate();
+        });
+
+        app.onPeerAvailable(() => {
+            $('msg').disabled = false;
+            $('send-btn').disabled = false;
         });
 
         $('setup-section').classList.add('hidden');

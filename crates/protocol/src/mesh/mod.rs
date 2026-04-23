@@ -38,6 +38,9 @@ pub struct MeshNodeFSM {
 
     ///
     metadata: MeshMetadata,
+
+    /// True once Output::Available has been emitted (one-shot)
+    available: bool,
 }
 
 impl MeshNodeFSM {
@@ -52,11 +55,16 @@ impl MeshNodeFSM {
             connections: HashMap::new(),
             pending_handshake: None,
             metadata: MeshMetadata::default(),
+            available: false,
         }
     }
 
     pub fn id(&self) -> &PeerID {
         &self.id
+    }
+
+    pub fn is_available(&self) -> bool {
+        self.available
     }
 
     pub fn is_connected(&self, peer: &PeerID) -> bool {
@@ -273,6 +281,21 @@ impl MeshNodeFSM {
                     outputs.push(Output::PeerDisconnected { peer: peer.clone() });
                 }
                 _ => {}
+            }
+        }
+
+        if !self.available {
+            let in_progress_relays = self
+                .connections
+                .values()
+                .filter(|ctx| {
+                    matches!(ctx.mode, HandshakeMode::Relay(_))
+                        && *ctx.fsm.state() != HandshakeState::Connected
+                })
+                .count();
+            if in_progress_relays == 0 && !self.connected_peers().is_empty() {
+                self.available = true;
+                outputs.push(Output::PeerAvailable);
             }
         }
 
