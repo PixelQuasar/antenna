@@ -4,10 +4,7 @@ mod test {
 
     use crate::{
         MeshNodeFSM, PeerID,
-        mesh::test::{
-            drive_bootstrap_handshake::drive_bootstrap_handshake,
-            join_mesh::{assert_full_mesh_connectivity, join_mesh},
-        },
+        test::{assert_full_mesh_connectivity, drive_bootstrap_handshake, join_mesh},
     };
 
     #[test]

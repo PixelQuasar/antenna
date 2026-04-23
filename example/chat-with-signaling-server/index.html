@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antenna P2P Chat</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+        .container { max-width: 680px; width: 100%; }
+        h1 { margin-bottom: 24px; font-size: 22px; }
+        .section { margin-bottom: 20px; }
+        label {
+            display: block;
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #16213e;
+            color: #eee;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        input:focus { outline: none; border-color: #e94560; }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #fff;
+            background: #e94560;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+        button:hover { opacity: 0.85; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .status {
+            padding: 10px;
+            background: #16213e;
+            border-radius: 6px;
+            font-size: 14px;
+            border-left: 3px solid #e94560;
+        }
+        .log {
+            background: #0f3460;
+            border-radius: 6px;
+            padding: 12px;
+            height: 220px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+        }
+        .chat-input { display: flex; gap: 8px; margin-top: 8px; }
+        .chat-input input { flex: 1; }
+        .hidden { display: none !important; }
+        .mt { margin-top: 8px; }
+        .row { display: flex; gap: 8px; }
+        .row input { flex: 1; }
+        .muted { color: #888; font-size: 12px; }
+        ul.peer-list {
+            list-style: none;
+            padding: 10px;
+            background: #16213e;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        ul.peer-list li + li { margin-top: 6px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Antenna P2P Chat with signaling server</h1>
+
+    <div class="section" id="setup-section">
+        <label>Initialize</label>
+        <div class="row">
+            <input id="turn" placeholder="TURN url (optional, demo default is used)" />
+            <button onclick="initApp()">Initialize</button>
+        </div>
+    </div>
+
+    <div class="section hidden" id="join-section">
+        <label>Join room</label>
+        <div class="row">
+            <input id="ws-url" placeholder="ws://localhost:8080/ws" />
+        </div>
+        <div class="row mt">
+            <input id="room-id" placeholder="room name" />
+            <button id="join-btn" onclick="joinRoom()">Join</button>
+        </div>
+        <div class="muted mt">Each join bootstraps one new peer. Repeat with a new room name to connect more.</div>
+    </div>
+
+    <div class="section">
+        <div class="status" id="status">Initialize to start</div>
+    </div>
+
+    <div class="section hidden" id="mesh-section">
+        <label>Connected peers</label>
+        <ul class="peer-list" id="peer-list"></ul>
+    </div>
+
+    <div class="section hidden" id="chat-section">
+        <label>Broadcast messages</label>
+        <div class="log" id="log"></div>
+        <div class="chat-input">
+            <input id="msg" placeholder="Type a message for the whole mesh…" disabled />
+            <button id="send-btn" onclick="sendMsg()" disabled>Broadcast</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+import init, { ChatApp } from './pkg/chat_with_signaling_server.js';
+
+await init();
+
+const $ = id => document.getElementById(id);
+let app;
+
+function status(text) {
+    $('status').textContent = text;
+}
+
+function log(text) {
+    const el = $('log');
+    el.textContent += (el.textContent ? '\n' : '') + text;
+    el.scrollTop = el.scrollHeight;
+}
+
+function updatePeerViews() {
+    const peers = Array.from(app.connectedPeers());
+    $('mesh-section').classList.remove('hidden');
+    $('chat-section').classList.remove('hidden');
+    $('peer-list').innerHTML = peers.length
+        ? peers.map(p => `<li>${p}</li>`).join('')
+        : '<li>No connected peers yet</li>';
+}
+
+window.initApp = function() {
+    const turn = $('turn').value.trim() || 'turn:demo-voicechat.quasarity.com:3478';
+
+    try {
+        app = new ChatApp(turn);
+
+        app.onMessage((peer, data) => {
+            const text = typeof data === 'string' ? data
+                : (data?.text ?? JSON.stringify(data));
+            log(peer + ': ' + text);
+            updatePeerViews();
+        });
+
+        app.onPeerConnected((peer) => {
+            status('Peer connected: ' + peer);
+            log('--- peer connected: ' + peer + ' ---');
+            updatePeerViews();
+        });
+
+        app.onPeerDisconnected((peer) => {
+            status('Peer disconnected: ' + peer);
+            log('--- peer disconnected: ' + peer + ' ---');
+            updatePeerViews();
+        });
+
+        app.onConnected(() => {
+            status('Mesh connected');
+            log('--- mesh connected ---');
+        });
+
+        app.onDisconnected(() => {
+            status('All peers disconnected');
+            log('--- mesh disconnected ---');
+            updatePeerViews();
+        });
+
+        app.onPeerAvailable(() => {
+            $('msg').disabled = false;
+            $('send-btn').disabled = false;
+        });
+
+        $('setup-section').classList.add('hidden');
+        $('join-section').classList.remove('hidden');
+        status('Initialized. Enter a signaling server URL and room name to connect.');
+        updatePeerViews();
+    } catch (e) {
+        status('Error: ' + e);
+        console.error(e);
+    }
+};
+
+window.joinRoom = async function() {
+    const wsUrl = $('ws-url').value.trim();
+    const roomId = $('room-id').value.trim();
+    if (!wsUrl) return status('Enter a signaling server URL');
+    if (!roomId) return status('Enter a room name');
+
+    $('join-btn').disabled = true;
+    try {
+        status('Connecting to signaling server…');
+        await app.connect(wsUrl);
+        status('Joining room "' + roomId + '"…');
+        await app.join(roomId);
+        status('Handshake done — waiting for data channel…');
+        $('room-id').value = '';
+    } catch (e) {
+        status('Error: ' + e);
+        console.error(e);
+    } finally {
+        $('join-btn').disabled = false;
+    }
+};
+
+window.sendMsg = async function() {
+    const input = $('msg');
+    const text = input.value.trim();
+    if (!text) return;
+
+    try {
+        await app.broadcast(text);
+        log('You: ' + text);
+        input.value = '';
+    } catch (e) {
+        status('Send error: ' + e);
+        console.error(e);
+    }
+};
+
+$('msg').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendMsg();
+});
+
+log('Ready');
+</script>
+
+</body>
+</html>

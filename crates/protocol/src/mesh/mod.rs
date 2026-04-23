@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use crate::{
     HandshakeFSM, HandshakeInput, HandshakeMode, HandshakeState, HandshakeStrategy, Identity,
     Input, MsgPayload, Output, PeerID, RelayPayload, SignalingPayload, UserMsgPayload,

@@ -9,6 +9,7 @@ mod webrtc;
 pub use dispatcher::{CallbackId, Dispatcher, Rtc, RtcCallbacks, RtcEvent};
 pub use driver::Driver;
 pub use peer::Peer;
+pub use signaling::SignalingClient;
 pub use storage::Storage;
 pub use utils::{EXECUTE_FUEL, IceServerConfig, STORAGE_IDENTITY_KEY};
 pub use webrtc::ConnectionManager;

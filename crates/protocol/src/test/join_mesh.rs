@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::{
     HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID,
-    mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake,
+    test::drive_bootstrap_handshake,
 };
 
 pub(crate) fn join_mesh(

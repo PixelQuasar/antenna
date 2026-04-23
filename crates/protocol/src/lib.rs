@@ -2,6 +2,7 @@ mod handshake;
 mod identity;
 mod mesh;
 mod state;
+#[cfg(test)]
 mod test;
 mod utils;
 

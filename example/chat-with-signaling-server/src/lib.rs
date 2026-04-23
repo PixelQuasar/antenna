@@ -1,4 +1,4 @@
-use antenna::{IceServerConfig, Peer, PeerID, Rtc};
+use antenna::{IceServerConfig, Peer, PeerID, Rtc, SignalingClient};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -10,6 +10,7 @@ struct Message {
 #[wasm_bindgen]
 pub struct ChatApp {
     peer: Peer<Message>,
+    signaling: Option<SignalingClient>,
 }
 
 #[wasm_bindgen]
@@ -34,7 +35,19 @@ impl ChatApp {
         let mut peer = Peer::with_ice_servers(ice_servers);
         peer.subscribe(Rtc::UserMessage(Self::on_message));
 
-        Ok(ChatApp { peer })
+        Ok(ChatApp {
+            peer,
+            signaling: None,
+        })
+    }
+
+    #[wasm_bindgen]
+    pub async fn connect(&mut self, ws_url: &str) -> Result<(), JsValue> {
+        let signaling = SignalingClient::connect(ws_url)
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        self.signaling = Some(signaling);
+        Ok(())
     }
 
     #[wasm_bindgen(js_name = myId)]
@@ -42,28 +55,18 @@ impl ChatApp {
         self.peer.my_id().to_string()
     }
 
-    #[wasm_bindgen(js_name = startAsHost)]
-    pub async fn start_as_host(&mut self) -> Result<String, JsValue> {
-        self.peer
-            .start()
-            .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))
-    }
-
-    #[wasm_bindgen(js_name = acceptOffer)]
-    pub async fn accept_offer(&mut self, offer_sdp: &str) -> Result<String, JsValue> {
-        self.peer
-            .receive_offer(offer_sdp.into())
-            .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))
-    }
-
-    #[wasm_bindgen(js_name = acceptAnswer)]
-    pub async fn accept_answer(&mut self, answer_sdp: &str) -> Result<(), JsValue> {
-        self.peer
-            .receive_answer(answer_sdp)
-            .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))
+    #[wasm_bindgen]
+    pub async fn join(&mut self, room_id: &str) -> Result<(), JsValue> {
+        if let Some(signaling) = &mut self.signaling {
+            signaling
+                .join(room_id, &mut self.peer)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))
+        } else {
+            Err(JsValue::from_str(
+                "Signaling client instance not found: try calling .connect(url) method first",
+            ))
+        }
     }
 
     #[wasm_bindgen(js_name = broadcast)]

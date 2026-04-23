@@ -18,3 +18,4 @@ futures.workspace = true
 biscuit-auth.workspace = true
 base64.workspace = true
 getrandom.workspace = true
+antenna-client-shared.workspace = true

@@ -1,8 +1,7 @@
 #[cfg(test)]
 mod test {
     use crate::{
-        HandshakeInput, Input, MeshNodeFSM, MsgPayload, Output,
-        mesh::test::drive_bootstrap_handshake::drive_bootstrap_handshake,
+        HandshakeInput, Input, MeshNodeFSM, MsgPayload, Output, test::drive_bootstrap_handshake,
     };
     use serde::{Deserialize, Serialize};
 

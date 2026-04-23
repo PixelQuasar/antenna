@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "crates/protocol",
     "crates/antenna",
-    "crates/shared",
     "crates/client/*",
     "crates/signaling-server",
     "example/*",
@@ -17,9 +16,6 @@ path = "crates/antenna"
 
 [workspace.dependencies.antenna-protocol]
 path = "crates/protocol"
-
-[workspace.dependencies.antenna-shared]
-path = "crates/shared"
 
 [workspace.dependencies.antenna-client-web]
 path = "crates/client/web"
@@ -73,6 +69,14 @@ version = "0.8"
 version = "0.2"
 features = ["js"]
 
+[workspace.dependencies.axum]
+version = "0.8.9"
+features = ["ws"]
+
+[workspace.dependencies.tokio]
+version = "1.0.0"
+features = ["full"]
+
 [workspace.dependencies.web-sys]
 version = "0.3"
 features = [
@@ -95,6 +99,7 @@ features = [
     "console",
     "Window",
     "Storage",
+    "WebSocket",
 ]
 
 [profile.release]

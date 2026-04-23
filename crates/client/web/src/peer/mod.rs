@@ -65,7 +65,7 @@ where
             .to_base64()
     }
 
-    pub async fn receive_offer(&mut self, offer: String) -> Result<String> {
+    pub async fn receive_offer(&mut self, offer: &str) -> Result<String> {
         let offer = SignalingPayload::from_base64(&offer)?;
         let peer_id = offer.peer_id();
         Driver::execute(
@@ -95,7 +95,7 @@ where
             .to_base64()
     }
 
-    pub async fn receive_answer(&mut self, answer: String) -> Result<()> {
+    pub async fn receive_answer(&mut self, answer: &str) -> Result<()> {
         let answer = SignalingPayload::from_base64(&answer)?;
         let peer_id = answer.peer_id();
         Driver::execute(
