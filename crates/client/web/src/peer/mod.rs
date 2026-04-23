@@ -21,7 +21,7 @@ use anyhow::{Context, Result};
 /// Transfer offer and answer between handshaking peers is user-defined only for now.
 pub struct Peer<Msg>
 where
-    Msg: UserMsgPayload,
+    Msg: UserMsgPayload + 'static,
 {
     driver: Rc<RefCell<Driver<Msg>>>,
     callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
@@ -29,7 +29,7 @@ where
 
 impl<Msg> Peer<Msg>
 where
-    Msg: UserMsgPayload,
+    Msg: UserMsgPayload + 'static,
 {
     pub fn new() -> Self {
         Self::with_ice_servers(IceServerConfig::default_stun())

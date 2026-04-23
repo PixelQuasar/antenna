@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 ///
 #[derive(Default, Clone)]
@@ -33,8 +33,8 @@ pub struct MeshNodeFSM {
     /// Map of handshake automati, contains state of current handshakes with other sessions
     connections: HashMap<PeerID, HandshakeContext>,
 
-    /// Bootstrap open-offer handshake before the joiner's peer ID is known
-    pending_handshake: Option<HandshakeContext>,
+    /// Pool of open-offer handshakes before the joiner's peer ID is known
+    pending_handshakes: VecDeque<HandshakeContext>,
 
     ///
     metadata: MeshMetadata,
@@ -53,7 +53,7 @@ impl MeshNodeFSM {
             id: PeerID::new(BASE64_URL_SAFE_NO_PAD.encode(identity.pubkey().to_bytes())),
             identity,
             connections: HashMap::new(),
-            pending_handshake: None,
+            pending_handshakes: VecDeque::new(),
             metadata: MeshMetadata::default(),
             available: false,
         }
@@ -107,17 +107,15 @@ impl MeshNodeFSM {
     }
 
     pub fn handle_init_open_offer<Msg: UserMsgPayload>(&mut self) -> Result<Vec<Output<Msg>>> {
-        self.pending_handshake = Some(HandshakeContext {
+        let mut ctx = HandshakeContext {
             fsm: HandshakeFSM::new(HandshakeStrategy::Host),
             mode: HandshakeMode::Bootstrap,
-        });
-        self.pending_handshake
-            .as_mut()
-            .unwrap()
-            .fsm
-            .process(HandshakeInput::Init)?;
+        };
+        ctx.fsm.process(HandshakeInput::Init)?;
+        self.pending_handshakes.push_back(ctx);
         Ok(vec![Output::InitOpenOffer])
     }
+
     pub fn handle_open_offer_created<Msg: UserMsgPayload>(
         &mut self,
         sdp: String,
@@ -127,8 +125,8 @@ impl MeshNodeFSM {
             pubkey: self.identity.pubkey(),
             token: self.identity.create_token()?.to_vec()?,
         });
-        self.pending_handshake
-            .as_mut()
+        self.pending_handshakes
+            .back_mut()
             .ok_or_else(|| anyhow!("No pending open offer"))?
             .fsm
             .process(HandshakeInput::OfferCreated(sdp))?;
@@ -211,18 +209,19 @@ impl MeshNodeFSM {
         peer: PeerID,
         event: HandshakeInput,
     ) -> Result<Vec<Output<Msg>>> {
+        let mut outputs: Vec<Output<Msg>> = vec![];
+
         if !self.connections.contains_key(&peer) {
             let HandshakeInput::Answer(_) = &event else {
                 return Err(anyhow!("Handshake instance with peer not found"));
             };
             let ctx = self
-                .pending_handshake
-                .take()
+                .pending_handshakes
+                .pop_front()
                 .ok_or_else(|| anyhow!("Pending handshake not found"))?;
             self.connections.insert(peer.clone(), ctx);
+            outputs.push(Output::InitOpenOffer);
         }
-
-        let mut outputs: Vec<Output<Msg>> = vec![];
 
         let side_effects_outs = self.handle_side_effects(&peer, &event)?;
         outputs.extend(side_effects_outs);

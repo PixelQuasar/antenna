@@ -1,6 +1,7 @@
 mod dispatcher;
 mod driver;
 mod peer;
+mod signaling;
 mod storage;
 mod utils;
 mod webrtc;

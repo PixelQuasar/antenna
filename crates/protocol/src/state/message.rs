@@ -2,9 +2,9 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::{PeerID, SignalingPayload};
 
-pub trait UserMsgPayload: Serialize + DeserializeOwned + Clone + 'static {}
+pub trait UserMsgPayload: Serialize + DeserializeOwned + Clone {}
 
-impl<T> UserMsgPayload for T where T: Serialize + DeserializeOwned + Clone + 'static {}
+impl<T> UserMsgPayload for T where T: Serialize + DeserializeOwned + Clone {}
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum RelayPayload {

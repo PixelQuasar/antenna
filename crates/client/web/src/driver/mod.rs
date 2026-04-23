@@ -15,15 +15,15 @@ use std::{
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
-pub struct Driver<Msg: UserMsgPayload> {
+pub struct Driver<Msg: UserMsgPayload + 'static> {
     fsm: MeshNodeFSM,
     connections: HashMap<PeerID, Rc<ConnectionManager>>,
-    pending: Option<Rc<ConnectionManager>>,
+    pending: VecDeque<Rc<ConnectionManager>>,
     ice_servers: Vec<IceServerConfig>,
     callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
 }
 
-impl<Msg: UserMsgPayload> Driver<Msg> {
+impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
     pub fn new(
         ice_servers: Vec<IceServerConfig>,
         callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
@@ -36,7 +36,7 @@ impl<Msg: UserMsgPayload> Driver<Msg> {
         Self {
             fsm,
             connections: HashMap::new(),
-            pending: None,
+            pending: VecDeque::new(),
             ice_servers,
             callbacks,
         }
@@ -83,9 +83,7 @@ impl<Msg: UserMsgPayload> Driver<Msg> {
                 Output::Handshake { peer, event } => {
                     Self::execute_handshake(driver.clone(), Some(peer), event).await?
                 }
-                Output::SendMessage { peer_to, data } => {
-                    driver.borrow().send(&peer_to, &data)?
-                }
+                Output::SendMessage { peer_to, data } => driver.borrow().send(&peer_to, &data)?,
                 Output::ReceiveMessage { peer_from, data } => {
                     if let MsgPayload::User(data) = data {
                         driver
@@ -167,7 +165,7 @@ impl<Msg: UserMsgPayload> Driver<Msg> {
         let outputs = driver.borrow_mut().fsm.process(fsm_input)?;
 
         match peer {
-            None => driver.borrow_mut().pending = Some(conn),
+            None => driver.borrow_mut().pending.push_back(conn),
             Some(peer_id) => {
                 driver.borrow_mut().connections.insert(peer_id, conn);
             }
@@ -209,7 +207,7 @@ impl<Msg: UserMsgPayload> Driver<Msg> {
         {
             let mut d = driver.borrow_mut();
             if !d.connections.contains_key(&peer_id) {
-                if let Some(pending) = d.pending.take() {
+                if let Some(pending) = d.pending.pop_front() {
                     d.connections.insert(peer_id.clone(), pending);
                 }
             }
@@ -236,7 +234,7 @@ impl<Msg: UserMsgPayload> Driver<Msg> {
     fn execute_close(&mut self, peer: Option<PeerID>) -> Result<Vec<Output<Msg>>> {
         match peer {
             None => {
-                if let Some(conn) = self.pending.take() {
+                for conn in self.pending.drain(..) {
                     conn.close();
                 }
             }
