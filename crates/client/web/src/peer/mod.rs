@@ -6,6 +6,8 @@ use antenna_protocol::{
     UserMsgPayload,
 };
 use anyhow::{Context, Result};
+use wasm_bindgen::JsValue;
+use wasm_bindgen_futures::spawn_local;
 
 /// Implementation of antenna protocol peer behavior.
 ///
@@ -25,6 +27,18 @@ where
 {
     driver: Rc<RefCell<Driver<Msg>>>,
     callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
+}
+
+impl<Msg> Clone for Peer<Msg>
+where
+    Msg: UserMsgPayload + 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            driver: self.driver.clone(),
+            callbacks: self.callbacks.clone(),
+        }
+    }
 }
 
 impl<Msg> Peer<Msg>
@@ -53,7 +67,7 @@ where
         self.callbacks.borrow_mut().unsubscribe(id)
     }
 
-    pub async fn start(&mut self) -> Result<String> {
+    pub async fn start(&self) -> Result<String> {
         Driver::execute(self.driver.clone(), Input::InitOpenOffer).await?;
 
         self.driver
@@ -65,7 +79,7 @@ where
             .to_base64()
     }
 
-    pub async fn receive_offer(&mut self, offer: &str) -> Result<String> {
+    pub async fn receive_offer(&self, offer: &str) -> Result<String> {
         let offer = SignalingPayload::from_base64(&offer)?;
         let peer_id = offer.peer_id();
         Driver::execute(
@@ -95,7 +109,7 @@ where
             .to_base64()
     }
 
-    pub async fn receive_answer(&mut self, answer: &str) -> Result<()> {
+    pub async fn receive_answer(&self, answer: &str) -> Result<()> {
         let answer = SignalingPayload::from_base64(&answer)?;
         let peer_id = answer.peer_id();
         Driver::execute(
@@ -110,27 +124,37 @@ where
         Ok(())
     }
 
-    pub async fn send(&mut self, peer_id: PeerID, data: Msg) -> Result<()> {
-        Driver::execute(
-            self.driver.clone(),
-            Input::Send {
-                peer_to: peer_id,
-                data: MsgPayload::User(data),
-            },
-        )
-        .await?;
-        Ok(())
+    pub fn send(&self, peer_id: PeerID, data: Msg) {
+        let driver = self.driver.clone();
+        spawn_local(async move {
+            if let Err(e) = Driver::execute(
+                driver,
+                Input::Send {
+                    peer_to: peer_id,
+                    data: MsgPayload::User(data),
+                },
+            )
+            .await
+            {
+                web_sys::console::error_1(&JsValue::from_str(&format!("{e:#}")));
+            }
+        });
     }
 
-    pub async fn broadcast(&mut self, data: Msg) -> Result<()> {
-        Driver::execute(
-            self.driver.clone(),
-            Input::Broadcast {
-                data: MsgPayload::User(data),
-            },
-        )
-        .await?;
-        Ok(())
+    pub fn broadcast(&self, data: Msg) {
+        let driver = self.driver.clone();
+        spawn_local(async move {
+            if let Err(e) = Driver::execute(
+                driver,
+                Input::Broadcast {
+                    data: MsgPayload::User(data),
+                },
+            )
+            .await
+            {
+                web_sys::console::error_1(&JsValue::from_str(&format!("{e:#}")));
+            }
+        });
     }
 
     pub fn is_connected(&self, peer_id: PeerID) -> bool {
@@ -166,7 +190,7 @@ where
         self.subscribe(Rtc::JsPeerDisconnected(cb));
     }
 
-    pub fn set_js_on_peer_available(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsPeerAvailable(cb));
+    pub fn set_js_on_available(&mut self, cb: js_sys::Function) {
+        self.subscribe(Rtc::JsAvailable(cb));
     }
 }

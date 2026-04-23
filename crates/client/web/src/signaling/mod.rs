@@ -5,6 +5,7 @@ use futures::StreamExt;
 use futures::channel::{mpsc, oneshot};
 use serde::Serialize;
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
+use wasm_bindgen_futures::spawn_local;
 use web_sys::{MessageEvent, WebSocket};
 
 use antenna_client_shared::{ClientMsg, ServerMsg};
@@ -66,40 +67,69 @@ impl SignalingClient {
     }
 
     pub async fn join<Msg: UserMsgPayload + 'static>(
-        &mut self,
-        room_id: &str,
-        peer: &mut Peer<Msg>,
+        mut self,
+        room_id: String,
+        peer: Peer<Msg>,
     ) -> Result<()> {
-        self.send(&ClientMsg::Join { room_id })?;
+        self.send(&ClientMsg::Join { room_id: &room_id })?;
 
         let text = self.recv_text().await?;
         match parse(&text)? {
             ServerMsg::RequestOffer => {
                 let offer = peer.start().await?;
                 self.send(&ClientMsg::Offer {
-                    room_id,
+                    room_id: &room_id,
                     offer: &offer,
                 })?;
-
-                let text = self.recv_text().await?;
-                match parse(&text)? {
+                match parse(&self.recv_text().await?)? {
                     ServerMsg::AnswerReceived { answer } => {
-                        peer.receive_answer(answer.into()).await?
+                        peer.receive_answer(&answer.to_owned()).await?;
                     }
                     ServerMsg::Error { message } => return Err(anyhow!("{message}")),
-                    _ => return Err(anyhow!("Unexpected message while waiting for answer")),
+                    _ => return Err(anyhow!("Unexpected message")),
                 }
             }
             ServerMsg::OfferReceived { offer } => {
-                let answer = peer.receive_offer(offer.into()).await?;
+                let answer = peer.receive_offer(&offer.to_owned()).await?;
                 self.send(&ClientMsg::Answer {
-                    room_id,
+                    room_id: &room_id,
                     answer: &answer,
                 })?;
             }
             ServerMsg::Error { message } => return Err(anyhow!("{message}")),
             _ => return Err(anyhow!("Unexpected message after join")),
         }
+
+        spawn_local(async move {
+            loop {
+                let text = match self.rx.next().await {
+                    Some(t) => t,
+                    None => break,
+                };
+                if let Ok(ServerMsg::RequestOffer) = parse(&text) {
+                    let offer = match peer.start().await {
+                        Ok(o) => o,
+                        Err(_) => break,
+                    };
+                    if self
+                        .send(&ClientMsg::Offer {
+                            room_id: &room_id,
+                            offer: &offer,
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                    let text = match self.rx.next().await {
+                        Some(t) => t,
+                        None => break,
+                    };
+                    if let Ok(ServerMsg::AnswerReceived { answer }) = parse(&text) {
+                        let _ = peer.receive_answer(&answer.to_owned()).await;
+                    }
+                }
+            }
+        });
 
         Ok(())
     }

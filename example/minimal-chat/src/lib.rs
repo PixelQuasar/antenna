@@ -67,11 +67,8 @@ impl ChatApp {
     }
 
     #[wasm_bindgen(js_name = broadcast)]
-    pub async fn broadcast(&mut self, text: String) -> Result<(), JsValue> {
-        self.peer
-            .broadcast(Message { text })
-            .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))
+    pub fn broadcast(&mut self, text: String) {
+        self.peer.broadcast(Message { text })
     }
 
     fn on_message(peer: PeerID, data: Message) {
@@ -106,9 +103,9 @@ impl ChatApp {
         self.peer.set_js_on_peer_disconnected(cb);
     }
 
-    #[wasm_bindgen(js_name = onPeerAvailable)]
-    pub fn js_on_peer_available(&mut self, cb: js_sys::Function) {
-        self.peer.set_js_on_peer_available(cb);
+    #[wasm_bindgen(js_name = onAvailable)]
+    pub fn js_on_available(&mut self, cb: js_sys::Function) {
+        self.peer.set_js_on_available(cb);
     }
 
     #[wasm_bindgen(js_name = connectedPeers)]

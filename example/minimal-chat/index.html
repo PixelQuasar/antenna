@@ -253,7 +253,9 @@ window.initApp = function() {
             schedulePeerViewUpdate();
         });
 
-        app.onPeerAvailable(() => {
+        app.onAvailable(() => {
+            status('Peer available');
+            log('--- peer available ---');
             $('msg').disabled = false;
             $('send-btn').disabled = false;
         });
@@ -333,7 +335,7 @@ window.sendMsg = async function() {
     }
 
     try {
-        await app.broadcast(text);
+        app.broadcast(text);
         log('You (broadcast): ' + text);
         input.value = '';
     } catch (e) {

@@ -101,10 +101,10 @@
     <div class="section hidden" id="join-section">
         <label>Join room</label>
         <div class="row">
-            <input id="ws-url" placeholder="ws://localhost:8080/ws" />
+            <input id="ws-url" placeholder="ws://localhost:8080/ws" value="ws://localhost:8088/ws" />
         </div>
         <div class="row mt">
-            <input id="room-id" placeholder="room name" />
+            <input id="room-id" placeholder="room name" value="123" />
             <button id="join-btn" onclick="joinRoom()">Join</button>
         </div>
         <div class="muted mt">Each join bootstraps one new peer. Repeat with a new room name to connect more.</div>
@@ -192,7 +192,9 @@ window.initApp = function() {
             updatePeerViews();
         });
 
-        app.onPeerAvailable(() => {
+        app.onAvailable(() => {
+            status('Peer available');
+            log('--- peer available ---');
             $('msg').disabled = false;
             $('send-btn').disabled = false;
         });
@@ -216,9 +218,8 @@ window.joinRoom = async function() {
     $('join-btn').disabled = true;
     try {
         status('Connecting to signaling server…');
-        await app.connect(wsUrl);
         status('Joining room "' + roomId + '"…');
-        await app.join(roomId);
+        await app.join(wsUrl, roomId);
         status('Handshake done — waiting for data channel…');
         $('room-id').value = '';
     } catch (e) {
@@ -235,7 +236,7 @@ window.sendMsg = async function() {
     if (!text) return;
 
     try {
-        await app.broadcast(text);
+        app.broadcast(text);
         log('You: ' + text);
         input.value = '';
     } catch (e) {

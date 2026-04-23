@@ -114,12 +114,12 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                     vec![]
                 }
                 Output::PeerAppeared { .. } => vec![],
-                Output::PeerAvailable => {
+                Output::Available => {
                     driver
                         .borrow()
                         .callbacks
                         .borrow()
-                        .emit(RtcEvent::PeerAvailable)?;
+                        .emit(RtcEvent::Available)?;
                     vec![]
                 }
             };

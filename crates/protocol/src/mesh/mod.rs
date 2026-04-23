@@ -297,7 +297,7 @@ impl MeshNodeFSM {
                 .count();
             if in_progress_relays == 0 && !self.connected_peers().is_empty() {
                 self.available = true;
-                outputs.push(Output::PeerAvailable);
+                outputs.push(Output::Available);
             }
         }
 

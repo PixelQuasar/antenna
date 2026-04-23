@@ -34,5 +34,5 @@ pub enum Output<Msg: UserMsgPayload> {
     PeerDisconnected { peer: PeerID },
 
     /// All relay handshakes complete — this peer is fully meshed and may send messages
-    PeerAvailable,
+    Available,
 }
