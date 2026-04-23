@@ -54,11 +54,10 @@ sequenceDiagram
     participant BD
     participant B
 
-    alt await SDP offer
-        AD ->> A: Input::InitHandshake bootstrap
-        AD ->> A: HandshakeInput::Init
-        A ->> AD: HandshakeOutput::InitSDPOffer
-        AD ->> A: HandshakeInput::OfferCreated
+    alt await open SDP offer
+        AD ->> A: Input::InitOpenOffer
+        A ->> AD: Output::InitOpenOffer
+        AD ->> A: Input::OpenOfferCreated
         A ->> A: write offer to metadata containing SDP, public key and biscuit token
     end
     AD ->> BD: get offer from FSM metadata and transfer it to B client somehow
@@ -75,6 +74,8 @@ sequenceDiagram
     AD ->> A: HandshakeInput::Answer
     A ->> AD: HandshakeOutput::AcceptSDPAnswer
     AD <<->> BD: webRTC onOpen callback invocation, DC established    
+    note over A: connected & available
+    note over B: connected & available
 ```
 
 ### Relay
@@ -90,8 +91,12 @@ sequenceDiagram
     participant CD
     participant C
 
+    note over A: connected & available
+    note over B: connected & available
     A <<-->> B: already connected and established DC
     B <<->> C: establishing bootstrap connection
+    note over C: connected
+   
     B ->> C: Msg RelayPayload::InitJoiner
     C ->> C: Input::InitHandshake relay via B
     B ->> A: Msg RelayPayload::InitHost
@@ -114,6 +119,8 @@ sequenceDiagram
     A ->> A: HandshakeInput::Answer
     A ->> AD: HandshakeOutput::AcceptSDPAnswer
     AD <<->> CD: webRTC onOpen callback invocation, DC
+
+    note over C: available
 ```
 
 
