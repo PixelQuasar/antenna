@@ -12,7 +12,7 @@ struct Message {
 #[wasm_bindgen]
 pub struct ChatApp {
     peer: Peer<Message>,
-    signaling: RefCell<Option<SignalingClient>>,
+    signaling_client: RefCell<Option<SignalingClient>>,
 }
 
 #[wasm_bindgen]
@@ -36,7 +36,7 @@ impl ChatApp {
 
         Ok(ChatApp {
             peer,
-            signaling: RefCell::new(None),
+            signaling_client: RefCell::new(None),
         })
     }
 
@@ -45,17 +45,25 @@ impl ChatApp {
         self.peer.my_id().to_string()
     }
 
-    #[wasm_bindgen(js_name = join)]
-    pub async fn join_room(&self, ws_url: String, room_id: String) -> Result<(), JsValue> {
-        let mut client = SignalingClient::connect(&ws_url)
-            .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        client
-            .join(&room_id, &self.peer)
-            .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        *self.signaling.borrow_mut() = Some(client);
+    #[wasm_bindgen]
+    pub async fn connect(&self, ws_url: String) -> Result<(), JsValue> {
+        *self.signaling_client.borrow_mut() = Some(
+            SignalingClient::connect(&ws_url)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?,
+        );
         Ok(())
+    }
+
+    #[wasm_bindgen]
+    pub async fn join(&self, room_id: String) -> Result<(), JsValue> {
+        let Some(client) = self.signaling_client.borrow_mut().take() else {
+            return Err(JsValue::from_str("Not connected"));
+        };
+        client
+            .join(room_id, self.peer.clone())
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
     #[wasm_bindgen(js_name = broadcast)]

@@ -215,11 +215,13 @@ window.joinRoom = async function() {
     if (!wsUrl) return status('Enter a signaling server URL');
     if (!roomId) return status('Enter a room name');
 
+    await app.connect(wsUrl);
+
     $('join-btn').disabled = true;
     try {
         status('Connecting to signaling server…');
         status('Joining room "' + roomId + '"…');
-        await app.join(wsUrl, roomId);
+        await app.join(roomId);
         status('Handshake done — waiting for data channel…');
         $('room-id').value = '';
     } catch (e) {
