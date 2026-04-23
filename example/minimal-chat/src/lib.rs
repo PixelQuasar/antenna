@@ -43,9 +43,9 @@ impl ChatApp {
     }
 
     #[wasm_bindgen(js_name = startAsHost)]
-    pub async fn start_as_host(&mut self, remote_id: String) -> Result<String, JsValue> {
+    pub async fn start_as_host(&mut self) -> Result<String, JsValue> {
         self.peer
-            .start(remote_id)
+            .start()
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
@@ -104,5 +104,14 @@ impl ChatApp {
     #[wasm_bindgen(js_name = onPeerDisconnected)]
     pub fn js_on_peer_disconnected(&mut self, cb: js_sys::Function) {
         self.peer.set_js_on_peer_disconnected(cb);
+    }
+
+    #[wasm_bindgen(js_name = connectedPeers)]
+    pub fn connected_peers(&self) -> js_sys::Array {
+        self.peer
+            .connected_peers()
+            .into_iter()
+            .map(|p| JsValue::from_str(p.as_str()))
+            .collect()
     }
 }

@@ -1,5 +1,5 @@
 /// Handshake-level state of the client handshake FSM.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum HandshakeState {
     /// Peer created but negotiation hasn't started yet
     Idle,

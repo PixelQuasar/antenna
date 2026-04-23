@@ -167,6 +167,7 @@ fn establish_relay_connection(
                     panic!("unexpected disconnect during relay test: {peer:?}");
                 }
                 Output::ReceiveMessage { .. } => {}
+                Output::InitOpenOffer => {}
             }
         }
     }

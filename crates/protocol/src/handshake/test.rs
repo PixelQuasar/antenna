@@ -1,15 +1,11 @@
 #[cfg(test)]
 mod tests {
     use crate::handshake::{HandshakeInput, HandshakeOutput, HandshakeState, Host, Joiner};
-    use crate::{Identity, PeerID, SignalingPayload};
+    use crate::{Identity, SignalingPayload};
 
     fn mock_payload() -> SignalingPayload {
         let id = Identity::new();
-        let token = id
-            .create_token(&PeerID::new("test"))
-            .unwrap()
-            .to_vec()
-            .unwrap();
+        let token = id.create_token().unwrap().to_vec().unwrap();
         SignalingPayload {
             sdp: "mock-sdp".into(),
             pubkey: id.pubkey(),

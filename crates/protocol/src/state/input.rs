@@ -13,8 +13,14 @@ pub enum Input<Msg: UserMsgPayload> {
         strategy: HandshakeStrategy,
     },
 
-    /// Reveice handshake event
-    Handshake { event: HandshakeInput, from: PeerID },
+    /// Bootstrap host initializes an open offer without knowing the joiner's ID yet.
+    InitOpenOffer,
+
+    /// Bootstrap host's SDP offer was created by WebRTC.
+    OpenOfferCreated(String),
+
+    /// Receive handshake event from a known peer
+    Handshake { from: PeerID, event: HandshakeInput },
 
     /// Receive abstract message
     MessageReceived {

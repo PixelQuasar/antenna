@@ -69,6 +69,10 @@ version = "0.22"
 [workspace.dependencies.rand]
 version = "0.8"
 
+[workspace.dependencies.getrandom]
+version = "0.2"
+features = ["js"]
+
 [workspace.dependencies.web-sys]
 version = "0.3"
 features = [

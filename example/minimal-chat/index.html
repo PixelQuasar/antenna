@@ -99,20 +99,10 @@
         <div class="muted mt">Initialize once, then reuse the controls below to connect more peers.</div>
     </div>
 
-    <div class="section hidden" id="my-id-section">
-        <label>Your Peer ID</label>
-        <div class="id-row">
-            <input id="my-id-display" readonly />
-            <button onclick="copyMyId()">Copy</button>
-        </div>
-        <div class="muted mt">Share this ID with the peer you want to connect to.</div>
-    </div>
-
     <div class="section hidden" id="connect-section">
         <label>Manual bootstrap</label>
         <div class="id-row">
-            <input id="target-id" placeholder="Target peer ID" />
-            <button onclick="chooseHost()">Create offer</button>
+            <button onclick="chooseHost()" style="width:100%">Create offer</button>
         </div>
         <div class="id-row mt">
             <button onclick="chooseJoiner()" style="width:100%">Accept offer from peer</button>
@@ -182,18 +172,6 @@ function log(text) {
     el.scrollTop = el.scrollHeight;
 }
 
-function encodeBase64(str) {
-    return btoa(str);
-}
-
-function decodeBase64(str) {
-    try {
-        return atob(str);
-    } catch (e) {
-        throw new Error('Invalid base64 string');
-    }
-}
-
 function ensureTargetId() {
     const targetId = $('target-id').value.trim();
     if (!targetId) {
@@ -246,9 +224,6 @@ window.initApp = function() {
     try {
         app = new ChatApp(turn);
 
-        const myId = app.myId();
-        $('my-id-display').value = myId;
-
         app.onConnected(() => {
             status('At least one peer is connected');
             log('--- mesh connected ---');
@@ -282,10 +257,8 @@ window.initApp = function() {
         });
 
         $('setup-section').classList.add('hidden');
-        $('my-id-section').classList.remove('hidden');
         $('connect-section').classList.remove('hidden');
         status('Initialized. Share your Peer ID, then bootstrap with a peer.');
-        log('My ID: ' + myId);
         updatePeerViews();
     } catch (e) {
         status('Error: ' + e);
@@ -295,21 +268,14 @@ window.initApp = function() {
 
 window.chooseHost = async function() {
     resetHandshakePanels();
-    try {
-        pendingTargetId = ensureTargetId();
-    } catch (e) {
-        status('Error: ' + e.message);
-        return;
-    }
-
     $('host-flow').classList.remove('hidden');
-    status('Generating offer for ' + pendingTargetId + '…');
+    status('Generating offer…');
 
     try {
-        const offer = await app.startAsHost(pendingTargetId);
-        $('offer-out').value = encodeBase64(offer);
-        status('Offer ready for ' + pendingTargetId + ' — copy and send it');
-        log('Prepared host offer for ' + pendingTargetId);
+        const offer = await app.startAsHost();
+        $('offer-out').value = offer;
+        status('Offer ready — copy and send it to the remote peer');
+        log('Prepared host offer');
     } catch (e) {
         status('Error: ' + e);
         console.error(e);
@@ -323,17 +289,16 @@ window.chooseJoiner = function() {
 };
 
 window.hostAcceptAnswer = async function() {
-    const answerBase64 = $('answer-in').value.trim();
-    if (!answerBase64) {
+    const answer = $('answer-in').value.trim();
+    if (!answer) {
         return alert('Paste the answer first');
     }
 
     try {
-        status('Applying answer from ' + pendingTargetId + '…');
-        const answer = decodeBase64(answerBase64);
+        status('Applying answer…');
         await app.acceptAnswer(answer);
-        status('Answer accepted from ' + pendingTargetId);
-        log('Accepted answer from ' + pendingTargetId);
+        status('Answer accepted');
+        log('Accepted answer');
     } catch (e) {
         status('Error: ' + e);
         console.error(e);
@@ -341,16 +306,15 @@ window.hostAcceptAnswer = async function() {
 };
 
 window.joinerAcceptOffer = async function() {
-    const offerBase64 = $('offer-in').value.trim();
-    if (!offerBase64) {
+    const offer = $('offer-in').value.trim();
+    if (!offer) {
         return alert('Paste the offer first');
     }
 
     try {
         status('Generating answer…');
-        const offer = decodeBase64(offerBase64);
         const answer = await app.acceptOffer(offer);
-        $('answer-out').value = encodeBase64(answer);
+        $('answer-out').value = answer;
         status('Answer ready — copy and send it back');
         log('Prepared joiner answer');
     } catch (e) {
@@ -374,10 +338,6 @@ window.sendMsg = async function() {
         status('Send error: ' + e);
         console.error(e);
     }
-};
-
-window.copyMyId = function() {
-    navigator.clipboard.writeText($('my-id-display').value);
 };
 
 $('msg').addEventListener('keydown', e => {

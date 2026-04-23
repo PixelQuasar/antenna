@@ -24,7 +24,6 @@ impl PeerConnectionManager {
     }
 
     pub async fn wait_for_ice_gathering_complete(&self) -> Result<String> {
-        // Early return if already complete
         if self.peer_connection.ice_gathering_state() == web_sys::RtcIceGatheringState::Complete {
             if let Some(desc) = self.peer_connection.local_description() {
                 return Ok(desc.sdp());

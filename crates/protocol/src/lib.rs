@@ -10,7 +10,7 @@ pub use handshake::{
     HandshakeStrategy, Host, Joiner, SignalingPayload,
 };
 pub use identity::{Identity, PeerID};
-pub use mesh::MeshNodeFSM;
+pub use mesh::{MeshMetadata, MeshNodeFSM};
 pub use state::{Input, MsgPayload, Output, RelayPayload, UserMsgPayload};
 pub(crate) use utils::{
     deserialize_base64_keypair, deserialize_base64_pubkey, deserialize_base64_vec,

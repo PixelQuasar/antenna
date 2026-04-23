@@ -3,11 +3,14 @@ use crate::{MsgPayload, PeerID, UserMsgPayload, handshake::HandshakeOutput};
 /// Common event that client FSM sends
 #[derive(Debug, Clone)]
 pub enum Output<Msg: UserMsgPayload> {
-    /// Handshake event
+    /// Handshake event for a known peer
     Handshake {
         peer: PeerID,
         event: HandshakeOutput,
     },
+
+    /// Bootstrap host: create an open offer (joiner peer ID not yet known)
+    InitOpenOffer,
 
     /// Send message to other peer in mesh
     SendMessage {

@@ -2,7 +2,8 @@ use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use crate::{CallbackId, Driver, IceServerConfig, Rtc, RtcCallbacks};
 use antenna_protocol::{
-    HandshakeInput, Input, MsgPayload, PeerID, SignalingPayload, UserMsgPayload,
+    HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MsgPayload, PeerID, SignalingPayload,
+    UserMsgPayload,
 };
 use anyhow::{Context, Result};
 
@@ -36,15 +37,12 @@ where
 
     pub fn with_ice_servers(ice_servers: Vec<IceServerConfig>) -> Self {
         let callbacks = Rc::new(RefCell::new(RtcCallbacks::new()));
-        let driver: Rc<RefCell<Driver<Msg>>> =
-            Rc::new(RefCell::new(Driver::new(ice_servers, callbacks.clone())));
-        driver.borrow_mut().attach_self(driver.clone());
-
+        let driver = Rc::new(RefCell::new(Driver::new(ice_servers, callbacks.clone())));
         Self { driver, callbacks }
     }
 
     pub fn my_id(&self) -> PeerID {
-        self.driver.borrow().id()
+        self.driver.borrow().id().clone()
     }
 
     pub fn subscribe(&mut self, subscription: Rtc<Msg>) -> CallbackId {
@@ -55,90 +53,83 @@ where
         self.callbacks.borrow_mut().unsubscribe(id)
     }
 
-    pub async fn start(&mut self, remote_id: String) -> Result<String> {
-        {
-            let remote_id = PeerID::new(remote_id);
-            let mut driver = self.driver.borrow_mut();
-            driver.init_host(remote_id.clone()).await?;
-            driver
-                .execute(Input::Handshake {
-                    from: remote_id,
-                    event: HandshakeInput::Init,
-                })
-                .await?;
-        }
+    pub async fn start(&mut self) -> Result<String> {
+        Driver::execute(self.driver.clone(), Input::InitOpenOffer).await?;
 
-        let offer = self
-            .driver
-            .borrow()
-            .fsm()
+        self.driver
             .borrow()
             .metadata()
             .offer
             .clone()
-            .context("Offer not found on starting")?;
-
-        offer.to_base64()
+            .context("Offer not found on starting")?
+            .to_base64()
     }
 
     pub async fn receive_offer(&mut self, offer: String) -> Result<String> {
-        {
-            let offer = SignalingPayload::from_base64(&offer)?;
-            let mut driver = self.driver.borrow_mut();
-            let peer_id = offer.peer_id();
-            driver.init_joiner(peer_id.clone()).await?;
-            driver
-                .execute(Input::Handshake {
-                    from: peer_id.clone(),
-                    event: HandshakeInput::Offer(offer),
-                })
-                .await?;
-        }
+        let offer = SignalingPayload::from_base64(&offer)?;
+        let peer_id = offer.peer_id();
+        Driver::execute(
+            self.driver.clone(),
+            Input::InitHandshake {
+                with: peer_id.clone(),
+                mode: HandshakeMode::Bootstrap,
+                strategy: HandshakeStrategy::Joiner,
+            },
+        )
+        .await?;
+        Driver::execute(
+            self.driver.clone(),
+            Input::Handshake {
+                from: peer_id,
+                event: HandshakeInput::Offer(offer),
+            },
+        )
+        .await?;
 
-        let answer = self
-            .driver
-            .borrow()
-            .fsm()
+        self.driver
             .borrow()
             .metadata()
             .answer
             .clone()
-            .context("Answer not found on receiving offer")?;
-
-        answer.to_base64()
+            .context("Answer not found on receiving offer")?
+            .to_base64()
     }
 
     pub async fn receive_answer(&mut self, answer: String) -> Result<()> {
         let answer = SignalingPayload::from_base64(&answer)?;
-        self.driver
-            .borrow_mut()
-            .execute(Input::Handshake {
-                from: answer.peer_id(),
+        let peer_id = answer.peer_id();
+        Driver::execute(
+            self.driver.clone(),
+            Input::Handshake {
+                from: peer_id,
                 event: HandshakeInput::Answer(answer),
-            })
-            .await?;
+            },
+        )
+        .await?;
 
         Ok(())
     }
 
     pub async fn send(&mut self, peer_id: PeerID, data: Msg) -> Result<()> {
-        self.driver
-            .borrow_mut()
-            .execute(Input::Send {
+        Driver::execute(
+            self.driver.clone(),
+            Input::Send {
                 peer_to: peer_id,
                 data: MsgPayload::User(data),
-            })
-            .await?;
+            },
+        )
+        .await?;
         Ok(())
     }
 
     pub async fn broadcast(&mut self, data: Msg) -> Result<()> {
-        self.driver
-            .borrow_mut()
-            .execute(Input::Broadcast {
+        Driver::execute(
+            self.driver.clone(),
+            Input::Broadcast {
                 data: MsgPayload::User(data),
-            })
-            .await?;
+            },
+        )
+        .await?;
         Ok(())
     }
 

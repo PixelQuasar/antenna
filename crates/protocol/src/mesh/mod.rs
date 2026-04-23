@@ -1,14 +1,8 @@
-mod handle_handshake;
-mod handle_message;
-
-#[cfg(test)]
-mod test;
-
 use crate::{
-    HandshakeFSM, HandshakeMode, HandshakeState, Identity, Input, Output, PeerID, SignalingPayload,
-    UserMsgPayload,
+    HandshakeFSM, HandshakeInput, HandshakeMode, HandshakeState, HandshakeStrategy, Identity,
+    Input, MsgPayload, Output, PeerID, RelayPayload, SignalingPayload, UserMsgPayload,
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use std::collections::{HashMap, HashSet};
 
@@ -39,6 +33,9 @@ pub struct MeshNodeFSM {
     /// Map of handshake automati, contains state of current handshakes with other sessions
     connections: HashMap<PeerID, HandshakeContext>,
 
+    /// Bootstrap open-offer handshake before the joiner's peer ID is known
+    pending_handshake: Option<HandshakeContext>,
+
     ///
     metadata: MeshMetadata,
 }
@@ -53,6 +50,7 @@ impl MeshNodeFSM {
             id: PeerID::new(BASE64_URL_SAFE_NO_PAD.encode(identity.pubkey().to_bytes())),
             identity,
             connections: HashMap::new(),
+            pending_handshake: None,
             metadata: MeshMetadata::default(),
         }
     }
@@ -84,48 +82,98 @@ impl MeshNodeFSM {
         })
     }
 
+    pub fn handle_init_handshake<Msg: UserMsgPayload>(
+        &mut self,
+        with: PeerID,
+        mode: HandshakeMode,
+        strategy: HandshakeStrategy,
+    ) -> Result<Vec<Output<Msg>>> {
+        self.connections.insert(
+            with,
+            HandshakeContext {
+                fsm: HandshakeFSM::new(strategy),
+                mode,
+            },
+        );
+        return Ok(vec![]);
+    }
+
+    pub fn handle_init_open_offer<Msg: UserMsgPayload>(&mut self) -> Result<Vec<Output<Msg>>> {
+        self.pending_handshake = Some(HandshakeContext {
+            fsm: HandshakeFSM::new(HandshakeStrategy::Host),
+            mode: HandshakeMode::Bootstrap,
+        });
+        self.pending_handshake
+            .as_mut()
+            .unwrap()
+            .fsm
+            .process(HandshakeInput::Init)?;
+        Ok(vec![Output::InitOpenOffer])
+    }
+    pub fn handle_open_offer_created<Msg: UserMsgPayload>(
+        &mut self,
+        sdp: String,
+    ) -> Result<Vec<Output<Msg>>> {
+        self.metadata.offer = Some(SignalingPayload {
+            sdp: sdp.clone(),
+            pubkey: self.identity.pubkey(),
+            token: self.identity.create_token()?.to_vec()?,
+        });
+        self.pending_handshake
+            .as_mut()
+            .ok_or_else(|| anyhow!("No pending open offer"))?
+            .fsm
+            .process(HandshakeInput::OfferCreated(sdp))?;
+        Ok(vec![])
+    }
+
+    pub fn handle_send<Msg: UserMsgPayload>(
+        &mut self,
+        peer_to: PeerID,
+        data: MsgPayload<Msg>,
+    ) -> Result<Vec<Output<Msg>>> {
+        if self.is_connected(&peer_to) {
+            Ok(vec![Output::SendMessage {
+                peer_to,
+                data: data,
+            }])
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    pub fn handle_broadcast<Msg: UserMsgPayload>(
+        &mut self,
+
+        data: MsgPayload<Msg>,
+    ) -> Result<Vec<Output<Msg>>> {
+        let mut out = vec![];
+        for (peer, _) in &self.connections {
+            if !self.is_connected(peer) {
+                continue;
+            }
+            out.push(Output::SendMessage {
+                peer_to: peer.clone(),
+                data: data.clone(),
+            })
+        }
+        Ok(out)
+    }
+
     pub fn process<Msg: UserMsgPayload>(&mut self, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
         match input {
             Input::InitHandshake {
                 with,
                 mode,
                 strategy,
-            } => {
-                self.connections.insert(
-                    with,
-                    HandshakeContext {
-                        fsm: HandshakeFSM::new(strategy),
-                        mode,
-                    },
-                );
-                return Ok(vec![]);
-            }
+            } => self.handle_init_handshake(with, mode, strategy),
+            Input::InitOpenOffer => self.handle_init_open_offer(),
+            Input::OpenOfferCreated(sdp) => self.handle_open_offer_created(sdp),
             Input::Handshake { from, event } => self.handle_handshake(from, event),
             Input::PeerLeaving { peer } => self.handle_peer_leaving(peer),
             Input::MessageReceived { peer_from, data } => self.handle_message(peer_from, data),
-            Input::Send { peer_to, data } => {
-                if self.is_connected(&peer_to) {
-                    Ok(vec![Output::SendMessage {
-                        peer_to,
-                        data: data,
-                    }])
-                } else {
-                    Ok(vec![])
-                }
-            }
-            Input::Broadcast { data } => {
-                let mut out = vec![];
-                for (peer, _) in &self.connections {
-                    if !self.is_connected(peer) {
-                        continue;
-                    }
-                    out.push(Output::SendMessage {
-                        peer_to: peer.clone(),
-                        data: data.clone(),
-                    })
-                }
-                Ok(out)
-            }
+            Input::Send { peer_to, data } => self.handle_send(peer_to, data),
+            Input::Broadcast { data } => self.handle_broadcast(data),
         }
     }
 
@@ -148,5 +196,218 @@ impl MeshNodeFSM {
             out.push(Output::PeerDisconnected { peer });
         }
         Ok(out)
+    }
+
+    pub(crate) fn handle_handshake<Msg: UserMsgPayload>(
+        &mut self,
+        peer: PeerID,
+        event: HandshakeInput,
+    ) -> Result<Vec<Output<Msg>>> {
+        if !self.connections.contains_key(&peer) {
+            let HandshakeInput::Answer(_) = &event else {
+                return Err(anyhow!("Handshake instance with peer not found"));
+            };
+            let ctx = self
+                .pending_handshake
+                .take()
+                .ok_or_else(|| anyhow!("Pending handshake not found"))?;
+            self.connections.insert(peer.clone(), ctx);
+        }
+
+        let mut outputs: Vec<Output<Msg>> = vec![];
+
+        let side_effects_outs = self.handle_side_effects(&peer, &event)?;
+        outputs.extend(side_effects_outs);
+
+        let handshake_out = {
+            let ctx = self.connections.get_mut(&peer);
+            if let Some(ctx) = ctx {
+                ctx.fsm.process(event.clone())?
+            } else {
+                None
+            }
+        };
+
+        if let Some(event) = handshake_out {
+            outputs.push(Output::Handshake {
+                peer: peer.clone(),
+                event,
+            });
+        }
+
+        let ctx = self.connections.get(&peer);
+        if let Some(ctx) = ctx {
+            match ctx.fsm.state() {
+                HandshakeState::Connected => {
+                    self.identity.add_known_peer(peer.clone());
+                    outputs.push(Output::PeerConnected { peer: peer.clone() });
+                    for (existing, _) in &self.connections {
+                        if !self.is_connected(existing) || *existing == peer {
+                            continue;
+                        }
+
+                        outputs.push(Output::PeerAppeared {
+                            peer: existing.clone(),
+                        });
+
+                        if ctx.mode == HandshakeMode::Bootstrap {
+                            outputs.push(Output::SendMessage {
+                                peer_to: existing.clone(),
+                                data: MsgPayload::RelaySignalingFrom {
+                                    src: peer.clone(),
+                                    data: RelayPayload::InitHost(peer.clone()),
+                                },
+                            });
+                            outputs.push(Output::SendMessage {
+                                peer_to: peer.clone(),
+                                data: MsgPayload::RelaySignalingFrom {
+                                    src: existing.clone(),
+                                    data: RelayPayload::InitJoiner(existing.clone()),
+                                },
+                            });
+                        }
+                    }
+                }
+                HandshakeState::Closed => {
+                    self.connections.remove(&peer);
+                    outputs.push(Output::PeerDisconnected { peer: peer.clone() });
+                }
+                _ => {}
+            }
+        }
+
+        Ok(outputs)
+    }
+
+    fn handle_side_effects<Msg: UserMsgPayload>(
+        &mut self,
+        peer: &PeerID,
+        event: &HandshakeInput,
+    ) -> Result<Vec<Output<Msg>>> {
+        let ctx = self.connections.get(peer).unwrap();
+        let mut outputs: Vec<Output<Msg>> = vec![];
+        match &event {
+            HandshakeInput::Offer(payload) | HandshakeInput::Answer(payload) => {
+                self.identity.verify(payload, &peer)?;
+            }
+            HandshakeInput::AnswerCreated(answer) => {
+                let answer = SignalingPayload {
+                    sdp: answer.clone(),
+                    pubkey: self.identity.pubkey(),
+                    token: self.identity.create_token()?.to_vec()?,
+                };
+                match &ctx.mode {
+                    HandshakeMode::Bootstrap => self.metadata.answer = Some(answer),
+                    HandshakeMode::Relay(via) => {
+                        outputs.push(Output::SendMessage {
+                            peer_to: via.clone(),
+                            data: MsgPayload::RelaySignalingTo {
+                                dst: peer.clone(),
+                                data: RelayPayload::Answer(answer),
+                            },
+                        });
+                    }
+                }
+            }
+            HandshakeInput::OfferCreated(offer) => {
+                let offer = SignalingPayload {
+                    sdp: offer.clone(),
+                    pubkey: self.identity.pubkey(),
+                    token: self.identity.create_token()?.to_vec()?,
+                };
+                match &ctx.mode {
+                    HandshakeMode::Bootstrap => self.metadata.offer = Some(offer),
+                    HandshakeMode::Relay(via) => {
+                        outputs.push(Output::SendMessage {
+                            peer_to: via.clone(),
+                            data: MsgPayload::RelaySignalingTo {
+                                dst: peer.clone(),
+                                data: RelayPayload::Offer(offer),
+                            },
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(outputs)
+    }
+
+    pub(crate) fn handle_message<Msg: UserMsgPayload>(
+        &mut self,
+        peer: PeerID,
+        msg: MsgPayload<Msg>,
+    ) -> Result<Vec<Output<Msg>>> {
+        if !self.is_connected(&peer) {
+            return Ok(vec![]);
+        }
+
+        match msg {
+            MsgPayload::RelaySignalingTo { dst, data } => {
+                self.handle_relay_signaling_to(peer, dst, data)
+            }
+            MsgPayload::RelaySignalingFrom { src, data } => {
+                self.handle_relay_signaling_from(peer, src, data)
+            }
+            MsgPayload::User(_) => Ok(vec![Output::ReceiveMessage {
+                peer_from: peer,
+                data: msg,
+            }]),
+            _ => Ok(vec![]),
+        }
+    }
+
+    fn handle_relay_signaling_to<Msg: UserMsgPayload>(
+        &mut self,
+        src: PeerID,
+        dst: PeerID,
+        data: RelayPayload,
+    ) -> Result<Vec<Output<Msg>>> {
+        Ok(vec![Output::SendMessage {
+            peer_to: dst,
+            data: MsgPayload::RelaySignalingFrom { src, data },
+        }])
+    }
+
+    fn handle_relay_signaling_from<Msg: UserMsgPayload>(
+        &mut self,
+        via: PeerID,
+        src: PeerID,
+        data: RelayPayload,
+    ) -> Result<Vec<Output<Msg>>> {
+        match data {
+            RelayPayload::InitHost(_) => {
+                if self.connections.contains_key(&src) {
+                    return Ok(vec![]);
+                }
+                self.process::<Msg>(Input::InitHandshake {
+                    with: src.clone(),
+                    mode: HandshakeMode::Relay(via),
+                    strategy: HandshakeStrategy::Host,
+                })?;
+                self.process::<Msg>(Input::Handshake {
+                    from: src,
+                    event: HandshakeInput::Init,
+                })
+            }
+            RelayPayload::InitJoiner(_) => {
+                if self.connections.contains_key(&src) {
+                    return Ok(vec![]);
+                }
+                self.process::<Msg>(Input::InitHandshake {
+                    with: src,
+                    mode: HandshakeMode::Relay(via),
+                    strategy: HandshakeStrategy::Joiner,
+                })
+            }
+            RelayPayload::Offer(offer) => self.process::<Msg>(Input::Handshake {
+                from: src,
+                event: HandshakeInput::Offer(offer),
+            }),
+            RelayPayload::Answer(answer) => self.process::<Msg>(Input::Handshake {
+                from: src,
+                event: HandshakeInput::Answer(answer),
+            }),
+        }
     }
 }

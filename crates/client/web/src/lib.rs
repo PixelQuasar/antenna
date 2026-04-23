@@ -10,4 +10,5 @@ pub use driver::Driver;
 pub use peer::Peer;
 pub use storage::Storage;
 pub use utils::{EXECUTE_FUEL, IceServerConfig, STORAGE_IDENTITY_KEY};
+pub use webrtc::ConnectionManager;
 pub use webrtc::{DataChannelManager, PeerConnectionManager};

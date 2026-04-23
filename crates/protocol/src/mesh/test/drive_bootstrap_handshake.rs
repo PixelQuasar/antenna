@@ -10,12 +10,13 @@ pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
     let host_id = host.id().clone();
     let joiner_id = joiner.id().clone();
 
-    host.process::<Msg>(Input::InitHandshake {
-        with: joiner_id.clone(),
-        mode: HandshakeMode::Bootstrap,
-        strategy: HandshakeStrategy::Host,
-    })
-    .unwrap();
+    let out = host.process::<Msg>(Input::InitOpenOffer).unwrap();
+    assert!(out.iter().any(|o| matches!(o, Output::InitOpenOffer)));
+
+    host.process::<Msg>(Input::OpenOfferCreated("offer".into()))
+        .unwrap();
+
+    let offer_payload = host.metadata().offer.clone().unwrap();
 
     joiner
         .process::<Msg>(Input::InitHandshake {
@@ -24,28 +25,6 @@ pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
             strategy: HandshakeStrategy::Joiner,
         })
         .unwrap();
-
-    let out = host
-        .process::<Msg>(Input::Handshake {
-            from: joiner_id.clone(),
-            event: HandshakeInput::Init,
-        })
-        .unwrap();
-    assert!(out.iter().any(|o| matches!(
-        o,
-        Output::Handshake {
-            event: HandshakeOutput::InitSDPOffer,
-            ..
-        }
-    )));
-
-    host.process::<Msg>(Input::Handshake {
-        from: joiner_id.clone(),
-        event: HandshakeInput::OfferCreated("offer".into()),
-    })
-    .unwrap();
-
-    let offer_payload = host.metadata().offer.clone().unwrap();
 
     let out = joiner
         .process::<Msg>(Input::Handshake {

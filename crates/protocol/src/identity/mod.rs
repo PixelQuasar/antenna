@@ -2,9 +2,7 @@ mod peer_id;
 
 use crate::{SignalingPayload, deserialize_base64_keypair, serialize_base64_keypair};
 use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
-use biscuit_auth::{
-    AuthorizerBuilder, Biscuit, KeyPair, PublicKey, builder::fact, builder::string,
-};
+use biscuit_auth::{Biscuit, KeyPair, PublicKey};
 pub use peer_id::PeerID;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -31,10 +29,8 @@ impl Identity {
         self.keypair.public()
     }
 
-    pub fn create_token(&self, for_peer: &PeerID) -> anyhow::Result<Biscuit> {
-        let token = Biscuit::builder()
-            .fact(fact("for_peer", &[string(for_peer.as_str())]))?
-            .build(&self.keypair)?;
+    pub fn create_token(&self) -> anyhow::Result<Biscuit> {
+        let token = Biscuit::builder().build(&self.keypair)?;
         Ok(token)
     }
 
@@ -48,22 +44,7 @@ impl Identity {
             derived_id == expected_sender.as_str(),
             "pubkey does not match sender PeerID"
         );
-
-        let token = Biscuit::from(&payload.token, &payload.pubkey)?;
-
-        AuthorizerBuilder::new()
-            .fact(fact(
-                "my_peer_id",
-                &[string(
-                    BASE64_URL_SAFE_NO_PAD
-                        .encode(self.pubkey().to_bytes())
-                        .as_str(),
-                )],
-            ))?
-            .policy("allow if for_peer($p), my_peer_id($p)")?
-            .build(&token)?
-            .authorize()?;
-
+        Biscuit::from(&payload.token, &payload.pubkey)?;
         Ok(())
     }
     pub fn add_known_peer(&mut self, peer: PeerID) {
