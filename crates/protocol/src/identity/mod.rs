@@ -17,6 +17,12 @@ pub struct Identity {
     known_peers: HashSet<PeerID>,
 }
 
+impl Default for Identity {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Identity {
     pub fn new() -> Self {
         Self {
@@ -48,7 +54,7 @@ impl Identity {
             "pubkey does not match sender PeerID"
         );
         let expected_b64 = BASE64_URL_SAFE_NO_PAD.encode(&payload.sdp);
-        let token = Biscuit::from(&payload.token, &payload.pubkey)?;
+        let token = Biscuit::from(&payload.token, payload.pubkey)?;
         AuthorizerBuilder::new()
             .check(format!("check if sdp(\"{expected_b64}\")").as_str())?
             .policy("allow if true")?

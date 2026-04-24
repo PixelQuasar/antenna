@@ -73,7 +73,7 @@ impl ChatApp {
 
     fn on_message(peer: PeerID, data: Message) {
         web_sys::console::log_2(
-            &JsValue::from_str(&peer.as_str()),
+            &JsValue::from_str(peer.as_str()),
             &JsValue::from_str(&data.text),
         );
     }

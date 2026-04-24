@@ -83,14 +83,14 @@ impl SignalingClient {
                 })?;
                 match parse(&self.recv_text().await?)? {
                     ServerMsg::AnswerReceived { answer } => {
-                        peer.receive_answer(&answer.to_owned()).await?;
+                        peer.receive_answer(answer).await?;
                     }
                     ServerMsg::Error { message } => return Err(anyhow!("{message}")),
                     _ => return Err(anyhow!("Unexpected message")),
                 }
             }
             ServerMsg::OfferReceived { offer } => {
-                let answer = peer.receive_offer(&offer.to_owned()).await?;
+                let answer = peer.receive_offer(offer).await?;
                 self.send(&ClientMsg::Answer {
                     room_id: &room_id,
                     answer: &answer,
@@ -125,7 +125,7 @@ impl SignalingClient {
                         None => break,
                     };
                     if let Ok(ServerMsg::AnswerReceived { answer }) = parse(&text) {
-                        let _ = peer.receive_answer(&answer.to_owned()).await;
+                        let _ = peer.receive_answer(answer).await;
                     }
                 }
             }

@@ -46,6 +46,12 @@ pub struct MeshNodeFSM {
     available: bool,
 }
 
+impl Default for MeshNodeFSM {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MeshNodeFSM {
     pub fn new() -> Self {
         Self::with_identity(Identity::new())
@@ -106,7 +112,7 @@ impl MeshNodeFSM {
                 mode,
             },
         );
-        return Ok(vec![]);
+        Ok(vec![])
     }
 
     pub fn handle_init_open_offer<Msg: UserMsgPayload>(&mut self) -> Result<Vec<Output<Msg>>> {
@@ -142,10 +148,7 @@ impl MeshNodeFSM {
         data: MsgPayload<Msg>,
     ) -> Result<Vec<Output<Msg>>> {
         if self.is_connected(&peer_to) {
-            Ok(vec![Output::SendMessage {
-                peer_to,
-                data: data,
-            }])
+            Ok(vec![Output::SendMessage { peer_to, data }])
         } else {
             Ok(vec![])
         }
@@ -157,7 +160,7 @@ impl MeshNodeFSM {
         data: MsgPayload<Msg>,
     ) -> Result<Vec<Output<Msg>>> {
         let mut out = vec![];
-        for (peer, _) in &self.connections {
+        for peer in self.connections.keys() {
             if !self.is_connected(peer) {
                 continue;
             }
@@ -260,7 +263,7 @@ impl MeshNodeFSM {
                 HandshakeState::Connected => {
                     self.identity.add_known_peer(peer.clone());
                     outputs.push(Output::PeerConnected { peer: peer.clone() });
-                    for (existing, _) in &self.connections {
+                    for existing in self.connections.keys() {
                         if !self.is_connected(existing) || *existing == peer {
                             continue;
                         }
@@ -322,11 +325,11 @@ impl MeshNodeFSM {
         let mut outputs: Vec<Output<Msg>> = vec![];
         match &event {
             HandshakeInput::Offer(payload) | HandshakeInput::Answer(payload) => {
-                self.identity.verify(payload, &peer)?;
+                self.identity.verify(payload, peer)?;
             }
             HandshakeInput::AnswerCreated(answer) => {
                 let answer = SignalingPayload {
-                    token: self.identity.create_token(&answer)?,
+                    token: self.identity.create_token(answer)?,
                     sdp: answer.clone(),
                     pubkey: self.identity.pubkey(),
                 };
@@ -345,7 +348,7 @@ impl MeshNodeFSM {
             }
             HandshakeInput::OfferCreated(offer) => {
                 let offer = SignalingPayload {
-                    token: self.identity.create_token(&offer)?,
+                    token: self.identity.create_token(offer)?,
                     sdp: offer.clone(),
                     pubkey: self.identity.pubkey(),
                 };

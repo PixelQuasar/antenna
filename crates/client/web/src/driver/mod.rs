@@ -214,10 +214,10 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
 
         {
             let mut d = driver.borrow_mut();
-            if !d.connections.contains_key(&peer_id) {
-                if let Some(pending) = d.pending.pop_front() {
-                    d.connections.insert(peer_id.clone(), pending);
-                }
+            if !d.connections.contains_key(&peer_id)
+                && let Some(pending) = d.pending.pop_front()
+            {
+                d.connections.insert(peer_id.clone(), pending);
             }
         }
 

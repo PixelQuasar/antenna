@@ -1,5 +1,4 @@
 use wasm_bindgen::prelude::*;
-use web_sys;
 
 const GOOGLE_STUN: &str = "stun:stun.l.google.com:19302";
 

@@ -55,7 +55,9 @@ impl ConnectionManager {
     }
 
     pub fn close(&self) {
-        self.dc.borrow().as_ref().map(|dc| dc.close());
+        if let Some(dc) = self.dc.borrow().as_ref() {
+            dc.close()
+        }
         self.pc.close();
     }
 }

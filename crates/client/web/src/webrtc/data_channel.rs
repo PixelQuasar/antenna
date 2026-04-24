@@ -2,7 +2,6 @@ use antenna_protocol::UserMsgPayload;
 use anyhow::{Result, anyhow};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
-use web_sys;
 
 pub struct DataChannelManager {
     data_channel: web_sys::RtcDataChannel,

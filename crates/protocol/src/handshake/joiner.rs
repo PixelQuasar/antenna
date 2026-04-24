@@ -6,6 +6,12 @@ pub struct Joiner {
     state: HandshakeState,
 }
 
+impl Default for Joiner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Joiner {
     pub fn new() -> Self {
         Self {

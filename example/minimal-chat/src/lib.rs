@@ -53,7 +53,7 @@ impl ChatApp {
     #[wasm_bindgen(js_name = acceptOffer)]
     pub async fn accept_offer(&mut self, offer_sdp: &str) -> Result<String, JsValue> {
         self.peer
-            .receive_offer(offer_sdp.into())
+            .receive_offer(offer_sdp)
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
@@ -73,7 +73,7 @@ impl ChatApp {
 
     fn on_message(peer: PeerID, data: Message) {
         web_sys::console::log_2(
-            &JsValue::from_str(&peer.as_str()),
+            &JsValue::from_str(peer.as_str()),
             &JsValue::from_str(&data.text),
         );
     }

@@ -97,6 +97,15 @@ where
     subscriptions_by_kind: HashMap<SubscriptionKind, HashSet<CallbackId>>,
 }
 
+impl<Msg> Default for RtcCallbacks<Msg>
+where
+    Msg: UserMsgPayload,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<Msg> RtcCallbacks<Msg>
 where
     Msg: UserMsgPayload,

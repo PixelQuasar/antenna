@@ -1,7 +1,6 @@
 use anyhow::{Result, anyhow};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
-use web_sys;
 
 use crate::utils::{IceServerConfig, async_callback};
 
@@ -24,10 +23,10 @@ impl PeerConnectionManager {
     }
 
     pub async fn wait_for_ice_gathering_complete(&self) -> Result<String> {
-        if self.peer_connection.ice_gathering_state() == web_sys::RtcIceGatheringState::Complete {
-            if let Some(desc) = self.peer_connection.local_description() {
-                return Ok(desc.sdp());
-            }
+        if self.peer_connection.ice_gathering_state() == web_sys::RtcIceGatheringState::Complete
+            && let Some(desc) = self.peer_connection.local_description()
+        {
+            return Ok(desc.sdp());
         }
 
         async_callback(|mut resolve| {

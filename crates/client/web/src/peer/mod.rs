@@ -41,6 +41,15 @@ where
     }
 }
 
+impl<Msg> Default for Peer<Msg>
+where
+    Msg: UserMsgPayload + 'static,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<Msg> Peer<Msg>
 where
     Msg: UserMsgPayload + 'static,
@@ -80,7 +89,7 @@ where
     }
 
     pub async fn receive_offer(&self, offer: &str) -> Result<String> {
-        let offer = SignalingPayload::from_base64(&offer)?;
+        let offer = SignalingPayload::from_base64(offer)?;
         let peer_id = offer.peer_id();
         Driver::execute(
             self.driver.clone(),
@@ -110,7 +119,7 @@ where
     }
 
     pub async fn receive_answer(&self, answer: &str) -> Result<()> {
-        let answer = SignalingPayload::from_base64(&answer)?;
+        let answer = SignalingPayload::from_base64(answer)?;
         let peer_id = answer.peer_id();
         Driver::execute(
             self.driver.clone(),
