@@ -44,7 +44,6 @@ impl HandshakeFSM {
     pub fn joiner() -> Self {
         Self {
             strategy: HandshakeStrategy::Joiner,
-
             fsm: StrategyFSM::Joiner(Joiner::new()),
         }
     }
@@ -54,7 +53,7 @@ impl HandshakeFSM {
         self.fsm.state()
     }
 
-    pub fn stragegy(&self) -> &HandshakeStrategy {
+    pub fn strategy(&self) -> &HandshakeStrategy {
         &self.strategy
     }
 

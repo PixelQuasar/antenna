@@ -49,7 +49,7 @@ pub(crate) fn join_mesh(
     }
 }
 
-fn establish_relay_connection(
+pub(crate) fn establish_relay_connection(
     peers: &mut HashMap<PeerID, MeshNodeFSM>,
     relay_id: &PeerID,
     joiner_id: &PeerID,
@@ -169,6 +169,7 @@ fn establish_relay_connection(
                 Output::ReceiveMessage { .. } => {}
                 Output::InitOpenOffer => {}
                 Output::Available => {}
+                Output::Unavailable => {}
             }
         }
     }

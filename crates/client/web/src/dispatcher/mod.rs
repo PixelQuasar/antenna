@@ -13,6 +13,7 @@ type DisconnectedCallback = fn();
 type PeerConnectedCallback = fn(PeerID);
 type PeerDisconnectedCallback = fn(PeerID);
 type AvailableCallback = fn();
+type UnavailableCallback = fn();
 
 #[derive(Clone)]
 pub enum RtcEvent<Msg: UserMsgPayload> {
@@ -22,6 +23,7 @@ pub enum RtcEvent<Msg: UserMsgPayload> {
     PeerConnected(PeerID),
     PeerDisconnected(PeerID),
     Available,
+    Unavailable,
 }
 
 pub enum Rtc<Msg: UserMsgPayload> {
@@ -31,12 +33,14 @@ pub enum Rtc<Msg: UserMsgPayload> {
     PeerConnected(PeerConnectedCallback),
     PeerDisconnected(PeerDisconnectedCallback),
     Available(AvailableCallback),
+    Unavailable(UnavailableCallback),
     JsConnected(js_sys::Function),
     JsUserMessage(js_sys::Function),
     JsDisconnected(js_sys::Function),
     JsPeerConnected(js_sys::Function),
     JsPeerDisconnected(js_sys::Function),
     JsAvailable(js_sys::Function),
+    JsUnavailable(js_sys::Function),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -47,6 +51,7 @@ enum SubscriptionKind {
     PeerConnected,
     PeerDisconnected,
     Available,
+    Unavailable,
 }
 
 impl<Msg: UserMsgPayload> Rtc<Msg> {
@@ -60,6 +65,7 @@ impl<Msg: UserMsgPayload> Rtc<Msg> {
                 SubscriptionKind::PeerDisconnected
             }
             Self::Available(_) | Self::JsAvailable(_) => SubscriptionKind::Available,
+            Self::Unavailable(_) | Self::JsUnavailable(_) => SubscriptionKind::Unavailable,
         }
     }
 }
@@ -73,6 +79,7 @@ impl<Msg: UserMsgPayload> RtcEvent<Msg> {
             Self::PeerConnected(_) => SubscriptionKind::PeerConnected,
             Self::PeerDisconnected(_) => SubscriptionKind::PeerDisconnected,
             Self::Available => SubscriptionKind::Available,
+            Self::Unavailable => SubscriptionKind::Unavailable,
         }
     }
 }
@@ -186,6 +193,10 @@ where
                 }
                 (Rtc::Available(cb), RtcEvent::Available) => cb(),
                 (Rtc::JsAvailable(cb), RtcEvent::Available) => {
+                    cb.call0(&JsValue::NULL).ok();
+                }
+                (Rtc::Unavailable(cb), RtcEvent::Unavailable) => cb(),
+                (Rtc::JsUnavailable(cb), RtcEvent::Unavailable) => {
                     cb.call0(&JsValue::NULL).ok();
                 }
                 _ => {}

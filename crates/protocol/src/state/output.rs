@@ -35,4 +35,7 @@ pub enum Output<Msg: UserMsgPayload> {
 
     /// All relay handshakes complete — this peer is fully meshed and may send messages
     Available,
+
+    /// Mesh has no connected peers — this peer can no longer send messages
+    Unavailable,
 }

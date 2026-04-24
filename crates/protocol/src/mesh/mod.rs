@@ -124,9 +124,9 @@ impl MeshNodeFSM {
         sdp: String,
     ) -> Result<Vec<Output<Msg>>> {
         self.metadata.offer = Some(SignalingPayload {
+            token: self.identity.create_token(&sdp)?,
             sdp: sdp.clone(),
             pubkey: self.identity.pubkey(),
-            token: self.identity.create_token()?.to_vec()?,
         });
         self.pending_handshakes
             .back_mut()
@@ -203,6 +203,15 @@ impl MeshNodeFSM {
         let mut out = Vec::new();
         if was_connected.is_some() {
             out.push(Output::PeerDisconnected { peer });
+            if self.available
+                && self
+                    .connections
+                    .values()
+                    .any(|ctx| *ctx.fsm.state() != HandshakeState::Connected)
+            {
+                self.available = false;
+                out.push(Output::Unavailable);
+            }
         }
         Ok(out)
     }
@@ -317,9 +326,9 @@ impl MeshNodeFSM {
             }
             HandshakeInput::AnswerCreated(answer) => {
                 let answer = SignalingPayload {
+                    token: self.identity.create_token(&answer)?,
                     sdp: answer.clone(),
                     pubkey: self.identity.pubkey(),
-                    token: self.identity.create_token()?.to_vec()?,
                 };
                 match &ctx.mode {
                     HandshakeMode::Bootstrap => self.metadata.answer = Some(answer),
@@ -336,9 +345,9 @@ impl MeshNodeFSM {
             }
             HandshakeInput::OfferCreated(offer) => {
                 let offer = SignalingPayload {
+                    token: self.identity.create_token(&offer)?,
                     sdp: offer.clone(),
                     pubkey: self.identity.pubkey(),
-                    token: self.identity.create_token()?.to_vec()?,
                 };
                 match &ctx.mode {
                     HandshakeMode::Bootstrap => self.metadata.offer = Some(offer),
@@ -419,11 +428,17 @@ impl MeshNodeFSM {
                 if self.connections.contains_key(&src) {
                     return Ok(vec![]);
                 }
+                let mut out = vec![];
+                if self.available {
+                    self.available = false;
+                    out.push(Output::Unavailable);
+                }
                 self.process::<Msg>(Input::InitHandshake {
                     with: src,
                     mode: HandshakeMode::Relay(via),
                     strategy: HandshakeStrategy::Joiner,
-                })
+                })?;
+                Ok(out)
             }
             RelayPayload::Offer(offer) => self.process::<Msg>(Input::Handshake {
                 from: src,

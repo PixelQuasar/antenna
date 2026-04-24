@@ -199,6 +199,13 @@ window.initApp = function() {
             $('send-btn').disabled = false;
         });
 
+        app.onUnavailable(() => {
+            status('Peer unavailable');
+            log('--- peer unavailable ---');
+            $('msg').disabled = true;
+            $('send-btn').disabled = true;
+        });
+
         $('setup-section').classList.add('hidden');
         $('join-section').classList.remove('hidden');
         status('Initialized. Enter a signaling server URL and room name to connect.');

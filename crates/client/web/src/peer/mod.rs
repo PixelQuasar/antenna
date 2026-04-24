@@ -193,4 +193,8 @@ where
     pub fn set_js_on_available(&mut self, cb: js_sys::Function) {
         self.subscribe(Rtc::JsAvailable(cb));
     }
+
+    pub fn set_js_on_unavailable(&mut self, cb: js_sys::Function) {
+        self.subscribe(Rtc::JsUnavailable(cb));
+    }
 }

@@ -5,11 +5,12 @@ mod tests {
 
     fn mock_payload() -> SignalingPayload {
         let id = Identity::new();
-        let token = id.create_token().unwrap().to_vec().unwrap();
+        let sdp = "mock-sdp".to_string();
+        let token = id.create_token(&sdp).unwrap();
         SignalingPayload {
-            sdp: "mock-sdp".into(),
-            pubkey: id.pubkey(),
             token,
+            sdp,
+            pubkey: id.pubkey(),
         }
     }
 

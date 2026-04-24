@@ -122,6 +122,14 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                         .emit(RtcEvent::Available)?;
                     vec![]
                 }
+                Output::Unavailable => {
+                    driver
+                        .borrow()
+                        .callbacks
+                        .borrow()
+                        .emit(RtcEvent::Unavailable)?;
+                    vec![]
+                }
             };
             queue.extend(new_outputs);
         }
@@ -292,6 +300,7 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
             dc_manager.setup_on_open(move || {
                 let peer_id = peer_id.clone();
                 let driver = driver.clone();
+
                 spawn_local(async move {
                     if let Err(e) = Driver::execute(
                         driver,
