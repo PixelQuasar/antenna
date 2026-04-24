@@ -1,0 +1,21 @@
+FROM rust:1.89-bookworm AS builder
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY example ./example
+
+RUN cargo build --release -p antenna-signaling-server
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=builder /app/target/release/antenna-signaling-server /usr/local/bin/antenna-signaling-server
+
+ARG ADDR=0.0.0.0:8080
+ENV ADDR=${ADDR}
+
+CMD ["/usr/local/bin/antenna-signaling-server"]
