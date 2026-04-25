@@ -14,12 +14,12 @@ pub(crate) fn join_mesh(
         let mut bootstrap = all_peers.remove(bootstrap_id).unwrap();
         let mut new_peer = all_peers.remove(new_peer_id).unwrap();
 
-        let outputs = drive_bootstrap_handshake::<()>(&mut bootstrap, &mut new_peer);
+        let (host_out, _) = drive_bootstrap_handshake::<()>(&mut bootstrap, &mut new_peer);
 
         all_peers.insert(bootstrap_id.clone(), bootstrap);
         all_peers.insert(new_peer_id.clone(), new_peer);
 
-        outputs
+        host_out
     };
 
     let appeared_peers = bootstrap_outputs
@@ -55,8 +55,9 @@ pub(crate) fn establish_relay_connection(
     joiner_id: &PeerID,
     host_id: &PeerID,
     initial_messages: &[(PeerID, PeerID, MsgPayload<()>)],
-) {
+) -> Vec<Output<()>> {
     let mut queue = VecDeque::new();
+    let mut collected: Vec<Output<()>> = vec![];
 
     for (from, to, data) in initial_messages {
         let is_for_pair = matches!(
@@ -83,6 +84,8 @@ pub(crate) fn establish_relay_connection(
             })
             .unwrap();
 
+        collected.extend(outputs.iter().cloned());
+
         for output in outputs {
             match output {
                 Output::Handshake { peer, event } => match event {
@@ -99,6 +102,7 @@ pub(crate) fn establish_relay_connection(
                             })
                             .unwrap();
 
+                        collected.extend(outputs.iter().cloned());
                         collect_relay_signaling_to(
                             outputs, relay_id, joiner_id, &mut queue, host_id,
                         );
@@ -116,6 +120,7 @@ pub(crate) fn establish_relay_connection(
                             })
                             .unwrap();
 
+                        collected.extend(outputs.iter().cloned());
                         collect_relay_signaling_to(
                             outputs, relay_id, host_id, &mut queue, joiner_id,
                         );
@@ -124,24 +129,28 @@ pub(crate) fn establish_relay_connection(
                         assert_eq!(to, *host_id);
                         assert_eq!(peer, *joiner_id);
 
-                        peers
-                            .get_mut(host_id)
-                            .unwrap()
-                            .process::<()>(Input::Handshake {
-                                from: joiner_id.clone(),
-                                event: HandshakeInput::DataChannelOpen,
-                            })
-                            .unwrap();
+                        collected.extend(
+                            peers
+                                .get_mut(host_id)
+                                .unwrap()
+                                .process::<()>(Input::Handshake {
+                                    from: joiner_id.clone(),
+                                    event: HandshakeInput::DataChannelOpen,
+                                })
+                                .unwrap(),
+                        );
                         host_dc_open = true;
 
-                        peers
-                            .get_mut(joiner_id)
-                            .unwrap()
-                            .process::<()>(Input::Handshake {
-                                from: host_id.clone(),
-                                event: HandshakeInput::DataChannelOpen,
-                            })
-                            .unwrap();
+                        collected.extend(
+                            peers
+                                .get_mut(joiner_id)
+                                .unwrap()
+                                .process::<()>(Input::Handshake {
+                                    from: host_id.clone(),
+                                    event: HandshakeInput::DataChannelOpen,
+                                })
+                                .unwrap(),
+                        );
                         joiner_dc_open = true;
                     }
                     HandshakeOutput::Connected => {}
@@ -178,6 +187,8 @@ pub(crate) fn establish_relay_connection(
     assert!(joiner_dc_open, "joiner side data channel never opened");
     assert!(peers.get(host_id).unwrap().is_connected(joiner_id));
     assert!(peers.get(joiner_id).unwrap().is_connected(host_id));
+
+    collected
 }
 
 fn collect_relay_signaling_to(

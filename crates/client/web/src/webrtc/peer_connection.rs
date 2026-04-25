@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
-use crate::utils::{IceServerConfig, async_callback};
+use crate::utils::{IceServerConfig, async_callback, build_rtc_config};
 
 pub struct PeerConnectionManager {
     peer_connection: web_sys::RtcPeerConnection,
@@ -11,7 +11,7 @@ pub struct PeerConnectionManager {
 impl PeerConnectionManager {
     pub fn from_ice_config(ice_servers: &[IceServerConfig]) -> Result<Self> {
         let peer_connection = web_sys::RtcPeerConnection::new_with_configuration(
-            &IceServerConfig::build_rtc_config(ice_servers),
+            &build_rtc_config(ice_servers),
         )
         .map_err(|e| anyhow!("Failed to create PeerConnection: {:?}", e))?;
 

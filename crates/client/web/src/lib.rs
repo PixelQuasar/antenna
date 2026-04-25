@@ -6,11 +6,14 @@ mod storage;
 mod utils;
 mod webrtc;
 
-pub use dispatcher::{CallbackId, Dispatcher, Rtc, RtcCallbacks, RtcEvent};
+pub use dispatcher::{Rtc, RtcCallbacks};
 pub use driver::Driver;
-pub use peer::Peer;
+pub use peer::WebPeer;
 pub use signaling::SignalingClient;
 pub use storage::Storage;
-pub use utils::{EXECUTE_FUEL, IceServerConfig, STORAGE_IDENTITY_KEY};
 pub use webrtc::ConnectionManager;
 pub use webrtc::{DataChannelManager, PeerConnectionManager};
+
+pub use antenna_client_shared::{
+    CallbackId, Dispatcher, EXECUTE_FUEL, IceServerConfig, Peer, RtcEvent, STORAGE_IDENTITY_KEY,
+};

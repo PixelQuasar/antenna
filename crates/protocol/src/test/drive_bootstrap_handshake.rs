@@ -6,7 +6,7 @@ use crate::{
 pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
     host: &mut MeshNodeFSM,
     joiner: &mut MeshNodeFSM,
-) -> Vec<Output<Msg>> {
+) -> (Vec<Output<Msg>>, Vec<Output<Msg>>) {
     let host_id = host.id().clone();
     let joiner_id = joiner.id().clone();
 
@@ -63,14 +63,14 @@ pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
         }
     )));
 
-    joiner
+    let joiner_dc_out = joiner
         .process::<Msg>(Input::Handshake {
             from: host_id.clone(),
             event: HandshakeInput::DataChannelOpen,
         })
         .unwrap();
 
-    let outputs = host
+    let host_dc_out = host
         .process::<Msg>(Input::Handshake {
             from: joiner_id.clone(),
             event: HandshakeInput::DataChannelOpen,
@@ -80,5 +80,5 @@ pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
     assert!(host.is_connected(&joiner_id));
     assert!(joiner.is_connected(&host_id));
 
-    outputs
+    (host_dc_out, joiner_dc_out)
 }

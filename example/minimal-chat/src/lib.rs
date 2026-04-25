@@ -1,4 +1,4 @@
-use antenna::{IceServerConfig, Peer, PeerID, Rtc};
+use antenna::{IceServerConfig, Peer, PeerID, Rtc, WebPeer};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -9,7 +9,7 @@ struct Message {
 
 #[wasm_bindgen]
 pub struct ChatApp {
-    peer: Peer<Message>,
+    peer: WebPeer<Message>,
 }
 
 #[wasm_bindgen]
@@ -31,7 +31,7 @@ impl ChatApp {
             pass.into(),
         ));
 
-        let mut peer = Peer::with_ice_servers(ice_servers);
+        let mut peer = WebPeer::with_ice_servers(ice_servers);
         peer.subscribe(Rtc::UserMessage(Self::on_message));
 
         Ok(ChatApp { peer })

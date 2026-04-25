@@ -1,27 +1,18 @@
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use crate::{CallbackId, Driver, IceServerConfig, Rtc, RtcCallbacks};
+use antenna_client_shared::{CallbackId, Peer};
 use antenna_protocol::{
     HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MsgPayload, PeerID, SignalingPayload,
     UserMsgPayload,
 };
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
 
-/// Implementation of antenna protocol peer behavior.
-///
-/// To connect peer with other peers and form mesh, bootstrap connection should be established.
-/// Bootstrap connection includes three steps:
-///
-/// - Init (host creates offer). This step is starting by calling `start` method.
-///
-/// - Accept offer (joiner accepts offer and creates answer). Method is `receive_offer`.
-///
-/// - Connect (host accepts answer and establishes webRTC datachannel). Method is `accept_answer`.
-///
-/// Transfer offer and answer between handshaking peers is user-defined only for now.
-pub struct Peer<Msg>
+use crate::{Driver, IceServerConfig, Rtc, RtcCallbacks};
+
+pub struct WebPeer<Msg>
 where
     Msg: UserMsgPayload + 'static,
 {
@@ -29,7 +20,7 @@ where
     callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
 }
 
-impl<Msg> Clone for Peer<Msg>
+impl<Msg> Clone for WebPeer<Msg>
 where
     Msg: UserMsgPayload + 'static,
 {
@@ -41,7 +32,7 @@ where
     }
 }
 
-impl<Msg> Default for Peer<Msg>
+impl<Msg> Default for WebPeer<Msg>
 where
     Msg: UserMsgPayload + 'static,
 {
@@ -50,7 +41,7 @@ where
     }
 }
 
-impl<Msg> Peer<Msg>
+impl<Msg> WebPeer<Msg>
 where
     Msg: UserMsgPayload + 'static,
 {
@@ -64,19 +55,55 @@ where
         Self { driver, callbacks }
     }
 
-    pub fn my_id(&self) -> PeerID {
+    pub fn set_js_on_message(&mut self, cb: js_sys::Function) {
+        self.subscribe(Rtc::JsUserMessage(cb));
+    }
+
+    pub fn set_js_on_connected(&mut self, cb: js_sys::Function) {
+        self.subscribe(Rtc::JsConnected(cb));
+    }
+
+    pub fn set_js_on_disconnected(&mut self, cb: js_sys::Function) {
+        self.subscribe(Rtc::JsDisconnected(cb));
+    }
+
+    pub fn set_js_on_peer_connected(&mut self, cb: js_sys::Function) {
+        self.subscribe(Rtc::JsPeerConnected(cb));
+    }
+
+    pub fn set_js_on_peer_disconnected(&mut self, cb: js_sys::Function) {
+        self.subscribe(Rtc::JsPeerDisconnected(cb));
+    }
+
+    pub fn set_js_on_available(&mut self, cb: js_sys::Function) {
+        self.subscribe(Rtc::JsAvailable(cb));
+    }
+
+    pub fn set_js_on_unavailable(&mut self, cb: js_sys::Function) {
+        self.subscribe(Rtc::JsUnavailable(cb));
+    }
+}
+
+#[async_trait(?Send)]
+impl<Msg> Peer<Msg> for WebPeer<Msg>
+where
+    Msg: UserMsgPayload + 'static,
+{
+    type Subscription = Rtc<Msg>;
+
+    fn my_id(&self) -> PeerID {
         self.driver.borrow().id().clone()
     }
 
-    pub fn subscribe(&mut self, subscription: Rtc<Msg>) -> CallbackId {
+    fn subscribe(&mut self, subscription: Rtc<Msg>) -> CallbackId {
         self.callbacks.borrow_mut().subscribe(subscription)
     }
 
-    pub fn unsubscribe(&mut self, id: CallbackId) -> bool {
+    fn unsubscribe(&mut self, id: CallbackId) -> bool {
         self.callbacks.borrow_mut().unsubscribe(id)
     }
 
-    pub async fn start(&self) -> Result<String> {
+    async fn start(&self) -> Result<String> {
         Driver::execute(self.driver.clone(), Input::InitOpenOffer).await?;
 
         self.driver
@@ -88,7 +115,7 @@ where
             .to_base64()
     }
 
-    pub async fn receive_offer(&self, offer: &str) -> Result<String> {
+    async fn receive_offer(&self, offer: &str) -> Result<String> {
         let offer = SignalingPayload::from_base64(offer)?;
         let peer_id = offer.peer_id();
         Driver::execute(
@@ -118,7 +145,7 @@ where
             .to_base64()
     }
 
-    pub async fn receive_answer(&self, answer: &str) -> Result<()> {
+    async fn receive_answer(&self, answer: &str) -> Result<()> {
         let answer = SignalingPayload::from_base64(answer)?;
         let peer_id = answer.peer_id();
         Driver::execute(
@@ -133,7 +160,7 @@ where
         Ok(())
     }
 
-    pub fn send(&self, peer_id: PeerID, data: Msg) {
+    fn send(&self, peer_id: PeerID, data: Msg) {
         let driver = self.driver.clone();
         spawn_local(async move {
             if let Err(e) = Driver::execute(
@@ -150,7 +177,7 @@ where
         });
     }
 
-    pub fn broadcast(&self, data: Msg) {
+    fn broadcast(&self, data: Msg) {
         let driver = self.driver.clone();
         spawn_local(async move {
             if let Err(e) = Driver::execute(
@@ -166,44 +193,16 @@ where
         });
     }
 
-    pub fn is_connected(&self, peer_id: PeerID) -> bool {
+    fn is_connected(&self, peer_id: PeerID) -> bool {
         self.driver.borrow().is_connected(&peer_id)
     }
 
-    pub fn connected_peers(&self) -> HashSet<String> {
+    fn connected_peers(&self) -> HashSet<String> {
         self.driver
             .borrow()
             .connected_peers()
             .iter()
             .map(|p| p.to_string())
             .collect()
-    }
-
-    pub fn set_js_on_message(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsUserMessage(cb));
-    }
-
-    pub fn set_js_on_connected(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsConnected(cb));
-    }
-
-    pub fn set_js_on_disconnected(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsDisconnected(cb));
-    }
-
-    pub fn set_js_on_peer_connected(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsPeerConnected(cb));
-    }
-
-    pub fn set_js_on_peer_disconnected(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsPeerDisconnected(cb));
-    }
-
-    pub fn set_js_on_available(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsAvailable(cb));
-    }
-
-    pub fn set_js_on_unavailable(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsUnavailable(cb));
     }
 }

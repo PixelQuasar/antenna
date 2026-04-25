@@ -8,10 +8,8 @@ use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{MessageEvent, WebSocket};
 
-use antenna_client_shared::{ClientMsg, ServerMsg};
+use antenna_client_shared::{ClientMsg, Peer, ServerMsg};
 use antenna_protocol::UserMsgPayload;
-
-use crate::Peer;
 
 pub struct SignalingClient {
     ws: WebSocket,
@@ -69,7 +67,7 @@ impl SignalingClient {
     pub async fn join<Msg: UserMsgPayload + 'static>(
         mut self,
         room_id: String,
-        peer: Peer<Msg>,
+        peer: impl Peer<Msg> + Clone + 'static,
     ) -> Result<()> {
         self.send(&ClientMsg::Join { room_id: &room_id })?;
 

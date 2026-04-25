@@ -41,9 +41,6 @@ pub struct MeshNodeFSM {
 
     ///
     metadata: MeshMetadata,
-
-    /// True once Output::Available has been emitted (one-shot)
-    available: bool,
 }
 
 impl Default for MeshNodeFSM {
@@ -64,16 +61,11 @@ impl MeshNodeFSM {
             connections: HashMap::new(),
             pending_handshakes: VecDeque::new(),
             metadata: MeshMetadata::default(),
-            available: false,
         }
     }
 
     pub fn id(&self) -> &PeerID {
         &self.id
-    }
-
-    pub fn is_available(&self) -> bool {
-        self.available
     }
 
     pub fn is_connected(&self, peer: &PeerID) -> bool {
@@ -206,13 +198,11 @@ impl MeshNodeFSM {
         let mut out = Vec::new();
         if was_connected.is_some() {
             out.push(Output::PeerDisconnected { peer });
-            if self.available
-                && self
-                    .connections
-                    .values()
-                    .any(|ctx| *ctx.fsm.state() != HandshakeState::Connected)
+            if self
+                .connections
+                .values()
+                .any(|ctx| *ctx.fsm.state() != HandshakeState::Connected)
             {
-                self.available = false;
                 out.push(Output::Unavailable);
             }
         }
@@ -298,19 +288,16 @@ impl MeshNodeFSM {
             }
         }
 
-        if !self.available {
-            let in_progress_relays = self
-                .connections
-                .values()
-                .filter(|ctx| {
-                    matches!(ctx.mode, HandshakeMode::Relay(_))
-                        && *ctx.fsm.state() != HandshakeState::Connected
-                })
-                .count();
-            if in_progress_relays == 0 && !self.connected_peers().is_empty() {
-                self.available = true;
-                outputs.push(Output::Available);
-            }
+        let in_progress_relays = self
+            .connections
+            .values()
+            .filter(|ctx| {
+                matches!(ctx.mode, HandshakeMode::Relay(_))
+                    && *ctx.fsm.state() != HandshakeState::Connected
+            })
+            .count();
+        if in_progress_relays == 0 && !self.connected_peers().is_empty() {
+            outputs.push(Output::Available);
         }
 
         Ok(outputs)
@@ -432,10 +419,7 @@ impl MeshNodeFSM {
                     return Ok(vec![]);
                 }
                 let mut out = vec![];
-                if self.available {
-                    self.available = false;
-                    out.push(Output::Unavailable);
-                }
+                out.push(Output::Unavailable);
                 self.process::<Msg>(Input::InitHandshake {
                     with: src,
                     mode: HandshakeMode::Relay(via),

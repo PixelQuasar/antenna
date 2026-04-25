@@ -77,6 +77,9 @@ features = ["ws"]
 version = "1.0.0"
 features = ["full"]
 
+[workspace.dependencies.async-trait]
+version = "0.1.89"
+
 [workspace.dependencies.web-sys]
 version = "0.3"
 features = [

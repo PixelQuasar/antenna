@@ -5,7 +5,7 @@ use antenna_protocol::{PeerID, UserMsgPayload};
 use anyhow::{Result, anyhow};
 use wasm_bindgen::prelude::*;
 
-pub type CallbackId = u64;
+pub use antenna_client_shared::{CallbackId, Dispatcher, RtcEvent};
 
 type ConnectedCallback = fn();
 type MessageCallback<Msg> = fn(PeerID, Msg);
@@ -14,17 +14,6 @@ type PeerConnectedCallback = fn(PeerID);
 type PeerDisconnectedCallback = fn(PeerID);
 type AvailableCallback = fn();
 type UnavailableCallback = fn();
-
-#[derive(Clone)]
-pub enum RtcEvent<Msg: UserMsgPayload> {
-    Connected,
-    UserMessage(PeerID, Msg),
-    Disconnected,
-    PeerConnected(PeerID),
-    PeerDisconnected(PeerID),
-    Available,
-    Unavailable,
-}
 
 pub enum Rtc<Msg: UserMsgPayload> {
     Connected(ConnectedCallback),
@@ -70,22 +59,16 @@ impl<Msg: UserMsgPayload> Rtc<Msg> {
     }
 }
 
-impl<Msg: UserMsgPayload> RtcEvent<Msg> {
-    fn kind(&self) -> SubscriptionKind {
-        match self {
-            Self::Connected => SubscriptionKind::Connected,
-            Self::UserMessage(_, _) => SubscriptionKind::UserMessage,
-            Self::Disconnected => SubscriptionKind::Disconnected,
-            Self::PeerConnected(_) => SubscriptionKind::PeerConnected,
-            Self::PeerDisconnected(_) => SubscriptionKind::PeerDisconnected,
-            Self::Available => SubscriptionKind::Available,
-            Self::Unavailable => SubscriptionKind::Unavailable,
-        }
+fn event_kind<Msg: UserMsgPayload>(event: &RtcEvent<Msg>) -> SubscriptionKind {
+    match event {
+        RtcEvent::Connected => SubscriptionKind::Connected,
+        RtcEvent::UserMessage(_, _) => SubscriptionKind::UserMessage,
+        RtcEvent::Disconnected => SubscriptionKind::Disconnected,
+        RtcEvent::PeerConnected(_) => SubscriptionKind::PeerConnected,
+        RtcEvent::PeerDisconnected(_) => SubscriptionKind::PeerDisconnected,
+        RtcEvent::Available => SubscriptionKind::Available,
+        RtcEvent::Unavailable => SubscriptionKind::Unavailable,
     }
-}
-
-pub trait Dispatcher<Msg: UserMsgPayload> {
-    fn emit(&self, event: RtcEvent<Msg>) -> Result<()>;
 }
 
 pub struct RtcCallbacks<Msg>
@@ -159,7 +142,8 @@ where
     Msg: UserMsgPayload,
 {
     fn emit(&self, event: RtcEvent<Msg>) -> Result<()> {
-        let Some(ids) = self.subscriptions_by_kind.get(&event.kind()) else {
+        let kind = event_kind(&event);
+        let Some(ids) = self.subscriptions_by_kind.get(&kind) else {
             return Ok(());
         };
 

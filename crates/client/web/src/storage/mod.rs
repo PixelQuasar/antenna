@@ -1,3 +1,4 @@
+use antenna_client_shared::IdentityStorage;
 use antenna_protocol::Identity;
 use anyhow::{Context, Result, anyhow};
 
@@ -5,8 +6,8 @@ use crate::STORAGE_IDENTITY_KEY;
 
 pub struct Storage;
 
-impl Storage {
-    pub fn load_identity() -> Option<Identity> {
+impl IdentityStorage for Storage {
+    fn load_identity() -> Option<Identity> {
         let storage = web_sys::window()?
             .local_storage()
             .ok()??
@@ -15,7 +16,7 @@ impl Storage {
         serde_json::from_str(&storage).ok()
     }
 
-    pub fn save_identity(identity: &Identity) -> Result<()> {
+    fn save_identity(identity: &Identity) -> Result<()> {
         let json = serde_json::to_string(identity)?;
         web_sys::window()
             .context("DOM window is unavailable")?

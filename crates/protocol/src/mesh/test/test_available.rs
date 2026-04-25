@@ -12,13 +12,10 @@ mod test {
         let mut alice = MeshNodeFSM::new();
         let mut bob = MeshNodeFSM::new();
 
-        assert!(!alice.is_available());
-        assert!(!bob.is_available());
+        let (host_out, joiner_out) = drive_bootstrap_handshake::<()>(&mut alice, &mut bob);
 
-        drive_bootstrap_handshake::<()>(&mut alice, &mut bob);
-
-        assert!(alice.is_available());
-        assert!(bob.is_available());
+        assert!(host_out.iter().any(|o| matches!(o, Output::Available)));
+        assert!(joiner_out.iter().any(|o| matches!(o, Output::Available)));
     }
 
     #[test]
@@ -33,14 +30,15 @@ mod test {
         let mut charlie = MeshNodeFSM::new();
         let charlie_id = charlie.id().clone();
 
-        let bootstrap_outputs = drive_bootstrap_handshake::<()>(&mut bob, &mut charlie);
+        let (bob_bootstrap_out, charlie_bootstrap_out) =
+            drive_bootstrap_handshake::<()>(&mut bob, &mut charlie);
 
         assert!(
-            charlie.is_available(),
+            charlie_bootstrap_out.iter().any(|o| matches!(o, Output::Available)),
             "charlie should be available immediately after bootstrap"
         );
 
-        let relay_messages: Vec<_> = bootstrap_outputs
+        let relay_messages: Vec<_> = bob_bootstrap_out
             .into_iter()
             .filter_map(|o| match o {
                 Output::SendMessage { peer_to, data } => Some((bob_id.clone(), peer_to, data)),
@@ -53,10 +51,11 @@ mod test {
         peers.insert(bob_id.clone(), bob);
         peers.insert(charlie_id.clone(), charlie);
 
-        establish_relay_connection(&mut peers, &bob_id, &charlie_id, &alice_id, &relay_messages);
+        let relay_out =
+            establish_relay_connection(&mut peers, &bob_id, &charlie_id, &alice_id, &relay_messages);
 
         assert!(
-            peers[&charlie_id].is_available(),
+            relay_out.iter().any(|o| matches!(o, Output::Available)),
             "charlie should be available after relay with alice completes"
         );
     }
@@ -73,7 +72,7 @@ mod test {
         peers.insert(alice_id.clone(), alice);
         peers.insert(bob_id.clone(), bob);
 
-        let mut charlie = MeshNodeFSM::new();
+        let charlie = MeshNodeFSM::new();
         let charlie_id = charlie.id().clone();
         peers.insert(charlie_id.clone(), charlie);
         join_mesh(&charlie_id, &bob_id, &mut peers);
@@ -82,14 +81,15 @@ mod test {
         let mut dave = MeshNodeFSM::new();
         let dave_id = dave.id().clone();
 
-        let bootstrap_outputs = drive_bootstrap_handshake::<()>(&mut alice, &mut dave);
+        let (alice_bootstrap_out, dave_bootstrap_out) =
+            drive_bootstrap_handshake::<()>(&mut alice, &mut dave);
 
         assert!(
-            dave.is_available(),
+            dave_bootstrap_out.iter().any(|o| matches!(o, Output::Available)),
             "dave should be available immediately after bootstrap"
         );
 
-        let appeared: Vec<PeerID> = bootstrap_outputs
+        let appeared: Vec<PeerID> = alice_bootstrap_out
             .iter()
             .filter_map(|o| match o {
                 Output::PeerAppeared { peer } => Some(peer.clone()),
@@ -97,10 +97,12 @@ mod test {
             })
             .collect();
 
-        let relay_messages: Vec<_> = bootstrap_outputs
-            .into_iter()
+        let relay_messages: Vec<_> = alice_bootstrap_out
+            .iter()
             .filter_map(|o| match o {
-                Output::SendMessage { peer_to, data } => Some((alice_id.clone(), peer_to, data)),
+                Output::SendMessage { peer_to, data } => {
+                    Some((alice_id.clone(), peer_to.clone(), data.clone()))
+                }
                 _ => None,
             })
             .collect();
@@ -108,13 +110,9 @@ mod test {
         peers.insert(alice_id.clone(), alice);
         peers.insert(dave_id.clone(), dave);
 
-        assert_eq!(
-            appeared.len(),
-            2,
-            "alice should introduce dave to 2 existing peers"
-        );
+        assert_eq!(appeared.len(), 2, "alice should introduce dave to 2 existing peers");
 
-        establish_relay_connection(
+        let relay1_out = establish_relay_connection(
             &mut peers,
             &alice_id,
             &dave_id,
@@ -122,11 +120,11 @@ mod test {
             &relay_messages,
         );
         assert!(
-            peers[&dave_id].is_available(),
+            relay1_out.iter().any(|o| matches!(o, Output::Available)),
             "dave should be available after first relay completes"
         );
 
-        establish_relay_connection(
+        let relay2_out = establish_relay_connection(
             &mut peers,
             &alice_id,
             &dave_id,
@@ -134,7 +132,7 @@ mod test {
             &relay_messages,
         );
         assert!(
-            peers[&dave_id].is_available(),
+            relay2_out.iter().any(|o| matches!(o, Output::Available)),
             "dave should be available after all relays complete"
         );
     }

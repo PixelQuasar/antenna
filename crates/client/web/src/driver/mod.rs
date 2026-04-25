@@ -1,3 +1,5 @@
+use antenna_client_shared::IdentityStorage;
+
 use crate::{
     ConnectionManager, DataChannelManager, Dispatcher, EXECUTE_FUEL, IceServerConfig, RtcCallbacks,
     RtcEvent, Storage,
