@@ -26,9 +26,6 @@ path = "crates/client/native"
 [workspace.dependencies.antenna-client-shared]
 path = "crates/client/shared"
 
-[workspace.dependencies.antenna-signaling-server]
-path = "crates/signaling-server"
-
 [workspace.dependencies.anyhow]
 version = "1.0.101"
 

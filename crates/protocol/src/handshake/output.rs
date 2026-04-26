@@ -14,9 +14,9 @@ pub enum HandshakeOutput {
     /// Apply received answer from other peer (from joiner)
     AcceptSDPAnswer(SignalingPayload),
 
-    ///
+    /// Register connect with other peer
     Connected,
 
-    /// Close RTC connection
+    /// Close connection
     Close,
 }

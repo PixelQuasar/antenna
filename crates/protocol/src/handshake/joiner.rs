@@ -37,7 +37,7 @@ impl Joiner {
                 self.state = HandshakeState::Connected;
                 Ok(Some(HandshakeOutput::Connected))
             }
-            (_, HandshakeInput::Disconnected) => {
+            (_, HandshakeInput::ConnectionDropped) => {
                 self.state = HandshakeState::Closed;
                 Ok(Some(HandshakeOutput::Close))
             }

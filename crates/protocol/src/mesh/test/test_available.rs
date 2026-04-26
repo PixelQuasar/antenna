@@ -3,7 +3,7 @@ mod test {
     use std::collections::HashMap;
 
     use crate::{
-        MeshNodeFSM, Output, PeerID,
+        MeshNodeFSM, MsgPayload, Output, PeerID, RelayPayload,
         test::{drive_bootstrap_handshake, establish_relay_connection, join_mesh},
     };
 
@@ -92,7 +92,14 @@ mod test {
         let appeared: Vec<PeerID> = alice_bootstrap_out
             .iter()
             .filter_map(|o| match o {
-                Output::PeerAppeared { peer } => Some(peer.clone()),
+                Output::SendMessage {
+                    peer_to,
+                    data:
+                        MsgPayload::RelaySignalingFrom {
+                            data: RelayPayload::InitHost(_),
+                            ..
+                        },
+                } => Some(peer_to.clone()),
                 _ => None,
             })
             .collect();

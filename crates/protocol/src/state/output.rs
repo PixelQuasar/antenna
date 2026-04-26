@@ -1,4 +1,4 @@
-use crate::{MsgPayload, PeerID, UserMsgPayload, handshake::HandshakeOutput};
+use crate::{MsgPayload, PeerID, Scheduled, UserMsgPayload, handshake::HandshakeOutput};
 
 /// Common event that client FSM sends
 #[derive(Debug, Clone)]
@@ -24,9 +24,6 @@ pub enum Output<Msg: UserMsgPayload> {
         data: MsgPayload<Msg>,
     },
 
-    ///
-    PeerAppeared { peer: PeerID },
-
     /// Notify about new peer connected to mesh
     PeerConnected { peer: PeerID },
 
@@ -44,4 +41,7 @@ pub enum Output<Msg: UserMsgPayload> {
 
     /// Local node sent disconnect notices to all peers; driver must close all connections
     Disconnecting,
+
+    /// Driver should schedule a timer
+    ScheduleTimer { kind: Scheduled, after_ms: u64 },
 }

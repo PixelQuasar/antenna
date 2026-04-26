@@ -4,7 +4,8 @@ use std::{
     rc::Rc,
 };
 
-use antenna_client_shared::CallbackId;
+use crate::{Driver, Event, JsEventCallback, RtcCallbacks};
+use antenna_client_shared::IceServerConfig;
 use antenna_protocol::{
     HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MsgPayload, PeerID, SignalingPayload,
     UserMsgPayload,
@@ -12,8 +13,6 @@ use antenna_protocol::{
 use anyhow::{Context, Result};
 use wasm_bindgen::{JsValue, closure::Closure};
 use wasm_bindgen_futures::spawn_local;
-
-use crate::{Driver, IceServerConfig, JsEventCallback, Rtc, RtcCallbacks};
 
 pub struct Peer<Msg>
 where
@@ -84,11 +83,11 @@ where
         self.driver.borrow().id().clone()
     }
 
-    pub fn subscribe(&self, subscription: Rtc<Msg>) -> CallbackId {
+    pub fn subscribe(&self, subscription: Event<Msg>) -> u64 {
         self.callbacks.borrow_mut().subscribe(subscription)
     }
 
-    pub fn unsubscribe(&self, id: CallbackId) -> bool {
+    pub fn unsubscribe(&self, id: u64) -> bool {
         self.callbacks.borrow_mut().unsubscribe(id)
     }
 

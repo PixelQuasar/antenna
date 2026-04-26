@@ -154,7 +154,7 @@ mod test {
         let out = a
             .process::<TestMsg>(Input::Handshake {
                 from: b_id.clone(),
-                event: HandshakeInput::Disconnected,
+                event: HandshakeInput::ConnectionDropped,
             })
             .unwrap();
 

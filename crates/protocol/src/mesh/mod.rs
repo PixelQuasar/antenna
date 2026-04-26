@@ -3,11 +3,17 @@ mod test;
 
 use crate::{
     HandshakeFSM, HandshakeInput, HandshakeMode, HandshakeState, HandshakeStrategy, Identity,
-    Input, MsgPayload, Output, PeerID, RelayPayload, SignalingPayload, UserMsgPayload,
+    Input, MAX_RECONNECT_ATTEMPTS, MsgPayload, Output, PeerID, RECONNECT_INTERVAL_MS, RelayPayload,
+    Scheduled, SignalingPayload, UserMsgPayload,
 };
 use anyhow::{Result, anyhow};
 use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use std::collections::{HashMap, HashSet, VecDeque};
+
+#[derive(Debug, Default, Clone)]
+struct DroppedPeerState {
+    attempts: u32,
+}
 
 ///
 #[derive(Default, Clone)]
@@ -39,6 +45,10 @@ pub struct MeshNodeFSM {
     /// Pool of open-offer handshakes before the joiner's peer ID is known
     pending_handshakes: VecDeque<HandshakeContext>,
 
+    /// Peers we lost abruptly and are trying to reconnect to. Cleared on successful
+    /// reconnect (`HandshakeState::Connected`) or on `Input::Leave`.
+    lost_peers: HashMap<PeerID, DroppedPeerState>,
+
     ///
     metadata: MeshMetadata,
 }
@@ -60,6 +70,7 @@ impl MeshNodeFSM {
             identity,
             connections: HashMap::new(),
             pending_handshakes: VecDeque::new(),
+            lost_peers: HashMap::new(),
             metadata: MeshMetadata::default(),
         }
     }
@@ -179,6 +190,7 @@ impl MeshNodeFSM {
             Input::Send { peer_to, data } => self.handle_send(peer_to, data),
             Input::Broadcast { data } => self.handle_broadcast(data),
             Input::Leave => self.handle_leave(),
+            Input::TimerFired { kind } => self.handle_timer_fired(kind),
         }
     }
 
@@ -202,6 +214,7 @@ impl MeshNodeFSM {
         }
         self.connections.clear();
         self.pending_handshakes.clear();
+        self.lost_peers.clear();
         Ok(out)
     }
 
@@ -242,7 +255,7 @@ impl MeshNodeFSM {
                     self.connections.insert(peer.clone(), ctx);
                     outputs.push(Output::InitOpenOffer);
                 }
-                HandshakeInput::Disconnected => {
+                HandshakeInput::ConnectionDropped => {
                     return Ok(outputs);
                 }
                 _ => return Err(anyhow!("Handshake instance with peer not found")),
@@ -273,15 +286,12 @@ impl MeshNodeFSM {
             match ctx.fsm.state() {
                 HandshakeState::Connected => {
                     self.identity.add_known_peer(peer.clone());
+                    self.lost_peers.remove(&peer);
                     outputs.push(Output::PeerConnected { peer: peer.clone() });
                     for existing in self.connections.keys() {
                         if !self.is_connected(existing) || *existing == peer {
                             continue;
                         }
-
-                        outputs.push(Output::PeerAppeared {
-                            peer: existing.clone(),
-                        });
 
                         if ctx.mode == HandshakeMode::Bootstrap {
                             outputs.push(Output::SendMessage {
@@ -303,7 +313,12 @@ impl MeshNodeFSM {
                 }
                 HandshakeState::Closed => {
                     self.connections.remove(&peer);
+                    self.lost_peers.entry(peer.clone()).or_default();
                     outputs.push(Output::PeerLost { peer: peer.clone() });
+                    outputs.push(Output::ScheduleTimer {
+                        kind: Scheduled::ReconnectAttempt { peer: peer.clone() },
+                        after_ms: RECONNECT_INTERVAL_MS,
+                    });
                 }
                 _ => {}
             }
@@ -413,6 +428,88 @@ impl MeshNodeFSM {
             peer_to: dst,
             data: MsgPayload::RelaySignalingFrom { src, data },
         }])
+    }
+
+    fn handle_timer_fired<Msg: UserMsgPayload>(
+        &mut self,
+        kind: Scheduled,
+    ) -> Result<Vec<Output<Msg>>> {
+        match kind {
+            Scheduled::ReconnectAttempt { peer } => self.handle_reconnect_attempt(peer),
+        }
+    }
+
+    fn handle_reconnect_attempt<Msg: UserMsgPayload>(
+        &mut self,
+        peer: PeerID,
+    ) -> Result<Vec<Output<Msg>>> {
+        if !self.lost_peers.contains_key(&peer) {
+            return Ok(vec![]);
+        }
+        if self.is_connected(&peer) {
+            self.lost_peers.remove(&peer);
+            return Ok(vec![]);
+        }
+        if self.connections.contains_key(&peer) {
+            return Ok(vec![]);
+        }
+
+        let attempts = {
+            let state = self.lost_peers.get_mut(&peer).unwrap();
+            state.attempts += 1;
+            state.attempts
+        };
+
+        let mut outputs: Vec<Output<Msg>> = vec![];
+
+        if attempts > MAX_RECONNECT_ATTEMPTS {
+            self.lost_peers.remove(&peer);
+            return Ok(outputs);
+        }
+
+        let relay_peer = match self.connected_peers().into_iter().min() {
+            Some(peer) => peer,
+            None => {
+                self.lost_peers.remove(&peer);
+                return Ok(outputs);
+            }
+        };
+
+        let i_am_host = self.id < peer;
+        let payload = if i_am_host {
+            RelayPayload::InitJoiner(self.id.clone())
+        } else {
+            RelayPayload::InitHost(self.id.clone())
+        };
+
+        outputs.push(Output::SendMessage {
+            peer_to: relay_peer.clone(),
+            data: MsgPayload::RelaySignalingTo {
+                dst: peer.clone(),
+                data: payload,
+            },
+        });
+
+        if i_am_host {
+            let init_outs = self.process::<Msg>(Input::InitHandshake {
+                with: peer.clone(),
+                mode: HandshakeMode::Relay(relay_peer),
+                strategy: HandshakeStrategy::Host,
+            })?;
+            outputs.extend(init_outs);
+            let step_outs = self.process::<Msg>(Input::Handshake {
+                from: peer.clone(),
+                event: HandshakeInput::Init,
+            })?;
+            outputs.extend(step_outs);
+        }
+
+        outputs.push(Output::ScheduleTimer {
+            kind: Scheduled::ReconnectAttempt { peer },
+            after_ms: RECONNECT_INTERVAL_MS,
+        });
+
+        Ok(outputs)
     }
 
     fn handle_relay_signaling_from<Msg: UserMsgPayload>(

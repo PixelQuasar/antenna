@@ -1,14 +1,12 @@
-use antenna_client_shared::IdentityStorage;
+use antenna_client_shared::{ICE_DISCONNECTED_GRACE_MS, IdentityStorage};
 
-use crate::{
-    ConnectionManager, DataChannelManager, Dispatcher, EXECUTE_FUEL, IceServerConfig, RtcCallbacks,
-    RtcEvent, Storage,
-};
+use crate::{ConnectionManager, DataChannelManager, RtcCallbacks, Storage};
+use antenna_client_shared::{EXECUTE_FUEL, EventType, IceServerConfig};
 use antenna_protocol::{
     HandshakeInput, HandshakeOutput, Input, MeshMetadata, MeshNodeFSM, MsgPayload, Output, PeerID,
-    SignalingPayload, UserMsgPayload,
+    Scheduled, SignalingPayload, UserMsgPayload,
 };
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet, VecDeque},
@@ -92,7 +90,7 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                             .borrow()
                             .callbacks
                             .borrow()
-                            .emit(RtcEvent::UserMessage(peer_from, data))?;
+                            .emit(EventType::UserMessage(peer_from, data))?;
                     }
                     vec![]
                 }
@@ -107,7 +105,7 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                     driver
                         .callbacks
                         .borrow()
-                        .emit(RtcEvent::PeerConnected(peer))?;
+                        .emit(EventType::PeerConnected(peer))?;
                     vec![]
                 }
                 Output::PeerDisconnected { peer } => {
@@ -118,7 +116,7 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                         .borrow()
                         .callbacks
                         .borrow()
-                        .emit(RtcEvent::PeerDisconnected(peer))?;
+                        .emit(EventType::PeerDisconnected(peer))?;
                     vec![]
                 }
                 Output::PeerLost { peer } => {
@@ -126,16 +124,15 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                         .borrow()
                         .callbacks
                         .borrow()
-                        .emit(RtcEvent::PeerLost(peer))?;
+                        .emit(EventType::PeerDropped(peer))?;
                     vec![]
                 }
-                Output::PeerAppeared { .. } => vec![],
                 Output::Available => {
                     driver
                         .borrow()
                         .callbacks
                         .borrow()
-                        .emit(RtcEvent::Available)?;
+                        .emit(EventType::Available)?;
                     vec![]
                 }
                 Output::Unavailable => {
@@ -143,7 +140,7 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                         .borrow()
                         .callbacks
                         .borrow()
-                        .emit(RtcEvent::Unavailable)?;
+                        .emit(EventType::Unavailable)?;
                     vec![]
                 }
                 Output::Disconnecting => {
@@ -161,7 +158,11 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                         .borrow()
                         .callbacks
                         .borrow()
-                        .emit(RtcEvent::Disconnected)?;
+                        .emit(EventType::Disconnected)?;
+                    vec![]
+                }
+                Output::ScheduleTimer { kind, after_ms } => {
+                    Self::schedule_timer(driver.clone(), kind, after_ms)?;
                     vec![]
                 }
             };
@@ -188,6 +189,80 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
         }
     }
 
+    fn schedule_timer(driver: Rc<RefCell<Self>>, kind: Scheduled, after_ms: u64) -> Result<()> {
+        let window = web_sys::window().context("no global window")?;
+
+        let cb = Closure::once_into_js(move || {
+            spawn_local(async move {
+                if let Err(e) = Driver::execute(driver, Input::TimerFired { kind }).await {
+                    web_sys::console::error_1(&JsValue::from_str(&format!(
+                        "TimerFired execution failed: {e:#}"
+                    )));
+                }
+            });
+        });
+
+        let timeout = i32::try_from(after_ms).unwrap_or(i32::MAX);
+        window
+            .set_timeout_with_callback_and_timeout_and_arguments_0(cb.unchecked_ref(), timeout)
+            .map_err(|e| anyhow!("set_timeout failed: {:?}", e))?;
+
+        Ok(())
+    }
+
+    fn attach_ice_state_observer(
+        peer_id: PeerID,
+        driver: Rc<RefCell<Self>>,
+        conn: &ConnectionManager,
+    ) {
+        let pc = conn.rtc_peer_connection().clone();
+
+        conn.setup_on_ice_state_change(move |state| match state {
+            web_sys::RtcIceConnectionState::Failed => {
+                Self::execute_connection_dropped(driver.clone(), peer_id.clone());
+            }
+            web_sys::RtcIceConnectionState::Disconnected => {
+                let driver = driver.clone();
+                let peer_id = peer_id.clone();
+                let pc = pc.clone();
+
+                let cb = Closure::once_into_js(move || {
+                    let now = pc.ice_connection_state();
+                    if now == web_sys::RtcIceConnectionState::Disconnected
+                        || now == web_sys::RtcIceConnectionState::Failed
+                    {
+                        Self::execute_connection_dropped(driver, peer_id);
+                    }
+                });
+                if let Some(window) = web_sys::window() {
+                    let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                        cb.unchecked_ref(),
+                        ICE_DISCONNECTED_GRACE_MS as i32,
+                    );
+                }
+            }
+            _ => {}
+        });
+    }
+
+    fn execute_connection_dropped(driver: Rc<RefCell<Self>>, peer_id: PeerID) {
+        spawn_local(async move {
+            if let Err(e) = Driver::execute(
+                driver,
+                Input::<Msg>::Handshake {
+                    from: peer_id,
+                    event: HandshakeInput::ConnectionDropped,
+                },
+            )
+            .await
+            {
+                web_sys::console::error_1(&JsValue::from_str(&format!(
+                    "ICE-driven ConnectionDropped propagation failed: {e:#}"
+                )));
+            }
+        });
+    }
+
     async fn execute_init_offer(
         driver: Rc<RefCell<Self>>,
         peer: Option<PeerID>,
@@ -196,6 +271,10 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
         let conn = Rc::new(ConnectionManager::new_host(&ice_servers)?);
 
         let sdp = conn.create_offer().await?;
+
+        if let Some(peer_id) = &peer {
+            Self::attach_ice_state_observer(peer_id.clone(), driver.clone(), &conn);
+        }
 
         let fsm_input = match &peer {
             None => Input::<Msg>::OpenOfferCreated(sdp),
@@ -226,6 +305,7 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
         let conn = Rc::new(ConnectionManager::new_joiner(&ice_servers)?);
 
         Self::setup_joiner_data_channel(driver.clone(), &peer_id, conn.clone())?;
+        Self::attach_ice_state_observer(peer_id.clone(), driver.clone(), &conn);
 
         let sdp = conn.create_answer(&offer.sdp).await?;
 
@@ -262,6 +342,8 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
             .cloned()
             .context("Connection not found for peer")?;
 
+        Self::attach_ice_state_observer(peer_id.clone(), driver.clone(), &conn);
+
         {
             let mut dc_guard = conn.dc().borrow_mut();
             let dc = dc_guard.as_mut().context("DataChannel not initialized")?;
@@ -296,12 +378,12 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
             .borrow()
             .callbacks
             .borrow()
-            .emit(RtcEvent::Disconnected)?;
+            .emit(EventType::Disconnected)?;
         Ok(vec![])
     }
 
     fn execute_connected(&mut self) -> Result<Vec<Output<Msg>>> {
-        self.callbacks.borrow().emit(RtcEvent::Connected)?;
+        self.callbacks.borrow().emit(EventType::Connected)?;
         Ok(vec![])
     }
 
@@ -411,13 +493,13 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                         driver,
                         Input::<Msg>::Handshake {
                             from: peer_id,
-                            event: HandshakeInput::Disconnected,
+                            event: HandshakeInput::ConnectionDropped,
                         },
                     )
                     .await
                     {
                         web_sys::console::error_1(&JsValue::from_str(&format!(
-                            "Error while routing Disconnected: {:?}",
+                            "Error while routing ConnectionDropped: {:?}",
                             e
                         )));
                     }

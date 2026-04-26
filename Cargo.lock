@@ -15,6 +15,7 @@ dependencies = [
 name = "antenna"
 version = "0.1.0"
 dependencies = [
+ "antenna-client-shared",
  "antenna-client-web",
  "antenna-protocol",
 ]

@@ -68,7 +68,7 @@ mod tests {
         host.process(HandshakeInput::Init).unwrap();
         assert_eq!(*host.state(), HandshakeState::CreatingOffer);
 
-        let out = host.process(HandshakeInput::Disconnected).unwrap();
+        let out = host.process(HandshakeInput::ConnectionDropped).unwrap();
         assert_eq!(*host.state(), HandshakeState::Closed);
         assert_eq!(out, Some(HandshakeOutput::Close));
     }

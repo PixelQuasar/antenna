@@ -3,10 +3,16 @@ mod ice;
 mod signaling;
 mod storage;
 
-pub use dispatcher::{CallbackId, Dispatcher, RtcEvent};
+pub use dispatcher::{
+    Event, EventType, MessageCallback, NoArgCallback, PeerCallback, RtcCallbacks,
+};
 pub use ice::IceServerConfig;
 pub use signaling::{ClientMsg, ServerMsg};
 pub use storage::IdentityStorage;
 
+/// fsm-polling method in peer recursion fuel
 pub const EXECUTE_FUEL: u64 = 1024;
+/// Storage identity key
 pub const STORAGE_IDENTITY_KEY: &str = "antenna_identity";
+/// Time after what we are enforcing relay reconnection
+pub const ICE_DISCONNECTED_GRACE_MS: u64 = 5000;

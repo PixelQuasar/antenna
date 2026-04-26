@@ -8,10 +8,12 @@ use crate::utils::{IceServerConfig, async_callback, build_rtc_config};
 
 pub struct PeerConnectionManager {
     peer_connection: web_sys::RtcPeerConnection,
-    ice_closure: RefCell<Option<Closure<dyn FnMut(JsValue)>>>,
+    ice_cb: RefCell<Option<Closure<dyn FnMut(JsValue)>>>,
+    ice_state_cb: RefCell<Option<Closure<dyn FnMut(JsValue)>>>,
 }
 
 impl PeerConnectionManager {
+    /// creates new peer connection manager from ICE config
     pub fn from_ice_config(ice_servers: &[IceServerConfig]) -> Result<Self> {
         let peer_connection =
             web_sys::RtcPeerConnection::new_with_configuration(&build_rtc_config(ice_servers))
@@ -19,15 +21,33 @@ impl PeerConnectionManager {
 
         Ok(Self {
             peer_connection,
-            ice_closure: RefCell::new(None),
+            ice_cb: RefCell::new(None),
+            ice_state_cb: RefCell::new(None),
         })
     }
 
+    /// Wires oniceconnectionstatechange and forwards the current ICE connection state to callback
+    /// on every state change.
+    pub fn setup_on_ice_state_change<F>(&self, mut callback: F)
+    where
+        F: FnMut(web_sys::RtcIceConnectionState) + 'static,
+    {
+        let pc = self.peer_connection.clone();
+        let cb = Closure::<dyn FnMut(JsValue)>::new(move |_evt: JsValue| {
+            callback(pc.ice_connection_state());
+        });
+        self.peer_connection
+            .set_oniceconnectionstatechange(Some(cb.as_ref().unchecked_ref()));
+        *self.ice_state_cb.borrow_mut() = Some(cb);
+    }
+
+    /// peer connection web object getter
     pub fn peer_connection(&self) -> &web_sys::RtcPeerConnection {
         &self.peer_connection
     }
 
-    pub async fn wait_for_ice_gathering_complete(&self) -> Result<String> {
+    /// blocks async flow until ice gathering would be complete and then generates SDP description
+    pub async fn fetch_sdp(&self) -> Result<String> {
         if self.peer_connection.ice_gathering_state() == web_sys::RtcIceGatheringState::Complete
             && let Some(desc) = self.peer_connection.local_description()
         {
@@ -46,17 +66,18 @@ impl PeerConnectionManager {
             }) as Box<dyn FnMut(JsValue)>);
             self.peer_connection
                 .set_onicecandidate(Some(cb.as_ref().unchecked_ref()));
-            *self.ice_closure.borrow_mut() = Some(cb);
+            *self.ice_cb.borrow_mut() = Some(cb);
         })
         .await
         .ok_or_else(|| anyhow!("ICE gathering callback failed"));
 
         self.peer_connection.set_onicecandidate(None);
-        *self.ice_closure.borrow_mut() = None;
+        *self.ice_cb.borrow_mut() = None;
 
         result
     }
 
+    /// Creates sdp offer
     pub async fn create_offer(&self) -> Result<String> {
         let offer = JsFuture::from(self.peer_connection.create_offer())
             .await
@@ -69,6 +90,7 @@ impl PeerConnectionManager {
         Ok(sdp)
     }
 
+    /// Creates sdp answer
     pub async fn create_answer(&self) -> Result<String> {
         let answer = JsFuture::from(self.peer_connection.create_answer())
             .await
@@ -81,6 +103,7 @@ impl PeerConnectionManager {
         Ok(sdp)
     }
 
+    /// Set local sdp description
     pub async fn set_local_description(&self, sdp: &str, is_offer: bool) -> Result<()> {
         let sdp_type = if is_offer {
             web_sys::RtcSdpType::Offer
@@ -98,6 +121,7 @@ impl PeerConnectionManager {
         Ok(())
     }
 
+    /// Set remote description
     pub async fn set_remote_description(&self, sdp: &str, is_offer: bool) -> Result<()> {
         let sdp_type = if is_offer {
             web_sys::RtcSdpType::Offer
@@ -123,6 +147,7 @@ impl PeerConnectionManager {
 impl Drop for PeerConnectionManager {
     fn drop(&mut self) {
         self.peer_connection.set_onicecandidate(None);
+        self.peer_connection.set_oniceconnectionstatechange(None);
         self.close();
     }
 }

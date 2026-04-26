@@ -1,5 +1,5 @@
 use crate::{
-    HandshakeMode, HandshakeStrategy, PeerID, UserMsgPayload, handshake::HandshakeInput,
+    HandshakeMode, HandshakeStrategy, PeerID, Scheduled, UserMsgPayload, handshake::HandshakeInput,
     state::MsgPayload,
 };
 
@@ -42,4 +42,7 @@ pub enum Input<Msg: UserMsgPayload> {
 
     /// The local node initiates departure from the mesh
     Leave,
+
+    /// Driver-scheduled timer expired; FSM dispatches by kind.
+    TimerFired { kind: Scheduled },
 }

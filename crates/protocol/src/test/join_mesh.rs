@@ -1,7 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use crate::{
-    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID,
+    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID, RelayPayload,
     test::drive_bootstrap_handshake,
 };
 
@@ -25,7 +25,14 @@ pub(crate) fn join_mesh(
     let appeared_peers = bootstrap_outputs
         .iter()
         .filter_map(|o| match o {
-            Output::PeerAppeared { peer } => Some(peer.clone()),
+            Output::SendMessage {
+                peer_to,
+                data:
+                    MsgPayload::RelaySignalingFrom {
+                        data: RelayPayload::InitHost(_),
+                        ..
+                    },
+            } => Some(peer_to.clone()),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -159,10 +166,6 @@ pub(crate) fn establish_relay_connection(
                 Output::SendMessage { peer_to, data } => {
                     queue.push_back((to.clone(), peer_to, data));
                 }
-                Output::PeerAppeared { peer } => {
-                    assert_eq!(to, *joiner_id);
-                    assert_eq!(peer, *host_id);
-                }
                 Output::PeerConnected { peer } => {
                     if to == *host_id {
                         assert_eq!(peer, *joiner_id);
@@ -183,6 +186,7 @@ pub(crate) fn establish_relay_connection(
                 Output::Available => {}
                 Output::Unavailable => {}
                 Output::Disconnecting => {}
+                Output::ScheduleTimer { .. } => {}
             }
         }
     }

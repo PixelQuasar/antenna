@@ -12,8 +12,9 @@ pub use handshake::{
 };
 pub use identity::{Identity, PeerID};
 pub use mesh::{MeshMetadata, MeshNodeFSM};
-pub use state::{Input, MsgPayload, Output, RelayPayload, UserMsgPayload};
+pub use state::{Input, MsgPayload, Output, RelayPayload, Scheduled, UserMsgPayload};
 pub(crate) use utils::{
-    deserialize_base64_keypair, deserialize_base64_pubkey, deserialize_base64_vec,
-    serialize_base64_keypair, serialize_base64_pubkey, serialize_base64_vec,
+    MAX_RECONNECT_ATTEMPTS, RECONNECT_INTERVAL_MS, deserialize_base64_keypair,
+    deserialize_base64_pubkey, deserialize_base64_vec, serialize_base64_keypair,
+    serialize_base64_pubkey, serialize_base64_vec,
 };

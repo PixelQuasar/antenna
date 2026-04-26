@@ -1,8 +1,7 @@
 use antenna_client_shared::IdentityStorage;
+use antenna_client_shared::STORAGE_IDENTITY_KEY;
 use antenna_protocol::Identity;
 use anyhow::{Context, Result, anyhow};
-
-use crate::STORAGE_IDENTITY_KEY;
 
 pub struct Storage;
 
