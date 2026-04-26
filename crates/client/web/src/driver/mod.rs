@@ -97,22 +97,36 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                     vec![]
                 }
                 Output::PeerConnected { peer } => {
-                    let d = driver.borrow();
-                    if let Err(err) = Storage::save_identity(d.fsm.identity()) {
+                    let driver = driver.borrow();
+                    if let Err(err) = Storage::save_identity(driver.fsm.identity()) {
                         web_sys::console::log_1(&JsValue::from_str(&format!(
                             "Error during identity save: {:?}",
                             err
                         )));
                     }
-                    d.callbacks.borrow().emit(RtcEvent::PeerConnected(peer))?;
+                    driver
+                        .callbacks
+                        .borrow()
+                        .emit(RtcEvent::PeerConnected(peer))?;
                     vec![]
                 }
                 Output::PeerDisconnected { peer } => {
+                    if let Some(conn) = driver.borrow_mut().connections.remove(&peer) {
+                        conn.close();
+                    }
                     driver
                         .borrow()
                         .callbacks
                         .borrow()
                         .emit(RtcEvent::PeerDisconnected(peer))?;
+                    vec![]
+                }
+                Output::PeerLost { peer } => {
+                    driver
+                        .borrow()
+                        .callbacks
+                        .borrow()
+                        .emit(RtcEvent::PeerLost(peer))?;
                     vec![]
                 }
                 Output::PeerAppeared { .. } => vec![],
@@ -130,6 +144,24 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                         .callbacks
                         .borrow()
                         .emit(RtcEvent::Unavailable)?;
+                    vec![]
+                }
+                Output::Disconnecting => {
+                    let conns: Vec<_> = driver
+                        .borrow_mut()
+                        .connections
+                        .drain()
+                        .map(|(_, v)| v)
+                        .collect();
+                    let pending: Vec<_> = driver.borrow_mut().pending.drain(..).collect();
+                    for conn in conns.into_iter().chain(pending) {
+                        conn.close();
+                    }
+                    driver
+                        .borrow()
+                        .callbacks
+                        .borrow()
+                        .emit(RtcEvent::Disconnected)?;
                     vec![]
                 }
             };
@@ -151,7 +183,7 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
             HandshakeOutput::AcceptSDPAnswer(answer) => {
                 Self::execute_accept_answer(driver, peer, answer).await
             }
-            HandshakeOutput::Close => driver.borrow_mut().execute_close(peer),
+            HandshakeOutput::Close => Self::execute_close(driver, peer).await,
             HandshakeOutput::Connected => driver.borrow_mut().execute_connected(),
         }
     }
@@ -215,11 +247,11 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
         let peer_id = peer.context("accept answer called without peer ID")?;
 
         {
-            let mut d = driver.borrow_mut();
-            if !d.connections.contains_key(&peer_id)
-                && let Some(pending) = d.pending.pop_front()
+            let mut driver = driver.borrow_mut();
+            if !driver.connections.contains_key(&peer_id)
+                && let Some(pending) = driver.pending.pop_front()
             {
-                d.connections.insert(peer_id.clone(), pending);
+                driver.connections.insert(peer_id.clone(), pending);
             }
         }
 
@@ -231,8 +263,8 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
             .context("Connection not found for peer")?;
 
         {
-            let dc_guard = conn.dc().borrow();
-            let dc = dc_guard.as_ref().context("DataChannel not initialized")?;
+            let mut dc_guard = conn.dc().borrow_mut();
+            let dc = dc_guard.as_mut().context("DataChannel not initialized")?;
             Self::attach_data_channel_callbacks(peer_id, driver, dc)?;
         }
 
@@ -241,20 +273,30 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
         Ok(vec![])
     }
 
-    fn execute_close(&mut self, peer: Option<PeerID>) -> Result<Vec<Output<Msg>>> {
-        match peer {
-            None => {
-                for conn in self.pending.drain(..) {
-                    conn.close();
+    async fn execute_close(
+        driver: Rc<RefCell<Self>>,
+        peer: Option<PeerID>,
+    ) -> Result<Vec<Output<Msg>>> {
+        {
+            let mut driver = driver.borrow_mut();
+            match &peer {
+                None => {
+                    for conn in driver.pending.drain(..) {
+                        conn.close();
+                    }
                 }
-            }
-            Some(peer_id) => {
-                if let Some(conn) = self.connections.remove(&peer_id) {
-                    conn.close();
+                Some(peer_id) => {
+                    if let Some(conn) = driver.connections.remove(peer_id) {
+                        conn.close();
+                    }
                 }
             }
         }
-        self.callbacks.borrow().emit(RtcEvent::Disconnected)?;
+        driver
+            .borrow()
+            .callbacks
+            .borrow()
+            .emit(RtcEvent::Disconnected)?;
         Ok(vec![])
     }
 
@@ -273,10 +315,13 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
         let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |evt: JsValue| {
             let event: web_sys::RtcDataChannelEvent = evt.unchecked_into();
             let channel = event.channel();
-            let dc_manager = DataChannelManager::from_existing(channel);
+            let mut dc_manager = DataChannelManager::from_existing(channel);
 
-            let result =
-                Self::attach_data_channel_callbacks(peer_id.clone(), driver.clone(), &dc_manager);
+            let result = Self::attach_data_channel_callbacks(
+                peer_id.clone(),
+                driver.clone(),
+                &mut dc_manager,
+            );
             if let Err(e) = result {
                 web_sys::console::error_1(&JsValue::from_str(&format!(
                     "Error while attaching data channel callbacks: {:?}",
@@ -287,14 +332,14 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
         }));
         conn.rtc_peer_connection()
             .set_ondatachannel(Some(cb.as_ref().unchecked_ref()));
-        cb.forget();
+        conn.store_ondatachannel_closure(cb);
         Ok(())
     }
 
     fn attach_data_channel_callbacks(
         peer_id: PeerID,
         driver: Rc<RefCell<Self>>,
-        dc_manager: &DataChannelManager,
+        dc_manager: &mut DataChannelManager,
     ) -> Result<()> {
         {
             let peer_id = peer_id.clone();

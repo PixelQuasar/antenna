@@ -100,6 +100,98 @@ mod test {
     }
 
     #[test]
+    fn leave_sends_disconnect_to_peer_and_emits_disconnecting() {
+        let (mut a, b) = connected_pair();
+        let b_id = b.id().clone();
+
+        let out = a.process::<TestMsg>(Input::Leave).unwrap();
+
+        assert!(
+            out.iter().any(|o| matches!(
+                o,
+                Output::SendMessage { peer_to, data: MsgPayload::Disconnect }
+                if peer_to == &b_id
+            )),
+            "expected Disconnect message to connected peer"
+        );
+        assert!(out.iter().any(|o| matches!(o, Output::Disconnecting)));
+        assert!(!a.is_connected(&b_id));
+    }
+
+    #[test]
+    fn leave_with_no_peers_emits_only_disconnecting() {
+        let mut alone = MeshNodeFSM::new();
+
+        let out = alone.process::<TestMsg>(Input::Leave).unwrap();
+
+        assert_eq!(out.len(), 1);
+        assert!(matches!(out[0], Output::Disconnecting));
+    }
+
+    #[test]
+    fn receiving_disconnect_message_removes_peer() {
+        let (mut a, b) = connected_pair();
+        let b_id = b.id().clone();
+
+        assert!(a.is_connected(&b_id));
+
+        let out = a
+            .process::<TestMsg>(Input::MessageReceived {
+                peer_from: b_id.clone(),
+                data: MsgPayload::Disconnect,
+            })
+            .unwrap();
+
+        assert!(out.iter().any(|o| matches!(o, Output::PeerDisconnected { peer } if peer == &b_id)));
+        assert!(!a.is_connected(&b_id));
+    }
+
+    #[test]
+    fn abrupt_disconnect_emits_peer_lost() {
+        let (mut a, b) = connected_pair();
+        let b_id = b.id().clone();
+
+        let out = a
+            .process::<TestMsg>(Input::Handshake {
+                from: b_id.clone(),
+                event: HandshakeInput::Disconnected,
+            })
+            .unwrap();
+
+        assert!(
+            out.iter().any(|o| matches!(o, Output::PeerLost { peer } if peer == &b_id)),
+            "abrupt disconnect should emit PeerLost"
+        );
+        assert!(
+            !out.iter().any(|o| matches!(o, Output::PeerDisconnected { .. })),
+            "abrupt disconnect must not emit PeerDisconnected"
+        );
+        assert!(!a.is_connected(&b_id));
+    }
+
+    #[test]
+    fn graceful_disconnect_emits_peer_disconnected_not_lost() {
+        let (mut a, b) = connected_pair();
+        let b_id = b.id().clone();
+
+        let out = a
+            .process::<TestMsg>(Input::MessageReceived {
+                peer_from: b_id.clone(),
+                data: MsgPayload::Disconnect,
+            })
+            .unwrap();
+
+        assert!(
+            out.iter().any(|o| matches!(o, Output::PeerDisconnected { peer } if peer == &b_id)),
+            "graceful disconnect should emit PeerDisconnected"
+        );
+        assert!(
+            !out.iter().any(|o| matches!(o, Output::PeerLost { .. })),
+            "graceful disconnect must not emit PeerLost"
+        );
+    }
+
+    #[test]
     fn unknown_handshake_event_errors() {
         let mut mesh = MeshNodeFSM::new();
         let unknown_id = MeshNodeFSM::new().id().clone();

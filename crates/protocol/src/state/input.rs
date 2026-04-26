@@ -39,4 +39,7 @@ pub enum Input<Msg: UserMsgPayload> {
 
     /// Receive peer leaving message
     PeerLeaving { peer: PeerID },
+
+    /// The local node initiates departure from the mesh
+    Leave,
 }

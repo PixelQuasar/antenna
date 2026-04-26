@@ -1,6 +1,6 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, rc::Rc};
 
-use antenna::{IceServerConfig, Peer, PeerID, Rtc, SignalingClient, WebPeer};
+use antenna::{IceServerConfig, Peer, PeerID, Rtc, SignalingClient};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -11,7 +11,7 @@ struct Message {
 
 #[wasm_bindgen]
 pub struct ChatApp {
-    peer: WebPeer<Message>,
+    peer: Rc<RefCell<Peer<Message>>>,
     signaling_client: RefCell<Option<SignalingClient>>,
 }
 
@@ -31,18 +31,18 @@ impl ChatApp {
             "password".into(),
         ));
 
-        let mut peer = WebPeer::with_ice_servers(ice_servers);
+        let peer = Peer::with_ice_servers(ice_servers);
         peer.subscribe(Rtc::UserMessage(Self::on_message));
 
         Ok(ChatApp {
-            peer,
+            peer: Rc::new(RefCell::new(peer)),
             signaling_client: RefCell::new(None),
         })
     }
 
     #[wasm_bindgen(js_name = myId)]
     pub fn my_id(&self) -> String {
-        self.peer.my_id().to_string()
+        self.peer.borrow().my_id().to_string()
     }
 
     #[wasm_bindgen]
@@ -66,9 +66,14 @@ impl ChatApp {
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
+    #[wasm_bindgen]
+    pub fn leave(&self) {
+        self.peer.borrow().leave();
+    }
+
     #[wasm_bindgen(js_name = broadcast)]
     pub fn broadcast(&self, text: String) {
-        self.peer.broadcast(Message { text })
+        self.peer.borrow().broadcast(Message { text })
     }
 
     fn on_message(peer: PeerID, data: Message) {
@@ -79,43 +84,44 @@ impl ChatApp {
     }
 
     #[wasm_bindgen(js_name = onMessage)]
-    pub fn js_on_message(&mut self, cb: js_sys::Function) {
-        self.peer.set_js_on_message(cb);
+    pub fn js_on_message(&self, cb: js_sys::Function) {
+        self.peer.borrow().subscribe(Rtc::JsUserMessage(cb));
     }
 
     #[wasm_bindgen(js_name = onConnected)]
-    pub fn js_on_connected(&mut self, cb: js_sys::Function) {
-        self.peer.set_js_on_connected(cb);
+    pub fn js_on_connected(&self, cb: js_sys::Function) {
+        self.peer.borrow().subscribe(Rtc::JsConnected(cb));
     }
 
     #[wasm_bindgen(js_name = onDisconnected)]
-    pub fn js_on_disconnected(&mut self, cb: js_sys::Function) {
-        self.peer.set_js_on_disconnected(cb);
+    pub fn js_on_disconnected(&self, cb: js_sys::Function) {
+        self.peer.borrow().subscribe(Rtc::JsDisconnected(cb));
     }
 
     #[wasm_bindgen(js_name = onPeerConnected)]
-    pub fn js_on_peer_connected(&mut self, cb: js_sys::Function) {
-        self.peer.set_js_on_peer_connected(cb);
+    pub fn js_on_peer_connected(&self, cb: js_sys::Function) {
+        self.peer.borrow().subscribe(Rtc::JsPeerConnected(cb));
     }
 
     #[wasm_bindgen(js_name = onPeerDisconnected)]
-    pub fn js_on_peer_disconnected(&mut self, cb: js_sys::Function) {
-        self.peer.set_js_on_peer_disconnected(cb);
+    pub fn js_on_peer_disconnected(&self, cb: js_sys::Function) {
+        self.peer.borrow().subscribe(Rtc::JsPeerDisconnected(cb));
     }
 
     #[wasm_bindgen(js_name = onAvailable)]
-    pub fn js_on_available(&mut self, cb: js_sys::Function) {
-        self.peer.set_js_on_available(cb);
+    pub fn js_on_available(&self, cb: js_sys::Function) {
+        self.peer.borrow().subscribe(Rtc::JsAvailable(cb));
     }
 
     #[wasm_bindgen(js_name = onUnavailable)]
-    pub fn js_on_unavailable(&mut self, cb: js_sys::Function) {
-        self.peer.set_js_on_unavailable(cb);
+    pub fn js_on_unavailable(&self, cb: js_sys::Function) {
+        self.peer.borrow().subscribe(Rtc::JsUnavailable(cb));
     }
 
     #[wasm_bindgen(js_name = connectedPeers)]
     pub fn connected_peers(&self) -> js_sys::Array {
         self.peer
+            .borrow()
             .connected_peers()
             .into_iter()
             .map(|p| JsValue::from_str(&p))

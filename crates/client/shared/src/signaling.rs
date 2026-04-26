@@ -6,6 +6,7 @@ pub enum ClientMsg<'a> {
     Join { room_id: &'a str },
     Offer { room_id: &'a str, offer: &'a str },
     Answer { room_id: &'a str, answer: &'a str },
+    Disconnect { room_id: &'a str },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -173,12 +173,16 @@ pub(crate) fn establish_relay_connection(
                     }
                 }
                 Output::PeerDisconnected { peer } => {
-                    panic!("unexpected disconnect during relay test: {peer:?}");
+                    panic!("unexpected graceful disconnect during relay test: {peer:?}");
+                }
+                Output::PeerLost { peer } => {
+                    panic!("unexpected peer loss during relay test: {peer:?}");
                 }
                 Output::ReceiveMessage { .. } => {}
                 Output::InitOpenOffer => {}
                 Output::Available => {}
                 Output::Unavailable => {}
+                Output::Disconnecting => {}
             }
         }
     }

@@ -29,7 +29,6 @@ version = "0.1.0"
 dependencies = [
  "antenna-protocol",
  "anyhow",
- "async-trait",
  "serde",
 ]
 

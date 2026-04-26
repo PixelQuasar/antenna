@@ -1,10 +1,14 @@
-use crate::{DataChannelManager, IceServerConfig, PeerConnectionManager};
-use anyhow::Result;
 use std::cell::RefCell;
+
+use anyhow::Result;
+use wasm_bindgen::{JsValue, closure::Closure};
+
+use crate::{DataChannelManager, IceServerConfig, PeerConnectionManager};
 
 pub struct ConnectionManager {
     pc: PeerConnectionManager,
     dc: RefCell<Option<DataChannelManager>>,
+    ondatachannel_cb: RefCell<Option<Closure<dyn FnMut(JsValue)>>>,
 }
 
 impl ConnectionManager {
@@ -14,6 +18,7 @@ impl ConnectionManager {
         Ok(Self {
             pc,
             dc: RefCell::new(Some(dc)),
+            ondatachannel_cb: RefCell::new(None),
         })
     }
 
@@ -22,6 +27,7 @@ impl ConnectionManager {
         Ok(Self {
             pc,
             dc: RefCell::new(None),
+            ondatachannel_cb: RefCell::new(None),
         })
     }
 
@@ -54,10 +60,22 @@ impl ConnectionManager {
         self.pc.peer_connection()
     }
 
+    pub fn store_ondatachannel_closure(&self, cb: Closure<dyn FnMut(JsValue)>) {
+        *self.ondatachannel_cb.borrow_mut() = Some(cb);
+    }
+
     pub fn close(&self) {
+        self.pc.peer_connection().set_ondatachannel(None);
+        *self.ondatachannel_cb.borrow_mut() = None;
         if let Some(dc) = self.dc.borrow().as_ref() {
-            dc.close()
+            dc.close();
         }
         self.pc.close();
+    }
+}
+
+impl Drop for ConnectionManager {
+    fn drop(&mut self) {
+        self.close();
     }
 }

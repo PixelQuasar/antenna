@@ -21,4 +21,5 @@ pub enum MsgPayload<Msg: UserMsgPayload> {
     RelaySignalingTo { dst: PeerID, data: RelayPayload },
     RelaySignalingFrom { src: PeerID, data: RelayPayload },
     Heartbeat,
+    Disconnect,
 }

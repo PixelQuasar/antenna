@@ -1,38 +1,40 @@
-use std::{cell::RefCell, collections::HashSet, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashSet,
+    rc::Rc,
+};
 
-use antenna_client_shared::{CallbackId, Peer};
+use antenna_client_shared::CallbackId;
 use antenna_protocol::{
     HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MsgPayload, PeerID, SignalingPayload,
     UserMsgPayload,
 };
 use anyhow::{Context, Result};
-use async_trait::async_trait;
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{JsValue, closure::Closure};
 use wasm_bindgen_futures::spawn_local;
 
-use crate::{Driver, IceServerConfig, Rtc, RtcCallbacks};
+use crate::{Driver, IceServerConfig, JsEventCallback, Rtc, RtcCallbacks};
 
-pub struct WebPeer<Msg>
+pub struct Peer<Msg>
 where
     Msg: UserMsgPayload + 'static,
 {
     driver: Rc<RefCell<Driver<Msg>>>,
     callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
+    left: Rc<Cell<bool>>,
+    _callback_buffer: Vec<JsEventCallback>,
 }
 
-impl<Msg> Clone for WebPeer<Msg>
+impl<Msg> Drop for Peer<Msg>
 where
     Msg: UserMsgPayload + 'static,
 {
-    fn clone(&self) -> Self {
-        Self {
-            driver: self.driver.clone(),
-            callbacks: self.callbacks.clone(),
-        }
+    fn drop(&mut self) {
+        self.leave();
     }
 }
 
-impl<Msg> Default for WebPeer<Msg>
+impl<Msg> Default for Peer<Msg>
 where
     Msg: UserMsgPayload + 'static,
 {
@@ -41,7 +43,7 @@ where
     }
 }
 
-impl<Msg> WebPeer<Msg>
+impl<Msg> Peer<Msg>
 where
     Msg: UserMsgPayload + 'static,
 {
@@ -52,58 +54,45 @@ where
     pub fn with_ice_servers(ice_servers: Vec<IceServerConfig>) -> Self {
         let callbacks = Rc::new(RefCell::new(RtcCallbacks::new()));
         let driver = Rc::new(RefCell::new(Driver::new(ice_servers, callbacks.clone())));
-        Self { driver, callbacks }
+        let left = Rc::new(Cell::new(false));
+
+        let window = web_sys::window().expect("no global window");
+        let cb = Closure::<dyn FnMut()>::new({
+            let left = left.clone();
+            let driver = driver.clone();
+            move || {
+                if left.replace(true) {
+                    return;
+                }
+                let driver = driver.clone();
+                spawn_local(async move {
+                    let _ = Driver::execute(driver, Input::Leave).await;
+                });
+            }
+        });
+        let _callback_buffer = vec![JsEventCallback::new(window.into(), "beforeunload", cb)];
+
+        Self {
+            driver,
+            callbacks,
+            left,
+            _callback_buffer,
+        }
     }
 
-    pub fn set_js_on_message(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsUserMessage(cb));
-    }
-
-    pub fn set_js_on_connected(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsConnected(cb));
-    }
-
-    pub fn set_js_on_disconnected(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsDisconnected(cb));
-    }
-
-    pub fn set_js_on_peer_connected(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsPeerConnected(cb));
-    }
-
-    pub fn set_js_on_peer_disconnected(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsPeerDisconnected(cb));
-    }
-
-    pub fn set_js_on_available(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsAvailable(cb));
-    }
-
-    pub fn set_js_on_unavailable(&mut self, cb: js_sys::Function) {
-        self.subscribe(Rtc::JsUnavailable(cb));
-    }
-}
-
-#[async_trait(?Send)]
-impl<Msg> Peer<Msg> for WebPeer<Msg>
-where
-    Msg: UserMsgPayload + 'static,
-{
-    type Subscription = Rtc<Msg>;
-
-    fn my_id(&self) -> PeerID {
+    pub fn my_id(&self) -> PeerID {
         self.driver.borrow().id().clone()
     }
 
-    fn subscribe(&mut self, subscription: Rtc<Msg>) -> CallbackId {
+    pub fn subscribe(&self, subscription: Rtc<Msg>) -> CallbackId {
         self.callbacks.borrow_mut().subscribe(subscription)
     }
 
-    fn unsubscribe(&mut self, id: CallbackId) -> bool {
+    pub fn unsubscribe(&self, id: CallbackId) -> bool {
         self.callbacks.borrow_mut().unsubscribe(id)
     }
 
-    async fn start(&self) -> Result<String> {
+    pub async fn start(&self) -> Result<String> {
         Driver::execute(self.driver.clone(), Input::InitOpenOffer).await?;
 
         self.driver
@@ -115,7 +104,7 @@ where
             .to_base64()
     }
 
-    async fn receive_offer(&self, offer: &str) -> Result<String> {
+    pub async fn receive_offer(&self, offer: &str) -> Result<String> {
         let offer = SignalingPayload::from_base64(offer)?;
         let peer_id = offer.peer_id();
         Driver::execute(
@@ -145,7 +134,7 @@ where
             .to_base64()
     }
 
-    async fn receive_answer(&self, answer: &str) -> Result<()> {
+    pub async fn receive_answer(&self, answer: &str) -> Result<()> {
         let answer = SignalingPayload::from_base64(answer)?;
         let peer_id = answer.peer_id();
         Driver::execute(
@@ -160,7 +149,7 @@ where
         Ok(())
     }
 
-    fn send(&self, peer_id: PeerID, data: Msg) {
+    pub fn send(&self, peer_id: PeerID, data: Msg) {
         let driver = self.driver.clone();
         spawn_local(async move {
             if let Err(e) = Driver::execute(
@@ -177,7 +166,7 @@ where
         });
     }
 
-    fn broadcast(&self, data: Msg) {
+    pub fn broadcast(&self, data: Msg) {
         let driver = self.driver.clone();
         spawn_local(async move {
             if let Err(e) = Driver::execute(
@@ -193,11 +182,23 @@ where
         });
     }
 
-    fn is_connected(&self, peer_id: PeerID) -> bool {
+    pub fn leave(&self) {
+        if self.left.replace(true) {
+            return;
+        }
+        let driver = self.driver.clone();
+        spawn_local(async move {
+            if let Err(e) = Driver::execute(driver, Input::Leave).await {
+                web_sys::console::error_1(&JsValue::from_str(&format!("{e:#}")));
+            }
+        });
+    }
+
+    pub fn is_connected(&self, peer_id: PeerID) -> bool {
         self.driver.borrow().is_connected(&peer_id)
     }
 
-    fn connected_peers(&self) -> HashSet<String> {
+    pub fn connected_peers(&self) -> HashSet<String> {
         self.driver
             .borrow()
             .connected_peers()

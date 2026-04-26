@@ -178,6 +178,7 @@ impl MeshNodeFSM {
             Input::MessageReceived { peer_from, data } => self.handle_message(peer_from, data),
             Input::Send { peer_to, data } => self.handle_send(peer_to, data),
             Input::Broadcast { data } => self.handle_broadcast(data),
+            Input::Leave => self.handle_leave(),
         }
     }
 
@@ -187,6 +188,21 @@ impl MeshNodeFSM {
 
     pub fn identity(&self) -> &Identity {
         &self.identity
+    }
+
+    fn handle_leave<Msg: UserMsgPayload>(&mut self) -> Result<Vec<Output<Msg>>> {
+        let mut out = vec![Output::Disconnecting];
+        for peer in self.connections.keys() {
+            if self.is_connected(peer) {
+                out.push(Output::SendMessage {
+                    peer_to: peer.clone(),
+                    data: MsgPayload::Disconnect,
+                });
+            }
+        }
+        self.connections.clear();
+        self.pending_handshakes.clear();
+        Ok(out)
     }
 
     fn handle_peer_leaving<Msg: UserMsgPayload>(
@@ -217,15 +233,20 @@ impl MeshNodeFSM {
         let mut outputs: Vec<Output<Msg>> = vec![];
 
         if !self.connections.contains_key(&peer) {
-            let HandshakeInput::Answer(_) = &event else {
-                return Err(anyhow!("Handshake instance with peer not found"));
-            };
-            let ctx = self
-                .pending_handshakes
-                .pop_front()
-                .ok_or_else(|| anyhow!("Pending handshake not found"))?;
-            self.connections.insert(peer.clone(), ctx);
-            outputs.push(Output::InitOpenOffer);
+            match &event {
+                HandshakeInput::Answer(_) => {
+                    let ctx = self
+                        .pending_handshakes
+                        .pop_front()
+                        .ok_or_else(|| anyhow!("Pending handshake not found"))?;
+                    self.connections.insert(peer.clone(), ctx);
+                    outputs.push(Output::InitOpenOffer);
+                }
+                HandshakeInput::Disconnected => {
+                    return Ok(outputs);
+                }
+                _ => return Err(anyhow!("Handshake instance with peer not found")),
+            }
         }
 
         let side_effects_outs = self.handle_side_effects(&peer, &event)?;
@@ -282,7 +303,7 @@ impl MeshNodeFSM {
                 }
                 HandshakeState::Closed => {
                     self.connections.remove(&peer);
-                    outputs.push(Output::PeerDisconnected { peer: peer.clone() });
+                    outputs.push(Output::PeerLost { peer: peer.clone() });
                 }
                 _ => {}
             }
@@ -377,6 +398,7 @@ impl MeshNodeFSM {
                 peer_from: peer,
                 data: msg,
             }]),
+            MsgPayload::Disconnect => self.handle_peer_leaving(peer),
             _ => Ok(vec![]),
         }
     }

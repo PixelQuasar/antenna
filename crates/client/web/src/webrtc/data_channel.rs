@@ -5,32 +5,37 @@ use wasm_bindgen::prelude::*;
 
 pub struct DataChannelManager {
     data_channel: web_sys::RtcDataChannel,
+    callback_buffer: Vec<Closure<dyn FnMut(JsValue)>>,
 }
 
 impl DataChannelManager {
     pub fn new(pc: &web_sys::RtcPeerConnection, label: &str) -> Self {
         let data_channel = pc.create_data_channel(label);
-
         data_channel.set_binary_type(web_sys::RtcDataChannelType::Arraybuffer);
-
-        Self { data_channel }
+        Self {
+            data_channel,
+            callback_buffer: Vec::new(),
+        }
     }
 
     pub fn from_existing(dc: web_sys::RtcDataChannel) -> Self {
         dc.set_binary_type(web_sys::RtcDataChannelType::Arraybuffer);
-        Self { data_channel: dc }
+        Self {
+            data_channel: dc,
+            callback_buffer: Vec::new(),
+        }
     }
 
-    pub fn setup_on_open<F: Fn() + 'static>(&self, on_open: F) {
+    pub fn setup_on_open<F: Fn() + 'static>(&mut self, on_open: F) {
         let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_: JsValue| {
             on_open();
         }));
         self.data_channel
             .set_onopen(Some(cb.as_ref().unchecked_ref()));
-        cb.forget();
+        self.callback_buffer.push(cb);
     }
 
-    pub fn setup_on_message<F: Fn(Vec<u8>) + 'static>(&self, on_message: F) {
+    pub fn setup_on_message<F: Fn(Vec<u8>) + 'static>(&mut self, on_message: F) {
         let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |event: JsValue| {
             let event: web_sys::MessageEvent = event.unchecked_into();
             if let Ok(ab) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
@@ -42,16 +47,16 @@ impl DataChannelManager {
         }));
         self.data_channel
             .set_onmessage(Some(cb.as_ref().unchecked_ref()));
-        cb.forget();
+        self.callback_buffer.push(cb);
     }
 
-    pub fn setup_on_close<F: Fn() + 'static>(&self, on_close: F) {
+    pub fn setup_on_close<F: Fn() + 'static>(&mut self, on_close: F) {
         let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |_: JsValue| {
             on_close();
         }));
         self.data_channel
             .set_onclose(Some(cb.as_ref().unchecked_ref()));
-        cb.forget();
+        self.callback_buffer.push(cb);
     }
 
     pub fn send_data<Msg: UserMsgPayload>(&self, data: &Msg) -> Result<()> {
@@ -64,6 +69,18 @@ impl DataChannelManager {
     }
 
     pub fn close(&self) {
+        self.data_channel.set_onopen(None);
+        self.data_channel.set_onmessage(None);
+        self.data_channel.set_onclose(None);
         self.data_channel.close();
+    }
+}
+
+impl Drop for DataChannelManager {
+    fn drop(&mut self) {
+        self.data_channel.set_onopen(None);
+        self.data_channel.set_onmessage(None);
+        self.data_channel.set_onclose(None);
+        self.close();
     }
 }

@@ -10,6 +10,7 @@ pub enum RtcEvent<Msg: UserMsgPayload> {
     Disconnected,
     PeerConnected(PeerID),
     PeerDisconnected(PeerID),
+    PeerLost(PeerID),
     Available,
     Unavailable,
 }

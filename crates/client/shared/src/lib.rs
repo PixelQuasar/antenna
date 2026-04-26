@@ -1,12 +1,10 @@
 mod dispatcher;
 mod ice;
-mod peer;
 mod signaling;
 mod storage;
 
 pub use dispatcher::{CallbackId, Dispatcher, RtcEvent};
 pub use ice::IceServerConfig;
-pub use peer::Peer;
 pub use signaling::{ClientMsg, ServerMsg};
 pub use storage::IdentityStorage;
 

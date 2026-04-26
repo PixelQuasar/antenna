@@ -12,6 +12,7 @@ type MessageCallback<Msg> = fn(PeerID, Msg);
 type DisconnectedCallback = fn();
 type PeerConnectedCallback = fn(PeerID);
 type PeerDisconnectedCallback = fn(PeerID);
+type PeerLostCallback = fn(PeerID);
 type AvailableCallback = fn();
 type UnavailableCallback = fn();
 
@@ -21,6 +22,7 @@ pub enum Rtc<Msg: UserMsgPayload> {
     Disconnected(DisconnectedCallback),
     PeerConnected(PeerConnectedCallback),
     PeerDisconnected(PeerDisconnectedCallback),
+    PeerLost(PeerLostCallback),
     Available(AvailableCallback),
     Unavailable(UnavailableCallback),
     JsConnected(js_sys::Function),
@@ -28,6 +30,7 @@ pub enum Rtc<Msg: UserMsgPayload> {
     JsDisconnected(js_sys::Function),
     JsPeerConnected(js_sys::Function),
     JsPeerDisconnected(js_sys::Function),
+    JsPeerLost(js_sys::Function),
     JsAvailable(js_sys::Function),
     JsUnavailable(js_sys::Function),
 }
@@ -39,6 +42,7 @@ enum SubscriptionKind {
     Disconnected,
     PeerConnected,
     PeerDisconnected,
+    PeerLost,
     Available,
     Unavailable,
 }
@@ -53,6 +57,7 @@ impl<Msg: UserMsgPayload> Rtc<Msg> {
             Self::PeerDisconnected(_) | Self::JsPeerDisconnected(_) => {
                 SubscriptionKind::PeerDisconnected
             }
+            Self::PeerLost(_) | Self::JsPeerLost(_) => SubscriptionKind::PeerLost,
             Self::Available(_) | Self::JsAvailable(_) => SubscriptionKind::Available,
             Self::Unavailable(_) | Self::JsUnavailable(_) => SubscriptionKind::Unavailable,
         }
@@ -66,6 +71,7 @@ fn event_kind<Msg: UserMsgPayload>(event: &RtcEvent<Msg>) -> SubscriptionKind {
         RtcEvent::Disconnected => SubscriptionKind::Disconnected,
         RtcEvent::PeerConnected(_) => SubscriptionKind::PeerConnected,
         RtcEvent::PeerDisconnected(_) => SubscriptionKind::PeerDisconnected,
+        RtcEvent::PeerLost(_) => SubscriptionKind::PeerLost,
         RtcEvent::Available => SubscriptionKind::Available,
         RtcEvent::Unavailable => SubscriptionKind::Unavailable,
     }
@@ -162,6 +168,7 @@ where
                 (Rtc::Disconnected(cb), RtcEvent::Disconnected) => cb(),
                 (Rtc::PeerConnected(cb), RtcEvent::PeerConnected(peer)) => cb(peer.clone()),
                 (Rtc::PeerDisconnected(cb), RtcEvent::PeerDisconnected(peer)) => cb(peer.clone()),
+                (Rtc::PeerLost(cb), RtcEvent::PeerLost(peer)) => cb(peer.clone()),
                 (Rtc::JsConnected(cb), RtcEvent::Connected) => {
                     cb.call0(&JsValue::NULL)
                         .map_err(|e| anyhow!("Failed to call onConnected callback: {:#?}", e))?;
@@ -181,6 +188,10 @@ where
                     cb.call1(&JsValue::NULL, &peer).ok();
                 }
                 (Rtc::JsPeerDisconnected(cb), RtcEvent::PeerDisconnected(peer)) => {
+                    let peer = js_sys::JsString::from(peer.as_str());
+                    cb.call1(&JsValue::NULL, &peer).ok();
+                }
+                (Rtc::JsPeerLost(cb), RtcEvent::PeerLost(peer)) => {
                     let peer = js_sys::JsString::from(peer.as_str());
                     cb.call1(&JsValue::NULL, &peer).ok();
                 }

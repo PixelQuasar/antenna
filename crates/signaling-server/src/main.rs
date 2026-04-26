@@ -263,6 +263,20 @@ async fn handle_socket(socket: WebSocket, rooms: Arc<Mutex<HashMap<String, RoomS
                     }
                 }
             }
+
+            ClientMsg::Disconnect { room_id } => {
+                let mut rooms = rooms.lock().unwrap();
+                if let Some(state) = rooms.get_mut(room_id) {
+                    state.remove_broker(conn_id);
+                    if let RoomState::Ready { brokers } = state
+                        && brokers.is_empty()
+                    {
+                        rooms.remove(room_id);
+                    }
+                }
+                joined_room = None;
+                break;
+            }
         }
     }
 

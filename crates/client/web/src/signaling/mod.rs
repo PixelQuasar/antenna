@@ -1,19 +1,19 @@
-use std::{cell::RefCell, rc::Rc};
-
+use crate::Peer;
+use antenna_client_shared::{ClientMsg, ServerMsg};
+use antenna_protocol::UserMsgPayload;
 use anyhow::{Result, anyhow};
 use futures::StreamExt;
 use futures::channel::{mpsc, oneshot};
 use serde::Serialize;
+use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{MessageEvent, WebSocket};
 
-use antenna_client_shared::{ClientMsg, Peer, ServerMsg};
-use antenna_protocol::UserMsgPayload;
-
 pub struct SignalingClient {
     ws: WebSocket,
     rx: mpsc::UnboundedReceiver<String>,
+    _onmessage_cb: Closure<dyn FnMut(MessageEvent)>,
 }
 
 impl SignalingClient {
@@ -21,7 +21,7 @@ impl SignalingClient {
         let ws = WebSocket::new(url).map_err(|e| anyhow!("WebSocket::new failed: {:?}", e))?;
 
         let (msg_tx, msg_rx) = mpsc::unbounded::<String>();
-        {
+        let onmessage_cb = {
             let msg_tx = msg_tx.clone();
             let cb = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
                 if let Some(text) = e.data().as_string() {
@@ -29,13 +29,13 @@ impl SignalingClient {
                 }
             });
             ws.set_onmessage(Some(cb.as_ref().unchecked_ref()));
-            cb.forget();
-        }
+            cb
+        };
 
         let (open_tx, open_rx) = oneshot::channel::<Result<()>>();
         let open_tx = Rc::new(RefCell::new(Some(open_tx)));
 
-        {
+        let _onopen_cb = {
             let open_tx = open_tx.clone();
             let cb = Closure::<dyn FnMut()>::new(move || {
                 if let Some(tx) = open_tx.borrow_mut().take() {
@@ -43,10 +43,10 @@ impl SignalingClient {
                 }
             });
             ws.set_onopen(Some(cb.as_ref().unchecked_ref()));
-            cb.forget();
-        }
+            cb
+        };
 
-        {
+        let _onerror_cb = {
             let open_tx = open_tx.clone();
             let cb = Closure::<dyn FnMut(JsValue)>::new(move |_| {
                 if let Some(tx) = open_tx.borrow_mut().take() {
@@ -54,41 +54,41 @@ impl SignalingClient {
                 }
             });
             ws.set_onerror(Some(cb.as_ref().unchecked_ref()));
-            cb.forget();
-        }
+            cb
+        };
 
         open_rx
             .await
             .map_err(|_| anyhow!("Open signal dropped"))??;
 
-        Ok(Self { ws, rx: msg_rx })
+        ws.set_onopen(None);
+        ws.set_onerror(None);
+
+        Ok(Self {
+            ws,
+            rx: msg_rx,
+            _onmessage_cb: onmessage_cb,
+        })
     }
 
     pub async fn join<Msg: UserMsgPayload + 'static>(
         mut self,
         room_id: String,
-        peer: impl Peer<Msg> + Clone + 'static,
+        peer: Rc<RefCell<Peer<Msg>>>,
     ) -> Result<()> {
         self.send(&ClientMsg::Join { room_id: &room_id })?;
 
         let text = self.recv_text().await?;
         match parse(&text)? {
             ServerMsg::RequestOffer => {
-                let offer = peer.start().await?;
+                let offer = peer.borrow().start().await?;
                 self.send(&ClientMsg::Offer {
                     room_id: &room_id,
                     offer: &offer,
                 })?;
-                match parse(&self.recv_text().await?)? {
-                    ServerMsg::AnswerReceived { answer } => {
-                        peer.receive_answer(answer).await?;
-                    }
-                    ServerMsg::Error { message } => return Err(anyhow!("{message}")),
-                    _ => return Err(anyhow!("Unexpected message")),
-                }
             }
             ServerMsg::OfferReceived { offer } => {
-                let answer = peer.receive_offer(offer).await?;
+                let answer = peer.borrow().receive_offer(offer).await?;
                 self.send(&ClientMsg::Answer {
                     room_id: &room_id,
                     answer: &answer,
@@ -104,27 +104,26 @@ impl SignalingClient {
                     Some(t) => t,
                     None => break,
                 };
-                if let Ok(ServerMsg::RequestOffer) = parse(&text) {
-                    let offer = match peer.start().await {
-                        Ok(o) => o,
-                        Err(_) => break,
-                    };
-                    if self
-                        .send(&ClientMsg::Offer {
-                            room_id: &room_id,
-                            offer: &offer,
-                        })
-                        .is_err()
-                    {
-                        break;
+                match parse(&text) {
+                    Ok(ServerMsg::RequestOffer) => {
+                        let offer = match peer.borrow().start().await {
+                            Ok(o) => o,
+                            Err(_) => break,
+                        };
+                        if self
+                            .send(&ClientMsg::Offer {
+                                room_id: &room_id,
+                                offer: &offer,
+                            })
+                            .is_err()
+                        {
+                            break;
+                        }
                     }
-                    let text = match self.rx.next().await {
-                        Some(t) => t,
-                        None => break,
-                    };
-                    if let Ok(ServerMsg::AnswerReceived { answer }) = parse(&text) {
-                        let _ = peer.receive_answer(answer).await;
+                    Ok(ServerMsg::AnswerReceived { answer }) => {
+                        let _ = peer.borrow().receive_answer(answer).await;
                     }
+                    _ => {}
                 }
             }
         });
@@ -153,6 +152,9 @@ fn parse(text: &str) -> Result<ServerMsg<'_>> {
 
 impl Drop for SignalingClient {
     fn drop(&mut self) {
+        self.ws.set_onmessage(None);
+        self.ws.set_onopen(None);
+        self.ws.set_onerror(None);
         let _ = self.ws.close();
     }
 }

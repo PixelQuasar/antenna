@@ -1,9 +1,11 @@
 mod async_callback;
 mod config;
+mod js_event_callback;
 
 pub use antenna_client_shared::IceServerConfig;
 pub use async_callback::async_callback;
 pub(crate) use config::build_rtc_config;
+pub use js_event_callback::JsEventCallback;
 
 use wasm_bindgen::JsCast;
 

@@ -2,10 +2,10 @@ mod peer_id;
 
 use crate::{SignalingPayload, deserialize_base64_keypair, serialize_base64_keypair};
 use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
-use biscuit_auth::{Biscuit, KeyPair, PublicKey, builder::AuthorizerBuilder};
+use biscuit_auth::{Biscuit, KeyPair, PublicKey, builder::AuthorizerBuilder, datalog::RunLimits};
 pub use peer_id::PeerID;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 
 #[derive(Serialize, Deserialize)]
 pub struct Identity {
@@ -58,6 +58,10 @@ impl Identity {
         AuthorizerBuilder::new()
             .check(format!("check if sdp(\"{expected_b64}\")").as_str())?
             .policy("allow if true")?
+            .set_limits(RunLimits {
+                max_time: Duration::from_millis(100),
+                ..Default::default()
+            })
             .build(&token)?
             .authorize()?;
         Ok(())

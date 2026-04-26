@@ -30,12 +30,18 @@ pub enum Output<Msg: UserMsgPayload> {
     /// Notify about new peer connected to mesh
     PeerConnected { peer: PeerID },
 
-    /// Notify about new peer disconnected to mesh
+    /// Notify about peer that gracefully left the mesh
     PeerDisconnected { peer: PeerID },
+
+    /// Notify about peer lost due to connection failure (abrupt, candidate for reconnect)
+    PeerLost { peer: PeerID },
 
     /// All relay handshakes complete — this peer is fully meshed and may send messages
     Available,
 
     /// Mesh has no connected peers — this peer can no longer send messages
     Unavailable,
+
+    /// Local node sent disconnect notices to all peers; driver must close all connections
+    Disconnecting,
 }

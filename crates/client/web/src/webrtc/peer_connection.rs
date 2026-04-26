@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use anyhow::{Result, anyhow};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
@@ -6,16 +8,19 @@ use crate::utils::{IceServerConfig, async_callback, build_rtc_config};
 
 pub struct PeerConnectionManager {
     peer_connection: web_sys::RtcPeerConnection,
+    ice_closure: RefCell<Option<Closure<dyn FnMut(JsValue)>>>,
 }
 
 impl PeerConnectionManager {
     pub fn from_ice_config(ice_servers: &[IceServerConfig]) -> Result<Self> {
-        let peer_connection = web_sys::RtcPeerConnection::new_with_configuration(
-            &build_rtc_config(ice_servers),
-        )
-        .map_err(|e| anyhow!("Failed to create PeerConnection: {:?}", e))?;
+        let peer_connection =
+            web_sys::RtcPeerConnection::new_with_configuration(&build_rtc_config(ice_servers))
+                .map_err(|e| anyhow!("Failed to create PeerConnection: {:?}", e))?;
 
-        Ok(Self { peer_connection })
+        Ok(Self {
+            peer_connection,
+            ice_closure: RefCell::new(None),
+        })
     }
 
     pub fn peer_connection(&self) -> &web_sys::RtcPeerConnection {
@@ -29,26 +34,27 @@ impl PeerConnectionManager {
             return Ok(desc.sdp());
         }
 
-        async_callback(|mut resolve| {
-            let cb_peer_connection = self.peer_connection.clone();
-
+        let result = async_callback(|mut resolve| {
+            let pc = self.peer_connection.clone();
             let cb = Closure::wrap(Box::new(move |_evt: JsValue| {
-                if cb_peer_connection.ice_gathering_state()
-                    != web_sys::RtcIceGatheringState::Complete
-                {
+                if pc.ice_gathering_state() != web_sys::RtcIceGatheringState::Complete {
                     return;
                 }
-                if let Some(desc) = cb_peer_connection.local_description() {
+                if let Some(desc) = pc.local_description() {
                     resolve(desc.sdp());
                 }
-            }));
-
+            }) as Box<dyn FnMut(JsValue)>);
             self.peer_connection
                 .set_onicecandidate(Some(cb.as_ref().unchecked_ref()));
-            cb.forget();
+            *self.ice_closure.borrow_mut() = Some(cb);
         })
         .await
-        .ok_or_else(|| anyhow!("ICE gathering callback failed"))
+        .ok_or_else(|| anyhow!("ICE gathering callback failed"));
+
+        self.peer_connection.set_onicecandidate(None);
+        *self.ice_closure.borrow_mut() = None;
+
+        result
     }
 
     pub async fn create_offer(&self) -> Result<String> {
@@ -111,5 +117,12 @@ impl PeerConnectionManager {
 
     pub fn close(&self) {
         self.peer_connection.close();
+    }
+}
+
+impl Drop for PeerConnectionManager {
+    fn drop(&mut self) {
+        self.peer_connection.set_onicecandidate(None);
+        self.close();
     }
 }

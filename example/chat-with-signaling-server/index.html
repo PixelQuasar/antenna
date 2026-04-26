@@ -125,6 +125,7 @@
         <div class="chat-input">
             <input id="msg" placeholder="Type a message for the whole mesh…" disabled />
             <button id="send-btn" onclick="sendMsg()" disabled>Broadcast</button>
+            <button onclick="leaveMesh()">Leave</button>
         </div>
     </div>
 </div>
@@ -187,7 +188,7 @@ window.initApp = function() {
         });
 
         app.onDisconnected(() => {
-            status('All peers disconnected');
+            status('Peer disconnected');
             log('--- mesh disconnected ---');
             updatePeerViews();
         });
@@ -236,6 +237,16 @@ window.joinRoom = async function() {
         console.error(e);
     } finally {
         $('join-btn').disabled = false;
+    }
+};
+
+window.leaveMesh = function() {
+    try {
+        app.leave();
+        log('--- left mesh ---');
+    } catch (e) {
+        status('Leave error: ' + e);
+        console.error(e);
     }
 };
 
