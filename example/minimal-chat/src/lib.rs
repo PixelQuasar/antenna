@@ -1,3 +1,5 @@
+#![cfg(target_family = "wasm")]
+
 use antenna::{Event, IceServerConfig, Peer, PeerID, js_message, js_no_arg, js_peer};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;

@@ -1,105 +1,59 @@
-use std::{
-    cell::{Cell, RefCell},
-    collections::HashSet,
-    rc::Rc,
-};
-
-use crate::{Driver, JsEventCallback, Storage};
-use antenna_client_shared::{Event, IceServerConfig, RtcCallbacks, STORAGE_IDENTITY_KEY};
+use antenna_client_shared::{Event, IceServerConfig, RtcCallbacks};
 use antenna_protocol::{
     HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MsgPayload, PeerID, SignalingPayload,
     UserMsgPayload,
 };
 use anyhow::{Context, Result};
-use wasm_bindgen::closure::Closure;
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::Mutex;
 
-pub struct Peer<Msg>
-where
-    Msg: UserMsgPayload + 'static,
-{
-    driver: Rc<RefCell<Driver<Msg>>>,
-    callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
-    left: Rc<Cell<bool>>,
-    _callback_buffer: Vec<JsEventCallback>,
+use crate::{Driver, Storage};
+
+/// Native concurrent peer implementation
+pub struct Peer<Msg: UserMsgPayload + Send + Sync + 'static> {
+    driver: Arc<Mutex<Driver<Msg>>>,
+    callbacks: Arc<Mutex<RtcCallbacks<Msg>>>,
+    left: Arc<AtomicBool>,
 }
 
-impl<Msg> Drop for Peer<Msg>
-where
-    Msg: UserMsgPayload + 'static,
-{
-    fn drop(&mut self) {
-        self.leave();
-    }
-}
-
-impl<Msg> Default for Peer<Msg>
-where
-    Msg: UserMsgPayload + 'static,
-{
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<Msg> Peer<Msg>
-where
-    Msg: UserMsgPayload + 'static,
-{
-    pub fn new() -> Self {
-        Self::with_ice_servers(IceServerConfig::default_stun())
+impl<Msg: UserMsgPayload + Send + Sync + 'static> Peer<Msg> {
+    pub fn new(storage: Storage) -> Self {
+        Self::with_ice_servers(storage, IceServerConfig::default_stun())
     }
 
-    pub fn with_ice_servers(ice_servers: Vec<IceServerConfig>) -> Self {
-        Self::with_storage(ice_servers, Storage::new(STORAGE_IDENTITY_KEY))
-    }
-
-    pub fn with_storage(ice_servers: Vec<IceServerConfig>, storage: Storage) -> Self {
-        let callbacks = Rc::new(RefCell::new(RtcCallbacks::new()));
-        let driver = Rc::new(RefCell::new(Driver::new(
+    pub fn with_ice_servers(storage: Storage, ice_servers: Vec<IceServerConfig>) -> Self {
+        let callbacks = Arc::new(Mutex::new(RtcCallbacks::new()));
+        let driver = Arc::new(Mutex::new(Driver::new(
             ice_servers,
             callbacks.clone(),
             storage,
         )));
-        let left = Rc::new(Cell::new(false));
-
-        let window = web_sys::window().expect("no global window");
-        let cb = Closure::<dyn FnMut()>::new({
-            let left = left.clone();
-            let driver = driver.clone();
-            move || {
-                if left.replace(true) {
-                    return;
-                }
-                Driver::dispatch_input(driver.clone(), Input::Leave, "beforeunload Leave");
-            }
-        });
-        let _callback_buffer = vec![JsEventCallback::new(window.into(), "beforeunload", cb)];
-
         Self {
             driver,
             callbacks,
-            left,
-            _callback_buffer,
+            left: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    pub fn my_id(&self) -> PeerID {
-        self.driver.borrow().id().clone()
+    pub async fn my_id(&self) -> PeerID {
+        self.driver.lock().await.id().clone()
     }
 
-    pub fn subscribe(&self, subscription: Event<Msg>) -> u64 {
-        self.callbacks.borrow_mut().subscribe(subscription)
+    pub async fn subscribe(&self, subscription: Event<Msg>) -> u64 {
+        self.callbacks.lock().await.subscribe(subscription)
     }
 
-    pub fn unsubscribe(&self, id: u64) -> bool {
-        self.callbacks.borrow_mut().unsubscribe(id)
+    pub async fn unsubscribe(&self, id: u64) -> bool {
+        self.callbacks.lock().await.unsubscribe(id)
     }
 
     pub async fn start(&self) -> Result<String> {
         Driver::execute(self.driver.clone(), Input::InitOpenOffer).await?;
-
         self.driver
-            .borrow()
+            .lock()
+            .await
             .metadata()
             .offer
             .clone()
@@ -127,9 +81,9 @@ where
             },
         )
         .await?;
-
         self.driver
-            .borrow()
+            .lock()
+            .await
             .metadata()
             .answer
             .clone()
@@ -148,7 +102,6 @@ where
             },
         )
         .await?;
-
         Ok(())
     }
 
@@ -174,22 +127,17 @@ where
     }
 
     pub fn leave(&self) {
-        if self.left.replace(true) {
+        if self.left.swap(true, Ordering::SeqCst) {
             return;
         }
         Driver::dispatch_input(self.driver.clone(), Input::Leave, "Peer::leave");
     }
 
-    pub fn is_connected(&self, peer_id: PeerID) -> bool {
-        self.driver.borrow().is_connected(&peer_id)
+    pub async fn is_connected(&self, peer_id: &PeerID) -> bool {
+        self.driver.lock().await.is_connected(peer_id)
     }
 
-    pub fn connected_peers(&self) -> HashSet<String> {
-        self.driver
-            .borrow()
-            .connected_peers()
-            .iter()
-            .map(|p| p.to_string())
-            .collect()
+    pub async fn connected_peers(&self) -> HashSet<PeerID> {
+        self.driver.lock().await.connected_peers()
     }
 }

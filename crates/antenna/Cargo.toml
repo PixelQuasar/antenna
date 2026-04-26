@@ -4,7 +4,13 @@ version = "0.1.0"
 edition = "2024"
 rust-version.workspace = true
 
+[features]
+default = ["web"]
+web = ["dep:antenna-client-web"]
+native = ["dep:antenna-client-native"]
+
 [dependencies]
-antenna-client-web.workspace = true
 antenna-protocol.workspace = true
 antenna-client-shared.workspace = true
+antenna-client-web = { workspace = true, optional = true }
+antenna-client-native = { workspace = true, optional = true }

@@ -14,5 +14,3 @@ pub use storage::IdentityStorage;
 pub const EXECUTE_FUEL: u64 = 1024;
 /// Storage identity key
 pub const STORAGE_IDENTITY_KEY: &str = "antenna_identity";
-/// Time after what we are enforcing relay reconnection
-pub const ICE_DISCONNECTED_GRACE_MS: u64 = 5000;

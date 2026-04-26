@@ -5,10 +5,12 @@ use antenna_client_shared::IceServerConfig;
 use anyhow::Result;
 use wasm_bindgen::{JsValue, closure::Closure};
 
+type OnDataChannelCb = Closure<dyn FnMut(JsValue)>;
+
 pub struct ConnectionManager {
     pc: PeerConnectionManager,
     dc: RefCell<Option<DataChannelManager>>,
-    ondatachannel_cb: RefCell<Option<Closure<dyn FnMut(JsValue)>>>,
+    ondatachannel_cb: RefCell<Option<OnDataChannelCb>>,
 }
 
 impl ConnectionManager {

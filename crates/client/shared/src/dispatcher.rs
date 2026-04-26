@@ -14,12 +14,12 @@ pub enum EventType<Msg: UserMsgPayload> {
     Unavailable,
 }
 
-pub struct NoArgCallback(Box<dyn Fn() -> Result<()>>);
+pub struct NoArgCallback(Box<dyn Fn() -> Result<()> + Send + Sync>);
 
 impl NoArgCallback {
     pub fn from_fn<F>(f: F) -> Self
     where
-        F: Fn() -> Result<()> + 'static,
+        F: Fn() -> Result<()> + Send + Sync + 'static,
     {
         Self(Box::new(f))
     }
@@ -38,12 +38,12 @@ impl From<fn()> for NoArgCallback {
     }
 }
 
-pub struct PeerCallback(Box<dyn Fn(&PeerID) -> Result<()>>);
+pub struct PeerCallback(Box<dyn Fn(&PeerID) -> Result<()> + Send + Sync>);
 
 impl PeerCallback {
     pub fn from_fn<F>(f: F) -> Self
     where
-        F: Fn(&PeerID) -> Result<()> + 'static,
+        F: Fn(&PeerID) -> Result<()> + Send + Sync + 'static,
     {
         Self(Box::new(f))
     }
@@ -62,12 +62,14 @@ impl From<fn(PeerID)> for PeerCallback {
     }
 }
 
-pub struct MessageCallback<Msg: UserMsgPayload>(Box<dyn Fn(&PeerID, &Msg) -> Result<()>>);
+pub struct MessageCallback<Msg: UserMsgPayload>(
+    Box<dyn Fn(&PeerID, &Msg) -> Result<()> + Send + Sync>,
+);
 
 impl<Msg: UserMsgPayload> MessageCallback<Msg> {
     pub fn from_fn<F>(f: F) -> Self
     where
-        F: Fn(&PeerID, &Msg) -> Result<()> + 'static,
+        F: Fn(&PeerID, &Msg) -> Result<()> + Send + Sync + 'static,
     {
         Self(Box::new(f))
     }

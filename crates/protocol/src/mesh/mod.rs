@@ -15,13 +15,13 @@ struct DroppedPeerState {
     attempts: u32,
 }
 
-///
+/// Metadata struct, contains state that is not bound to FSM
 #[derive(Default, Clone)]
 pub struct MeshMetadata {
-    ///
+    /// Offer containing public key and description
     pub offer: Option<SignalingPayload>,
 
-    ///
+    /// Answer containing public key and description
     pub answer: Option<SignalingPayload>,
 }
 
@@ -134,7 +134,6 @@ impl MeshNodeFSM {
     ) -> Result<Vec<Output<Msg>>> {
         self.metadata.offer = Some(SignalingPayload {
             token: self.identity.create_token(&sdp)?,
-            sdp: sdp.clone(),
             pubkey: self.identity.pubkey(),
         });
         self.pending_handshakes
@@ -353,7 +352,6 @@ impl MeshNodeFSM {
             HandshakeInput::AnswerCreated(answer) => {
                 let answer = SignalingPayload {
                     token: self.identity.create_token(answer)?,
-                    sdp: answer.clone(),
                     pubkey: self.identity.pubkey(),
                 };
                 match &ctx.mode {
@@ -372,7 +370,6 @@ impl MeshNodeFSM {
             HandshakeInput::OfferCreated(offer) => {
                 let offer = SignalingPayload {
                     token: self.identity.create_token(offer)?,
-                    sdp: offer.clone(),
                     pubkey: self.identity.pubkey(),
                 };
                 match &ctx.mode {

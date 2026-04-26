@@ -39,7 +39,6 @@ version = "1.0.149"
 [workspace.dependencies.futures]
 version = "0.3.32"
 
-# WASM dependencies
 [workspace.dependencies.wasm-bindgen]
 version = "0.2"
 
@@ -73,6 +72,18 @@ features = ["ws"]
 [workspace.dependencies.tokio]
 version = "1.0.0"
 features = ["full"]
+
+[workspace.dependencies.tokio-tungstenite]
+version = "0.24"
+
+[workspace.dependencies.webrtc]
+version = "0.11"
+
+[workspace.dependencies.bytes]
+version = "1"
+
+[workspace.dependencies.send_wrapper]
+version = "0.6"
 
 [workspace.dependencies.async-trait]
 version = "0.1.89"

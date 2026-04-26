@@ -6,10 +6,13 @@ use wasm_bindgen_futures::JsFuture;
 
 use crate::utils::{IceServerConfig, async_callback, build_rtc_config};
 
+type IceCb = Closure<dyn FnMut(JsValue)>;
+type IceStateCb = Closure<dyn FnMut(JsValue)>;
+
 pub struct PeerConnectionManager {
     peer_connection: web_sys::RtcPeerConnection,
-    ice_cb: RefCell<Option<Closure<dyn FnMut(JsValue)>>>,
-    ice_state_cb: RefCell<Option<Closure<dyn FnMut(JsValue)>>>,
+    ice_cb: RefCell<Option<IceCb>>,
+    ice_state_cb: RefCell<Option<IceStateCb>>,
 }
 
 impl PeerConnectionManager {
