@@ -216,11 +216,27 @@ sequenceDiagram
 
 Relay-хандшейк может произойти между двумя пирами, которые еще не подключены друг к другу, но при этом оба подключены к одному пиру. Relay-подключение происходит полностью под капотом - транспортом выступает DataChannel pipe через B. Благодаря relay-хандшейку каждый новый пир в меше требует лишь одно bootsrap-соединение - остальные проходят через relay.
 
+
+A and B connected. Add C:
 ```mermaid
 flowchart LR
-A <-. relay through B .-> C
+
 B -- bootstrap --> C
 A -- bootstrap --> B
+A <-. relay through B .-> C
+ 
+```
+
+And then add D:
+```mermaid
+flowchart LR
+
+B -- bootstrap --> C
+A -- bootstrap --> B
+B <-. relay through C .-> D
+D -- bootsrrap --> C
+A <-. relay through B .-> C
+A <-. relay through C .-> D
  
 ```
 
@@ -283,8 +299,12 @@ sequenceDiagram
 
 ### System messages
 
+Системные сообщения - сообщения, транслируемые через DataChannel между пирами, однако не использующиеся в юзер-сайд коммуникации.
+
 #### Relay
+
+Сообщения RelaySignalingTo и RelaySignalingFrom используются для установления хандшейка между двумя несоединенными пирами. Пир-посредник слушает RelaySignalingTo и отправляет RelaySignalingFrom.
 
 #### Disconnect
 
-### Reconnecting
+Сообщение отправляется пиром всем участникам меша, когда он хочет выйти из меша. Сообщение пытается отправляется автоматически в деструкторе пира (+ при закрытии страницы в web-имплементации). Без отправки этого сообщения пиры попытаются восстановить соединение.
