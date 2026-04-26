@@ -11,8 +11,7 @@ use antenna_protocol::{
     UserMsgPayload,
 };
 use anyhow::{Context, Result};
-use wasm_bindgen::{JsValue, closure::Closure};
-use wasm_bindgen_futures::spawn_local;
+use wasm_bindgen::closure::Closure;
 
 pub struct Peer<Msg>
 where
@@ -63,10 +62,7 @@ where
                 if left.replace(true) {
                     return;
                 }
-                let driver = driver.clone();
-                spawn_local(async move {
-                    let _ = Driver::execute(driver, Input::Leave).await;
-                });
+                Driver::dispatch_input(driver.clone(), Input::Leave, "beforeunload Leave");
             }
         });
         let _callback_buffer = vec![JsEventCallback::new(window.into(), "beforeunload", cb)];
@@ -149,48 +145,31 @@ where
     }
 
     pub fn send(&self, peer_id: PeerID, data: Msg) {
-        let driver = self.driver.clone();
-        spawn_local(async move {
-            if let Err(e) = Driver::execute(
-                driver,
-                Input::Send {
-                    peer_to: peer_id,
-                    data: MsgPayload::User(data),
-                },
-            )
-            .await
-            {
-                web_sys::console::error_1(&JsValue::from_str(&format!("{e:#}")));
-            }
-        });
+        Driver::dispatch_input(
+            self.driver.clone(),
+            Input::Send {
+                peer_to: peer_id,
+                data: MsgPayload::User(data),
+            },
+            "Peer::send",
+        );
     }
 
     pub fn broadcast(&self, data: Msg) {
-        let driver = self.driver.clone();
-        spawn_local(async move {
-            if let Err(e) = Driver::execute(
-                driver,
-                Input::Broadcast {
-                    data: MsgPayload::User(data),
-                },
-            )
-            .await
-            {
-                web_sys::console::error_1(&JsValue::from_str(&format!("{e:#}")));
-            }
-        });
+        Driver::dispatch_input(
+            self.driver.clone(),
+            Input::Broadcast {
+                data: MsgPayload::User(data),
+            },
+            "Peer::broadcast",
+        );
     }
 
     pub fn leave(&self) {
         if self.left.replace(true) {
             return;
         }
-        let driver = self.driver.clone();
-        spawn_local(async move {
-            if let Err(e) = Driver::execute(driver, Input::Leave).await {
-                web_sys::console::error_1(&JsValue::from_str(&format!("{e:#}")));
-            }
-        });
+        Driver::dispatch_input(self.driver.clone(), Input::Leave, "Peer::leave");
     }
 
     pub fn is_connected(&self, peer_id: PeerID) -> bool {
