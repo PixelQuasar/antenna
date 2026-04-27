@@ -5,25 +5,27 @@ utilizing the advantages of the webRTC protocol while fully encapsulating its AP
 signaling and reconnection. Antenna is a cross-platform SDK and can be used in both browser-based and
 native applications, although the focus is on the browser.
 
-#### Implemented features by platform:
+### Implemented features by platform:
 
 | Feature | WASM | rust tokio |
 | :--- | :---: | :---: |
 | Peer implementation | ✅ | ✅ |
 | Signaling client | ✅ | ✅ |
 
-#### Usage 
+### Usage 
 
 [See WASM example](https://github.com/PixelQuasar/antenna/tree/main/example/minimal-chat)
+
 [See WASM example with signaling server](https://github.com/PixelQuasar/antenna/tree/main/example/chat-with-signaling-server)
+
 [See bin example](https://github.com/PixelQuasar/antenna/tree/main/example/shell-chat)
 
-Instantiate peer (native):
+#### Instantiate peer (native):
 ```rust
 let peer = Arc::new(Peer::new(Storage::new("./antenna-identity.json")));
 ```
 
-Subscribe on events:
+#### Subscribe on events:
 ```rust
 peer.subscribe(Event::UserMessage(MessageCallback::<Message>::from_fn(
     |peer_id, msg| {
@@ -33,7 +35,7 @@ peer.subscribe(Event::UserMessage(MessageCallback::<Message>::from_fn(
 )))
 ```
 
-simple REPL example for performing handshake and broadcast messages:
+#### simple REPL example for performing handshake and broadcast messages:
 ```rust
 while let Ok(Some(line)) = lines.next_line().await {
     let line = line.trim();
