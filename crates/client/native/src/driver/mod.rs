@@ -150,6 +150,11 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Driver<Msg> {
                         let pending: Vec<_> = d.pending.drain(..).collect();
                         (conns, pending)
                     };
+                    // Brief grace before closing PCs: give the just-sent `Disconnect`
+                    // messages a chance to flush through SCTP. webrtc-rs's PC.close()
+                    // can be abrupt enough that buffered data is dropped, leaving the
+                    // remote without a graceful-disconnect signal.
+                    tokio::time::sleep(Duration::from_millis(100)).await;
                     for conn in conns.into_iter().chain(pending) {
                         conn.close().await;
                     }

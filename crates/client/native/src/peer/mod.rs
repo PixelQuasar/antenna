@@ -140,4 +140,16 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Peer<Msg> {
     pub async fn connected_peers(&self) -> HashSet<PeerID> {
         self.driver.lock().await.connected_peers()
     }
+
+    /// Force a connection drop to `peer_id`, used in tests
+    pub async fn force_drop(&self, peer_id: PeerID) -> Result<()> {
+        Driver::execute(
+            self.driver.clone(),
+            Input::Handshake {
+                from: peer_id,
+                event: HandshakeInput::ConnectionDropped,
+            },
+        )
+        .await
+    }
 }

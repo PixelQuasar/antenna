@@ -252,7 +252,6 @@ impl MeshNodeFSM {
                         .pop_front()
                         .ok_or_else(|| anyhow!("Pending handshake not found"))?;
                     self.connections.insert(peer.clone(), ctx);
-                    outputs.push(Output::InitOpenOffer);
                 }
                 HandshakeInput::ConnectionDropped => {
                     return Ok(outputs);
@@ -291,23 +290,20 @@ impl MeshNodeFSM {
                         if !self.is_connected(existing) || *existing == peer {
                             continue;
                         }
-
-                        if ctx.mode == HandshakeMode::Bootstrap {
-                            outputs.push(Output::SendMessage {
-                                peer_to: existing.clone(),
-                                data: MsgPayload::RelaySignalingFrom {
-                                    src: peer.clone(),
-                                    data: RelayPayload::InitHost(peer.clone()),
-                                },
-                            });
-                            outputs.push(Output::SendMessage {
-                                peer_to: peer.clone(),
-                                data: MsgPayload::RelaySignalingFrom {
-                                    src: existing.clone(),
-                                    data: RelayPayload::InitJoiner(existing.clone()),
-                                },
-                            });
-                        }
+                        outputs.push(Output::SendMessage {
+                            peer_to: existing.clone(),
+                            data: MsgPayload::RelaySignalingFrom {
+                                src: peer.clone(),
+                                data: RelayPayload::InitHost(peer.clone()),
+                            },
+                        });
+                        outputs.push(Output::SendMessage {
+                            peer_to: peer.clone(),
+                            data: MsgPayload::RelaySignalingFrom {
+                                src: existing.clone(),
+                                data: RelayPayload::InitJoiner(existing.clone()),
+                            },
+                        });
                     }
                 }
                 HandshakeState::Closed => {
@@ -318,6 +314,24 @@ impl MeshNodeFSM {
                         kind: Scheduled::ReconnectAttempt { peer: peer.clone() },
                         after_ms: RECONNECT_INTERVAL_MS,
                     });
+
+                    let orphans: Vec<PeerID> = self
+                        .connections
+                        .iter()
+                        .filter(|(_, c)| {
+                            matches!(&c.mode, HandshakeMode::Relay(via) if via == &peer)
+                                && *c.fsm.state() != HandshakeState::Connected
+                        })
+                        .map(|(id, _)| id.clone())
+                        .collect();
+                    for orphan in orphans {
+                        self.connections.remove(&orphan);
+                        self.lost_peers.entry(orphan.clone()).or_default();
+                        outputs.push(Output::ScheduleTimer {
+                            kind: Scheduled::ReconnectAttempt { peer: orphan },
+                            after_ms: RECONNECT_INTERVAL_MS,
+                        });
+                    }
                 }
                 _ => {}
             }

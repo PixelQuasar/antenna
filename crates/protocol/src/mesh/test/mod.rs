@@ -4,3 +4,4 @@ mod test_available;
 mod test_disconnect_rejoin;
 mod test_malicious;
 mod test_reconnect;
+mod test_relay_orphan;
