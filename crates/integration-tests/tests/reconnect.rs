@@ -39,12 +39,7 @@ async fn relay_reconnect_after_forced_drop() {
         .await
         .expect("B observes A drop");
 
-    // Reconnect handshake can take longer than the default timeout: the new
-    // peer connection has to redo full ICE + DTLS + SCTP after webrtc-rs releases
-    // ports from the just-closed connection. Use a generous deadline.
-    let pc_pred = |id: String| {
-        move |e: &TestEvent| matches!(e, TestEvent::PeerConnected(p) if p.as_str() == id)
-    };
+    let pc_pred = |id: String| move |e: &TestEvent| matches!(e, TestEvent::PeerConnected(p) if p.as_str() == id);
     a.wait_for(Duration::from_secs(60), pc_pred(b_id.to_string()))
         .await
         .expect("A reconnected to B via relay");

@@ -11,12 +11,7 @@ struct Message(String);
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let storage_path = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "./antenna-identity.json".to_string());
-    let storage = Storage::new(storage_path);
-
-    let peer: Arc<Peer<Message>> = Arc::new(Peer::new(storage));
+    let peer = Arc::new(Peer::new(Storage::new("./antenna-identity.json")));
 
     peer.subscribe(Event::UserMessage(MessageCallback::<Message>::from_fn(
         |peer_id, msg| {
@@ -52,7 +47,9 @@ async fn main() -> Result<()> {
     .await;
 
     println!("antenna chat — id: {}", peer.my_id().await);
-    println!("commands: id | start | offer <base64> | answer <base64> | send <text> | peers | quit");
+    println!(
+        "commands: id | start | offer <base64> | answer <base64> | send <text> | peers | quit"
+    );
 
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
     while let Ok(Some(line)) = lines.next_line().await {
