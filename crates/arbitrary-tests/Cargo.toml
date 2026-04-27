@@ -1,0 +1,10 @@
+[package]
+name = "antenna-arbitrary-tests"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+antenna-protocol.workspace = true
+proptest = "1"

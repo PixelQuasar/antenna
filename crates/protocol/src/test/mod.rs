@@ -1,6 +1,5 @@
-mod drive_bootstrap_handshake;
-mod helpers;
-mod join_mesh;
+mod handshake;
+mod mesh;
 
-pub(crate) use drive_bootstrap_handshake::drive_bootstrap_handshake;
-pub(crate) use join_mesh::{assert_full_mesh_connectivity, establish_relay_connection, join_mesh};
+pub(crate) use handshake::drive_bootstrap_handshake;
+pub(crate) use mesh::{assert_full_mesh_connectivity, establish_relay_connection, join_mesh};

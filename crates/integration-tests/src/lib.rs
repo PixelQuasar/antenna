@@ -231,7 +231,6 @@ pub async fn bridge(host: &TestPeer, joiner: &TestPeer) -> Result<()> {
     Ok(())
 }
 
-/// Default timeout for waiting on mesh-level events
 pub fn default_timeout() -> Duration {
-    Duration::from_secs(30)
+    Duration::from_secs(10)
 }

@@ -1,6 +1,3 @@
-#[cfg(test)]
-mod test;
-
 use crate::{
     HandshakeFSM, HandshakeInput, HandshakeMode, HandshakeState, HandshakeStrategy, Identity,
     Input, MAX_RECONNECT_ATTEMPTS, MsgPayload, Output, PeerID, RECONNECT_INTERVAL_MS, RelayPayload,
@@ -183,6 +180,19 @@ impl MeshNodeFSM {
         &self.identity
     }
 
+    /// Debug: snapshot of every connection's `(peer, state, mode)`.
+    pub fn connections_snapshot(&self) -> Vec<(PeerID, HandshakeState, HandshakeMode)> {
+        self.connections
+            .iter()
+            .map(|(peer, ctx)| (peer.clone(), ctx.fsm.state().clone(), ctx.mode.clone()))
+            .collect()
+    }
+
+    /// Debug: number of contexts in `pending_handshakes`.
+    pub fn pending_handshakes_len(&self) -> usize {
+        self.pending_handshakes.len()
+    }
+
     fn handle_leave<Msg: UserMsgPayload>(&mut self) -> Result<Vec<Output<Msg>>> {
         let mut out = vec![Output::Disconnecting];
         for peer in self.connections.keys() {
@@ -272,18 +282,23 @@ impl MeshNodeFSM {
                         if !self.is_connected(existing) || *existing == peer {
                             continue;
                         }
+                        let (host_id, joiner_id) = if *existing < peer {
+                            (existing.clone(), peer.clone())
+                        } else {
+                            (peer.clone(), existing.clone())
+                        };
                         outputs.push(Output::SendMessage {
-                            peer_to: existing.clone(),
+                            peer_to: host_id.clone(),
                             data: MsgPayload::RelaySignalingFrom {
-                                src: peer.clone(),
-                                data: RelayPayload::InitHost(peer.clone()),
+                                src: joiner_id.clone(),
+                                data: RelayPayload::InitHost(joiner_id.clone()),
                             },
                         });
                         outputs.push(Output::SendMessage {
-                            peer_to: peer.clone(),
+                            peer_to: joiner_id,
                             data: MsgPayload::RelaySignalingFrom {
-                                src: existing.clone(),
-                                data: RelayPayload::InitJoiner(existing.clone()),
+                                src: host_id.clone(),
+                                data: RelayPayload::InitJoiner(host_id),
                             },
                         });
                     }
@@ -391,7 +406,25 @@ impl MeshNodeFSM {
         peer: PeerID,
         msg: MsgPayload<Msg>,
     ) -> Result<Vec<Output<Msg>>> {
-        if !self.is_connected(&peer) {
+        // For relay-signaling (control plane), accept as soon as a handshake
+        // context exists with the sender. The strict `is_connected` gate
+        // would lose messages in the post-AcceptSDPAnswer / pre-DC-open
+        // window, which matters when two concurrent fan-outs assign
+        // different relays to the two endpoints of the same handshake:
+        // each side would route via its own relay, but the recipient hasn't
+        // finished its DC-open with that relay yet. The transport layer
+        // (DTLS-authenticated data channel) already vouches for sender
+        // identity, so dropping at the FSM here just creates dead-locks.
+        let is_signaling = matches!(
+            msg,
+            MsgPayload::RelaySignalingTo { .. } | MsgPayload::RelaySignalingFrom { .. }
+        );
+        let is_connected = if is_signaling {
+            self.connections.contains_key(&peer)
+        } else {
+            self.is_connected(&peer)
+        };
+        if !is_connected {
             return Ok(vec![]);
         }
 

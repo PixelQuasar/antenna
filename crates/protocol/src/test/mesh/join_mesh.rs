@@ -22,20 +22,26 @@ pub(crate) fn join_mesh(
         host_out
     };
 
-    let appeared_peers = bootstrap_outputs
+    // With deterministic role assignment in fan-out, the bootstrap host
+    // emits one of (InitHost, InitJoiner) to each existing peer depending on
+    // PeerID order. Collect every existing peer that appears as the
+    // recipient of a relay-signaling fan-out message (excluding the joiner).
+    let mut appeared_peers: Vec<PeerID> = bootstrap_outputs
         .iter()
         .filter_map(|o| match o {
             Output::SendMessage {
                 peer_to,
                 data:
                     MsgPayload::RelaySignalingFrom {
-                        data: RelayPayload::InitHost(_),
+                        data: RelayPayload::InitHost(_) | RelayPayload::InitJoiner(_),
                         ..
                     },
-            } => Some(peer_to.clone()),
+            } if peer_to != new_peer_id => Some(peer_to.clone()),
             _ => None,
         })
-        .collect::<Vec<_>>();
+        .collect();
+    appeared_peers.sort();
+    appeared_peers.dedup();
 
     let relay_messages = bootstrap_outputs
         .into_iter()
@@ -46,11 +52,16 @@ pub(crate) fn join_mesh(
         .collect::<Vec<_>>();
 
     for existing_peer_id in appeared_peers {
+        let (host_id, joiner_id) = if existing_peer_id < *new_peer_id {
+            (existing_peer_id.clone(), new_peer_id.clone())
+        } else {
+            (new_peer_id.clone(), existing_peer_id.clone())
+        };
         establish_relay_connection(
             all_peers,
             bootstrap_id,
-            new_peer_id,
-            &existing_peer_id,
+            &joiner_id,
+            &host_id,
             &relay_messages,
         );
     }

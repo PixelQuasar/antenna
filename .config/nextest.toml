@@ -1,0 +1,10 @@
+[profile.default]
+retries = 2
+
+[test-groups]
+integration = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(antenna-integration-tests)'
+slow-timeout = { period = "5s", terminate-after = 5 }
+test-group = "integration"

@@ -1,1 +1,2 @@
 - [Protocol](https://github.com/PixelQuasar/antenna/blob/main/docs/protocol.md)
+- [Architecture](https://github.com/PixelQuasar/antenna/blob/main/docs/architecture.md)

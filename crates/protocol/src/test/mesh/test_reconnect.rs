@@ -3,9 +3,8 @@ mod test {
     use std::collections::HashMap;
 
     use crate::{
-        HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID,
-        RelayPayload, Scheduled,
-        mesh::MAX_RECONNECT_ATTEMPTS,
+        HandshakeInput, HandshakeOutput, Input, MAX_RECONNECT_ATTEMPTS, MeshNodeFSM, MsgPayload,
+        Output, PeerID, RelayPayload, Scheduled,
         test::{drive_bootstrap_handshake, join_mesh},
     };
 

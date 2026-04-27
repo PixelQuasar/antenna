@@ -53,11 +53,16 @@ mod test {
         peers.insert(bob_id.clone(), bob);
         peers.insert(charlie_id.clone(), charlie);
 
+        let (host_id, joiner_id) = if alice_id < charlie_id {
+            (alice_id.clone(), charlie_id.clone())
+        } else {
+            (charlie_id.clone(), alice_id.clone())
+        };
         let relay_out = establish_relay_connection(
             &mut peers,
             &bob_id,
-            &charlie_id,
-            &alice_id,
+            &joiner_id,
+            &host_id,
             &relay_messages,
         );
 
@@ -98,20 +103,22 @@ mod test {
             "dave should be available immediately after bootstrap"
         );
 
-        let appeared: Vec<PeerID> = alice_bootstrap_out
+        let mut appeared: Vec<PeerID> = alice_bootstrap_out
             .iter()
             .filter_map(|o| match o {
                 Output::SendMessage {
                     peer_to,
                     data:
                         MsgPayload::RelaySignalingFrom {
-                            data: RelayPayload::InitHost(_),
+                            data: RelayPayload::InitHost(_) | RelayPayload::InitJoiner(_),
                             ..
                         },
-                } => Some(peer_to.clone()),
+                } if peer_to != &dave_id => Some(peer_to.clone()),
                 _ => None,
             })
             .collect();
+        appeared.sort();
+        appeared.dedup();
 
         let relay_messages: Vec<_> = alice_bootstrap_out
             .iter()
@@ -132,11 +139,20 @@ mod test {
             "alice should introduce dave to 2 existing peers"
         );
 
+        let pick_roles = |existing: &PeerID| -> (PeerID, PeerID) {
+            if *existing < dave_id {
+                (existing.clone(), dave_id.clone())
+            } else {
+                (dave_id.clone(), existing.clone())
+            }
+        };
+
+        let (host0, joiner0) = pick_roles(&appeared[0]);
         let relay1_out = establish_relay_connection(
             &mut peers,
             &alice_id,
-            &dave_id,
-            &appeared[0],
+            &joiner0,
+            &host0,
             &relay_messages,
         );
         assert!(
@@ -144,11 +160,12 @@ mod test {
             "dave should be available after first relay completes"
         );
 
+        let (host1, joiner1) = pick_roles(&appeared[1]);
         let relay2_out = establish_relay_connection(
             &mut peers,
             &alice_id,
-            &dave_id,
-            &appeared[1],
+            &joiner1,
+            &host1,
             &relay_messages,
         );
         assert!(

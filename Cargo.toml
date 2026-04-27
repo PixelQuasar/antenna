@@ -6,6 +6,7 @@ members = [
     "crates/client/*",
     "crates/signaling-server",
     "crates/integration-tests",
+    "crates/arbitrary-tests",
     "example/*",
 ]
 
