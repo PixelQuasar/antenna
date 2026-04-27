@@ -25,6 +25,7 @@ native applications, although the focus is on the browser.
 let peer = Arc::new(Peer::new(Storage::new("./antenna-identity.json")));
 ```
 
+
 #### Subscribe on events:
 ```rust
 peer.subscribe(Event::UserMessage(MessageCallback::<Message>::from_fn(
@@ -34,6 +35,7 @@ peer.subscribe(Event::UserMessage(MessageCallback::<Message>::from_fn(
     },
 )))
 ```
+
 
 #### simple REPL example for performing handshake and broadcast messages:
 ```rust
@@ -66,5 +68,6 @@ while let Ok(Some(line)) = lines.next_line().await {
     }
 }
 ```
+
 
 [Know more in docs](https://github.com/PixelQuasar/antenna/blob/main/docs/index.md)
