@@ -425,7 +425,6 @@ impl MeshNodeFSM {
                 data: msg,
             }]),
             MsgPayload::Disconnect => self.handle_peer_leaving(peer),
-            _ => Ok(vec![]),
         }
     }
 
