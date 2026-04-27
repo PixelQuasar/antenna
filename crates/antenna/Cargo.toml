@@ -3,11 +3,21 @@ name = "antenna"
 version = "0.1.0"
 edition = "2024"
 rust-version.workspace = true
+description = "Antenna is WASM-compatible library for building P2P meshes over WebRTC "
+license = "MIT"
+repository = "https://github.com/PixelQuasar/antenna"
+readme = "README.md" 
+keywords = ["p2p", "mesh", "webrtc", "wasm"]
+categories = ["development-tools"]
 
 [features]
-default = ["web"]
+default = ["web", "signaling-client"]
 web = ["dep:antenna-client-web"]
 native = ["dep:antenna-client-native"]
+signaling-client = [
+    "antenna-client-web?/signaling-client",
+    "antenna-client-native?/signaling-client",
+]
 
 [dependencies]
 antenna-protocol.workspace = true

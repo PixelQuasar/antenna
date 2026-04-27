@@ -10,7 +10,17 @@ pub use antenna_client_shared::{
 pub use antenna_protocol::PeerID;
 
 #[cfg(all(feature = "web", target_family = "wasm"))]
-pub use antenna_client_web::{Peer, SignalingClient, Storage, js_message, js_no_arg, js_peer};
+pub use antenna_client_web::{Peer, Storage, js_message, js_no_arg, js_peer};
+
+#[cfg(all(feature = "web", feature = "signaling-client", target_family = "wasm"))]
+pub use antenna_client_web::SignalingClient;
 
 #[cfg(all(feature = "native", not(target_family = "wasm")))]
-pub use antenna_client_native::{Peer, SignalingClient, Storage};
+pub use antenna_client_native::{Peer, Storage};
+
+#[cfg(all(
+    feature = "native",
+    feature = "signaling-client",
+    not(target_family = "wasm")
+))]
+pub use antenna_client_native::SignalingClient;

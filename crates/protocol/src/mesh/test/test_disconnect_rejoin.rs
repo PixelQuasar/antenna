@@ -46,7 +46,11 @@ mod test {
             .process::<()>(Input::Leave)
             .unwrap();
 
-        assert!(bob_leave_out.iter().any(|o| matches!(o, Output::Disconnecting)));
+        assert!(
+            bob_leave_out
+                .iter()
+                .any(|o| matches!(o, Output::Disconnecting))
+        );
         let disconnect_targets: Vec<PeerID> = bob_leave_out
             .iter()
             .filter_map(|o| match o {
@@ -63,9 +67,8 @@ mod test {
         for peer_id in [&alice_id, &charlie_id] {
             let out = deliver_disconnect(peers.get_mut(peer_id).unwrap(), &bob_id);
             assert!(
-                out.iter().any(
-                    |o| matches!(o, Output::PeerDisconnected { peer } if peer == &bob_id)
-                ),
+                out.iter()
+                    .any(|o| matches!(o, Output::PeerDisconnected { peer } if peer == &bob_id)),
                 "{peer_id:?} should observe PeerDisconnected for bob"
             );
         }

@@ -142,7 +142,10 @@ mod test {
             })
             .unwrap();
 
-        assert!(out.iter().any(|o| matches!(o, Output::PeerDisconnected { peer } if peer == &b_id)));
+        assert!(
+            out.iter()
+                .any(|o| matches!(o, Output::PeerDisconnected { peer } if peer == &b_id))
+        );
         assert!(!a.is_connected(&b_id));
     }
 
@@ -159,11 +162,13 @@ mod test {
             .unwrap();
 
         assert!(
-            out.iter().any(|o| matches!(o, Output::PeerLost { peer } if peer == &b_id)),
+            out.iter()
+                .any(|o| matches!(o, Output::PeerLost { peer } if peer == &b_id)),
             "abrupt disconnect should emit PeerLost"
         );
         assert!(
-            !out.iter().any(|o| matches!(o, Output::PeerDisconnected { .. })),
+            !out.iter()
+                .any(|o| matches!(o, Output::PeerDisconnected { .. })),
             "abrupt disconnect must not emit PeerDisconnected"
         );
         assert!(!a.is_connected(&b_id));
@@ -182,7 +187,8 @@ mod test {
             .unwrap();
 
         assert!(
-            out.iter().any(|o| matches!(o, Output::PeerDisconnected { peer } if peer == &b_id)),
+            out.iter()
+                .any(|o| matches!(o, Output::PeerDisconnected { peer } if peer == &b_id)),
             "graceful disconnect should emit PeerDisconnected"
         );
         assert!(

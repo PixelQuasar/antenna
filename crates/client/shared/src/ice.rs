@@ -9,11 +9,19 @@ pub struct IceServerConfig {
 
 impl IceServerConfig {
     pub fn new(urls: Vec<String>) -> Self {
-        Self { urls, username: None, credential: None }
+        Self {
+            urls,
+            username: None,
+            credential: None,
+        }
     }
 
     pub fn with_credentials(urls: Vec<String>, username: String, credential: String) -> Self {
-        Self { urls, username: Some(username), credential: Some(credential) }
+        Self {
+            urls,
+            username: Some(username),
+            credential: Some(credential),
+        }
     }
 
     pub fn default_stun() -> Vec<Self> {

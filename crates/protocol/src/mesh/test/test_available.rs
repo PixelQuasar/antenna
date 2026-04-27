@@ -34,7 +34,9 @@ mod test {
             drive_bootstrap_handshake::<()>(&mut bob, &mut charlie);
 
         assert!(
-            charlie_bootstrap_out.iter().any(|o| matches!(o, Output::Available)),
+            charlie_bootstrap_out
+                .iter()
+                .any(|o| matches!(o, Output::Available)),
             "charlie should be available immediately after bootstrap"
         );
 
@@ -51,8 +53,13 @@ mod test {
         peers.insert(bob_id.clone(), bob);
         peers.insert(charlie_id.clone(), charlie);
 
-        let relay_out =
-            establish_relay_connection(&mut peers, &bob_id, &charlie_id, &alice_id, &relay_messages);
+        let relay_out = establish_relay_connection(
+            &mut peers,
+            &bob_id,
+            &charlie_id,
+            &alice_id,
+            &relay_messages,
+        );
 
         assert!(
             relay_out.iter().any(|o| matches!(o, Output::Available)),
@@ -85,7 +92,9 @@ mod test {
             drive_bootstrap_handshake::<()>(&mut alice, &mut dave);
 
         assert!(
-            dave_bootstrap_out.iter().any(|o| matches!(o, Output::Available)),
+            dave_bootstrap_out
+                .iter()
+                .any(|o| matches!(o, Output::Available)),
             "dave should be available immediately after bootstrap"
         );
 
@@ -117,7 +126,11 @@ mod test {
         peers.insert(alice_id.clone(), alice);
         peers.insert(dave_id.clone(), dave);
 
-        assert_eq!(appeared.len(), 2, "alice should introduce dave to 2 existing peers");
+        assert_eq!(
+            appeared.len(),
+            2,
+            "alice should introduce dave to 2 existing peers"
+        );
 
         let relay1_out = establish_relay_connection(
             &mut peers,

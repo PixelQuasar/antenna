@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 rust-version.workspace = true
 
+[features]
+default = ["signaling-client"]
+signaling-client = ["dep:tokio-tungstenite"]
+
 [dependencies]
 antenna-protocol.workspace = true
 antenna-client-shared.workspace = true
@@ -13,6 +17,6 @@ serde_json.workspace = true
 futures.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
-tokio-tungstenite.workspace = true
+tokio-tungstenite = { workspace = true, optional = true }
 webrtc.workspace = true
 bytes.workspace = true
