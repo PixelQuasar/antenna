@@ -3,8 +3,8 @@ use antenna_client_shared::{
     EXECUTE_FUEL, EventType, IceServerConfig, IdentityStorage, RtcCallbacks,
 };
 use antenna_protocol::{
-    HandshakeInput, HandshakeOutput, Input, MeshMetadata, MeshNodeFSM, MsgPayload, Output, PeerID,
-    Scheduled, SignalingPayload, UserMsgPayload,
+    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID, Scheduled,
+    SignalingPayload, UserMsgPayload,
 };
 use anyhow::{Context, Result, anyhow};
 use std::{
@@ -50,11 +50,6 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
         self.fsm.id()
     }
 
-    /// Peer metadata getter
-    pub fn metadata(&self) -> MeshMetadata {
-        self.fsm.metadata().clone()
-    }
-
     /// Check is remote peer connected
     pub fn is_connected(&self, peer: &PeerID) -> bool {
         self.fsm.is_connected(peer)
@@ -92,10 +87,12 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
         });
     }
 
-    /// Execute fsm input and handle its output as side effect on platform layer entities
-    pub async fn execute(driver: Rc<RefCell<Self>>, input: Input<Msg>) -> Result<()> {
+    /// Execute fsm input and handle its output as side effect on platform layer entities.
+    /// Returns the outputs that aren't consumed as side effects.
+    pub async fn execute(driver: Rc<RefCell<Self>>, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
         let outputs = driver.borrow_mut().fsm.process(input)?;
         let mut queue = VecDeque::from(outputs);
+        let mut returned: Vec<Output<Msg>> = Vec::new();
         let mut fuel = EXECUTE_FUEL;
 
         while let Some(output) = queue.pop_back()
@@ -106,6 +103,10 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                 Output::InitOpenOffer => {
                     Self::execute_handshake(driver.clone(), None, HandshakeOutput::InitSDPOffer)
                         .await?
+                }
+                output @ (Output::OfferReady(_) | Output::AnswerReady(_)) => {
+                    returned.push(output);
+                    vec![]
                 }
                 Output::Handshake { peer, event } => {
                     Self::execute_handshake(driver.clone(), Some(peer), event).await?
@@ -168,7 +169,7 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
             };
             queue.extend(new_outputs);
         }
-        Ok(())
+        Ok(returned)
     }
 
     /// Execute handshake input

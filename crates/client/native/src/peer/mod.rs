@@ -1,7 +1,7 @@
 use antenna_client_shared::{Event, IceServerConfig, RtcCallbacks};
 use antenna_protocol::{
-    HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MsgPayload, PeerID, SignalingPayload,
-    UserMsgPayload,
+    HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MsgPayload, Output, PeerID,
+    SignalingPayload, UserMsgPayload,
 };
 use anyhow::{Context, Result};
 use std::collections::HashSet;
@@ -50,13 +50,13 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Peer<Msg> {
     }
 
     pub async fn start(&self) -> Result<String> {
-        Driver::execute(self.driver.clone(), Input::InitOpenOffer).await?;
-        self.driver
-            .lock()
-            .await
-            .metadata()
-            .offer
-            .clone()
+        let outputs = Driver::execute(self.driver.clone(), Input::InitOpenOffer).await?;
+        outputs
+            .into_iter()
+            .find_map(|o| match o {
+                Output::OfferReady(payload) => Some(payload),
+                _ => None,
+            })
             .context("Offer not found on starting")?
             .to_base64()
     }
@@ -73,7 +73,7 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Peer<Msg> {
             },
         )
         .await?;
-        Driver::execute(
+        let outputs = Driver::execute(
             self.driver.clone(),
             Input::Handshake {
                 from: peer_id,
@@ -81,12 +81,12 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Peer<Msg> {
             },
         )
         .await?;
-        self.driver
-            .lock()
-            .await
-            .metadata()
-            .answer
-            .clone()
+        outputs
+            .into_iter()
+            .find_map(|o| match o {
+                Output::AnswerReady(payload) => Some(payload),
+                _ => None,
+            })
             .context("Answer not found on receiving offer")?
             .to_base64()
     }
@@ -150,6 +150,7 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Peer<Msg> {
                 event: HandshakeInput::ConnectionDropped,
             },
         )
-        .await
+        .await?;
+        Ok(())
     }
 }

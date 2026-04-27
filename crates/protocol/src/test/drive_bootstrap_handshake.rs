@@ -13,10 +13,17 @@ pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
     let out = host.process::<Msg>(Input::InitOpenOffer).unwrap();
     assert!(out.iter().any(|o| matches!(o, Output::InitOpenOffer)));
 
-    host.process::<Msg>(Input::OpenOfferCreated("offer".into()))
+    let out = host
+        .process::<Msg>(Input::OpenOfferCreated("offer".into()))
         .unwrap();
 
-    let offer_payload = host.metadata().offer.clone().unwrap();
+    let offer_payload = out
+        .into_iter()
+        .find_map(|o| match o {
+            Output::OfferReady(p) => Some(p),
+            _ => None,
+        })
+        .unwrap();
 
     joiner
         .process::<Msg>(Input::InitHandshake {
@@ -40,14 +47,20 @@ pub(crate) fn drive_bootstrap_handshake<Msg: UserMsgPayload>(
         }
     )));
 
-    joiner
+    let out = joiner
         .process::<Msg>(Input::Handshake {
             from: host_id.clone(),
             event: HandshakeInput::AnswerCreated("answer".into()),
         })
         .unwrap();
 
-    let answer_payload = joiner.metadata().answer.clone().unwrap();
+    let answer_payload = out
+        .into_iter()
+        .find_map(|o| match o {
+            Output::AnswerReady(p) => Some(p),
+            _ => None,
+        })
+        .unwrap();
 
     let out = host
         .process::<Msg>(Input::Handshake {

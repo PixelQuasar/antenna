@@ -6,7 +6,7 @@ rust-version.workspace = true
 description = "Antenna is WASM-compatible library for building P2P meshes over WebRTC "
 license = "MIT"
 repository = "https://github.com/PixelQuasar/antenna"
-readme = "README.md" 
+readme = "../../README.md" 
 keywords = ["p2p", "mesh", "webrtc", "wasm"]
 categories = ["development-tools"]
 

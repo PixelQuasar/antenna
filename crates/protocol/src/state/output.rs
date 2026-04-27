@@ -1,4 +1,4 @@
-use crate::{MsgPayload, PeerID, Scheduled, UserMsgPayload, handshake::HandshakeOutput};
+use crate::{MsgPayload, PeerID, Scheduled, SignalingPayload, UserMsgPayload, handshake::HandshakeOutput};
 
 /// Common event that client FSM sends
 #[derive(Debug, Clone)]
@@ -11,6 +11,12 @@ pub enum Output<Msg: UserMsgPayload> {
 
     /// Bootstrap host: create an open offer (joiner peer ID not yet known)
     InitOpenOffer,
+
+    /// Bootstrap host: open offer SDP is ready to be shared out-of-band with a joiner
+    OfferReady(SignalingPayload),
+
+    /// Bootstrap joiner: SDP answer is ready to be shared out-of-band with the host
+    AnswerReady(SignalingPayload),
 
     /// Send message to other peer in mesh
     SendMessage {

@@ -7,8 +7,8 @@ use std::{
 use crate::{Driver, JsEventCallback, Storage};
 use antenna_client_shared::{Event, IceServerConfig, RtcCallbacks, STORAGE_IDENTITY_KEY};
 use antenna_protocol::{
-    HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MsgPayload, PeerID, SignalingPayload,
-    UserMsgPayload,
+    HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MsgPayload, Output, PeerID,
+    SignalingPayload, UserMsgPayload,
 };
 use anyhow::{Context, Result};
 use wasm_bindgen::closure::Closure;
@@ -96,13 +96,14 @@ where
     }
 
     pub async fn start(&self) -> Result<String> {
-        Driver::execute(self.driver.clone(), Input::InitOpenOffer).await?;
+        let outputs = Driver::execute(self.driver.clone(), Input::InitOpenOffer).await?;
 
-        self.driver
-            .borrow()
-            .metadata()
-            .offer
-            .clone()
+        outputs
+            .into_iter()
+            .find_map(|o| match o {
+                Output::OfferReady(payload) => Some(payload),
+                _ => None,
+            })
             .context("Offer not found on starting")?
             .to_base64()
     }
@@ -119,7 +120,7 @@ where
             },
         )
         .await?;
-        Driver::execute(
+        let outputs = Driver::execute(
             self.driver.clone(),
             Input::Handshake {
                 from: peer_id,
@@ -128,11 +129,12 @@ where
         )
         .await?;
 
-        self.driver
-            .borrow()
-            .metadata()
-            .answer
-            .clone()
+        outputs
+            .into_iter()
+            .find_map(|o| match o {
+                Output::AnswerReady(payload) => Some(payload),
+                _ => None,
+            })
             .context("Answer not found on receiving offer")?
             .to_base64()
     }

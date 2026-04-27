@@ -15,16 +15,6 @@ struct DroppedPeerState {
     attempts: u32,
 }
 
-/// Metadata struct, contains state that is not bound to FSM
-#[derive(Default, Clone)]
-pub struct MeshMetadata {
-    /// Offer containing public key and description
-    pub offer: Option<SignalingPayload>,
-
-    /// Answer containing public key and description
-    pub answer: Option<SignalingPayload>,
-}
-
 pub struct HandshakeContext {
     pub fsm: HandshakeFSM,
     pub mode: HandshakeMode,
@@ -48,9 +38,6 @@ pub struct MeshNodeFSM {
     /// Peers we lost abruptly and are trying to reconnect to. Cleared on successful
     /// reconnect (`HandshakeState::Connected`) or on `Input::Leave`.
     lost_peers: HashMap<PeerID, DroppedPeerState>,
-
-    ///
-    metadata: MeshMetadata,
 }
 
 impl Default for MeshNodeFSM {
@@ -71,7 +58,6 @@ impl MeshNodeFSM {
             connections: HashMap::new(),
             pending_handshakes: VecDeque::new(),
             lost_peers: HashMap::new(),
-            metadata: MeshMetadata::default(),
         }
     }
 
@@ -132,16 +118,16 @@ impl MeshNodeFSM {
         &mut self,
         sdp: String,
     ) -> Result<Vec<Output<Msg>>> {
-        self.metadata.offer = Some(SignalingPayload {
+        let offer = SignalingPayload {
             token: self.identity.create_token(&sdp)?,
             pubkey: self.identity.pubkey(),
-        });
+        };
         self.pending_handshakes
             .back_mut()
             .ok_or_else(|| anyhow!("No pending open offer"))?
             .fsm
             .process(HandshakeInput::OfferCreated(sdp))?;
-        Ok(vec![])
+        Ok(vec![Output::OfferReady(offer)])
     }
 
     pub fn handle_send<Msg: UserMsgPayload>(
@@ -191,10 +177,6 @@ impl MeshNodeFSM {
             Input::Leave => self.handle_leave(),
             Input::TimerFired { kind } => self.handle_timer_fired(kind),
         }
-    }
-
-    pub fn metadata(&self) -> &MeshMetadata {
-        &self.metadata
     }
 
     pub fn identity(&self) -> &Identity {
@@ -369,7 +351,7 @@ impl MeshNodeFSM {
                     pubkey: self.identity.pubkey(),
                 };
                 match &ctx.mode {
-                    HandshakeMode::Bootstrap => self.metadata.answer = Some(answer),
+                    HandshakeMode::Bootstrap => outputs.push(Output::AnswerReady(answer)),
                     HandshakeMode::Relay(via) => {
                         outputs.push(Output::SendMessage {
                             peer_to: via.clone(),
@@ -387,7 +369,7 @@ impl MeshNodeFSM {
                     pubkey: self.identity.pubkey(),
                 };
                 match &ctx.mode {
-                    HandshakeMode::Bootstrap => self.metadata.offer = Some(offer),
+                    HandshakeMode::Bootstrap => outputs.push(Output::OfferReady(offer)),
                     HandshakeMode::Relay(via) => {
                         outputs.push(Output::SendMessage {
                             peer_to: via.clone(),

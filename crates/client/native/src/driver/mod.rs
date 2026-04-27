@@ -3,8 +3,8 @@ use antenna_client_shared::{
     EXECUTE_FUEL, EventType, IceServerConfig, IdentityStorage, RtcCallbacks,
 };
 use antenna_protocol::{
-    HandshakeInput, HandshakeOutput, Input, MeshMetadata, MeshNodeFSM, MsgPayload, Output, PeerID,
-    Scheduled, SignalingPayload, UserMsgPayload,
+    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID, Scheduled,
+    SignalingPayload, UserMsgPayload,
 };
 use anyhow::{Context, Result};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -49,10 +49,6 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Driver<Msg> {
         self.fsm.id()
     }
 
-    pub fn metadata(&self) -> MeshMetadata {
-        self.fsm.metadata().clone()
-    }
-
     pub fn is_connected(&self, peer: &PeerID) -> bool {
         self.fsm.is_connected(peer)
     }
@@ -80,13 +76,15 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Driver<Msg> {
         });
     }
 
-    /// Execute fsm input and handle its output as side effect on the platform layer
-    pub async fn execute(driver: Arc<Mutex<Self>>, input: Input<Msg>) -> Result<()> {
+    /// Execute fsm input and handle its output as side effect on the platform layer.
+    /// Returns the outputs that aren't consumed as side effects
+    pub async fn execute(driver: Arc<Mutex<Self>>, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
         let outputs = {
             let mut d = driver.lock().await;
             d.fsm.process(input)?
         };
         let mut queue = VecDeque::from(outputs);
+        let mut returned: Vec<Output<Msg>> = Vec::new();
         let mut fuel = EXECUTE_FUEL;
 
         while let Some(output) = queue.pop_back()
@@ -97,6 +95,10 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Driver<Msg> {
                 Output::InitOpenOffer => {
                     Self::execute_handshake(driver.clone(), None, HandshakeOutput::InitSDPOffer)
                         .await?
+                }
+                output @ (Output::OfferReady(_) | Output::AnswerReady(_)) => {
+                    returned.push(output);
+                    vec![]
                 }
                 Output::Handshake { peer, event } => {
                     Self::execute_handshake(driver.clone(), Some(peer), event).await?
@@ -154,7 +156,6 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Driver<Msg> {
                     // messages a chance to flush through SCTP. webrtc-rs's PC.close()
                     // can be abrupt enough that buffered data is dropped, leaving the
                     // remote without a graceful-disconnect signal.
-                    tokio::time::sleep(Duration::from_millis(100)).await;
                     for conn in conns.into_iter().chain(pending) {
                         conn.close().await;
                     }
@@ -168,7 +169,7 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Driver<Msg> {
             };
             queue.extend(new_outputs);
         }
-        Ok(())
+        Ok(returned)
     }
 
     async fn execute_send(
