@@ -71,6 +71,7 @@ impl SignalingClient {
         })
     }
 
+    #[allow(clippy::await_holding_refcell_ref)]
     pub async fn join<Msg: UserMsgPayload + 'static>(
         mut self,
         room_id: String,
@@ -99,11 +100,7 @@ impl SignalingClient {
         }
 
         spawn_local(async move {
-            loop {
-                let text = match self.rx.next().await {
-                    Some(t) => t,
-                    None => break,
-                };
+            while let Some(text) = self.rx.next().await {
                 match parse(&text) {
                     Ok(ServerMsg::RequestOffer) => {
                         let offer = match peer.borrow().start().await {

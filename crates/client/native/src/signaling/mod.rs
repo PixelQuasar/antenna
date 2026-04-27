@@ -89,7 +89,7 @@ impl SignalingClient {
     async fn send(&mut self, msg: &impl Serialize) -> Result<()> {
         let text = serde_json::to_string(msg)?;
         self.stream
-            .send(Message::Text(text.into()))
+            .send(Message::Text(text))
             .await
             .map_err(|e| anyhow!("WebSocket send failed: {e}"))
     }

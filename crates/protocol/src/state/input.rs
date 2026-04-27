@@ -6,7 +6,7 @@ use crate::{
 /// Common event that client FSM receives
 #[derive(Debug, Clone)]
 pub enum Input<Msg: UserMsgPayload> {
-    ///
+    /// Initiate a handshake with a known peer ID, choosing role and signaling mode.
     InitHandshake {
         with: PeerID,
         mode: HandshakeMode,

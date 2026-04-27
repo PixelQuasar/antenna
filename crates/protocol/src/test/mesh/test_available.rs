@@ -110,7 +110,7 @@ mod test {
                     peer_to,
                     data:
                         MsgPayload::RelaySignalingFrom {
-                            data: RelayPayload::InitHost(_) | RelayPayload::InitJoiner(_),
+                            data: RelayPayload::InitConnect(_),
                             ..
                         },
                 } if peer_to != &dave_id => Some(peer_to.clone()),

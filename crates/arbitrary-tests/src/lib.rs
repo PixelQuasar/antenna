@@ -133,8 +133,7 @@ pub fn arb_handshake_input() -> impl Strategy<Value = HandshakeInput> {
 
 pub fn arb_relay_payload(pool: Vec<PeerID>) -> impl Strategy<Value = RelayPayload> {
     prop_oneof![
-        1 => arb_peer_from_pool(pool.clone()).prop_map(RelayPayload::InitHost),
-        1 => arb_peer_from_pool(pool).prop_map(RelayPayload::InitJoiner),
+        1 => arb_peer_from_pool(pool).prop_map(RelayPayload::InitConnect),
         1 => arb_signaling_payload().prop_map(RelayPayload::Offer),
         1 => arb_signaling_payload().prop_map(RelayPayload::Answer),
     ]

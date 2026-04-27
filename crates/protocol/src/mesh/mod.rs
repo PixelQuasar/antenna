@@ -67,6 +67,23 @@ impl MeshNodeFSM {
             && *self.connections.get(peer).unwrap().fsm.state() == HandshakeState::Connected
     }
 
+    /// Returns true if `peer` is allowed to deliver `msg` to us right now.
+    pub fn channel_open_for_msg<Msg: UserMsgPayload>(
+        &self,
+        peer: &PeerID,
+        msg: &MsgPayload<Msg>,
+    ) -> bool {
+        match msg {
+            MsgPayload::RelaySignalingTo { .. } | MsgPayload::RelaySignalingFrom { .. } => {
+                matches!(
+                    self.connections.get(peer).map(|c| c.fsm.state()),
+                    Some(HandshakeState::Connected | HandshakeState::WaitingForDataChannel)
+                )
+            }
+            MsgPayload::User(_) | MsgPayload::Disconnect => self.is_connected(peer),
+        }
+    }
+
     pub fn connected_peers(&self) -> HashSet<PeerID> {
         self.connections
             .iter()
@@ -282,23 +299,18 @@ impl MeshNodeFSM {
                         if !self.is_connected(existing) || *existing == peer {
                             continue;
                         }
-                        let (host_id, joiner_id) = if *existing < peer {
-                            (existing.clone(), peer.clone())
-                        } else {
-                            (peer.clone(), existing.clone())
-                        };
                         outputs.push(Output::SendMessage {
-                            peer_to: host_id.clone(),
+                            peer_to: existing.clone(),
                             data: MsgPayload::RelaySignalingFrom {
-                                src: joiner_id.clone(),
-                                data: RelayPayload::InitHost(joiner_id.clone()),
+                                src: peer.clone(),
+                                data: RelayPayload::InitConnect(peer.clone()),
                             },
                         });
                         outputs.push(Output::SendMessage {
-                            peer_to: joiner_id,
+                            peer_to: peer.clone(),
                             data: MsgPayload::RelaySignalingFrom {
-                                src: host_id.clone(),
-                                data: RelayPayload::InitJoiner(host_id),
+                                src: existing.clone(),
+                                data: RelayPayload::InitConnect(existing.clone()),
                             },
                         });
                     }
@@ -406,25 +418,7 @@ impl MeshNodeFSM {
         peer: PeerID,
         msg: MsgPayload<Msg>,
     ) -> Result<Vec<Output<Msg>>> {
-        // For relay-signaling (control plane), accept as soon as a handshake
-        // context exists with the sender. The strict `is_connected` gate
-        // would lose messages in the post-AcceptSDPAnswer / pre-DC-open
-        // window, which matters when two concurrent fan-outs assign
-        // different relays to the two endpoints of the same handshake:
-        // each side would route via its own relay, but the recipient hasn't
-        // finished its DC-open with that relay yet. The transport layer
-        // (DTLS-authenticated data channel) already vouches for sender
-        // identity, so dropping at the FSM here just creates dead-locks.
-        let is_signaling = matches!(
-            msg,
-            MsgPayload::RelaySignalingTo { .. } | MsgPayload::RelaySignalingFrom { .. }
-        );
-        let is_connected = if is_signaling {
-            self.connections.contains_key(&peer)
-        } else {
-            self.is_connected(&peer)
-        };
-        if !is_connected {
+        if !self.channel_open_for_msg(&peer, &msg) {
             return Ok(vec![]);
         }
 
@@ -501,17 +495,11 @@ impl MeshNodeFSM {
         };
 
         let i_am_host = self.id < peer;
-        let payload = if i_am_host {
-            RelayPayload::InitJoiner(self.id.clone())
-        } else {
-            RelayPayload::InitHost(self.id.clone())
-        };
-
         outputs.push(Output::SendMessage {
             peer_to: relay_peer.clone(),
             data: MsgPayload::RelaySignalingTo {
                 dst: peer.clone(),
-                data: payload,
+                data: RelayPayload::InitConnect(self.id.clone()),
             },
         });
 
@@ -544,32 +532,27 @@ impl MeshNodeFSM {
         data: RelayPayload,
     ) -> Result<Vec<Output<Msg>>> {
         match data {
-            RelayPayload::InitHost(_) => {
+            RelayPayload::InitConnect(_) => {
                 if self.connections.contains_key(&src) {
                     return Ok(vec![]);
                 }
+                let strategy = if self.id < src {
+                    HandshakeStrategy::Host
+                } else {
+                    HandshakeStrategy::Joiner
+                };
                 self.process::<Msg>(Input::InitHandshake {
                     with: src.clone(),
                     mode: HandshakeMode::Relay(via),
-                    strategy: HandshakeStrategy::Host,
+                    strategy: strategy.clone(),
                 })?;
-                self.process::<Msg>(Input::Handshake {
-                    from: src,
-                    event: HandshakeInput::Init,
-                })
-            }
-            RelayPayload::InitJoiner(_) => {
-                if self.connections.contains_key(&src) {
-                    return Ok(vec![]);
+                match strategy {
+                    HandshakeStrategy::Host => self.process::<Msg>(Input::Handshake {
+                        from: src,
+                        event: HandshakeInput::Init,
+                    }),
+                    HandshakeStrategy::Joiner => Ok(vec![Output::Unavailable]),
                 }
-                let mut out = vec![];
-                out.push(Output::Unavailable);
-                self.process::<Msg>(Input::InitHandshake {
-                    with: src,
-                    mode: HandshakeMode::Relay(via),
-                    strategy: HandshakeStrategy::Joiner,
-                })?;
-                Ok(out)
             }
             RelayPayload::Offer(offer) => self.process::<Msg>(Input::Handshake {
                 from: src,

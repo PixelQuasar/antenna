@@ -8,8 +8,7 @@ impl<T> UserMsgPayload for T where T: Serialize + DeserializeOwned + Clone {}
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum RelayPayload {
-    InitHost(PeerID),
-    InitJoiner(PeerID),
+    InitConnect(PeerID),
     Offer(SignalingPayload),
     Answer(SignalingPayload),
 }

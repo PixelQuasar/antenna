@@ -22,10 +22,8 @@ pub(crate) fn join_mesh(
         host_out
     };
 
-    // With deterministic role assignment in fan-out, the bootstrap host
-    // emits one of (InitHost, InitJoiner) to each existing peer depending on
-    // PeerID order. Collect every existing peer that appears as the
-    // recipient of a relay-signaling fan-out message (excluding the joiner).
+    // Bootstrap host fan-out emits a single `InitConnect` per recipient.
+    // Collect every existing peer that received one (excluding the joiner).
     let mut appeared_peers: Vec<PeerID> = bootstrap_outputs
         .iter()
         .filter_map(|o| match o {
@@ -33,7 +31,7 @@ pub(crate) fn join_mesh(
                 peer_to,
                 data:
                     MsgPayload::RelaySignalingFrom {
-                        data: RelayPayload::InitHost(_) | RelayPayload::InitJoiner(_),
+                        data: RelayPayload::InitConnect(_),
                         ..
                     },
             } if peer_to != new_peer_id => Some(peer_to.clone()),
@@ -223,16 +221,15 @@ fn collect_relay_signaling_to(
     let mut found = false;
 
     for output in outputs {
-        if let Output::SendMessage { peer_to, data } = output {
-            if let MsgPayload::RelaySignalingTo {
+        if let Output::SendMessage { peer_to, data } = output
+            && let MsgPayload::RelaySignalingTo {
                 dst: actual_dst, ..
             } = &data
-            {
-                assert_eq!(peer_to, *relay_id, "relay message must go to relay node");
-                assert_eq!(*actual_dst, *dst, "relay message must target correct peer");
-                queue.push_back((sender_id.clone(), relay_id.clone(), data));
-                found = true;
-            }
+        {
+            assert_eq!(peer_to, *relay_id, "relay message must go to relay node");
+            assert_eq!(*actual_dst, *dst, "relay message must target correct peer");
+            queue.push_back((sender_id.clone(), relay_id.clone(), data));
+            found = true;
         }
     }
 
@@ -252,7 +249,7 @@ pub(crate) fn assert_full_mesh_connectivity(peers: &HashMap<PeerID, MeshNodeFSM>
             mesh.connected_number()
         );
 
-        for (other_id, _) in peers {
+        for other_id in peers.keys() {
             if other_id != peer_id {
                 assert!(
                     mesh.is_connected(other_id),

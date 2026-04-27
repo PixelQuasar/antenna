@@ -181,13 +181,13 @@ mod test {
                 o,
                 Output::SendMessage {
                     peer_to,
-                    data: MsgPayload::RelaySignalingTo { dst, data: RelayPayload::InitJoiner(_) },
+                    data: MsgPayload::RelaySignalingTo { dst, data: RelayPayload::InitConnect(_) },
                 } if peer_to == &c_id && dst == &b_id
             )
         });
         assert!(
             relay_intro_sent,
-            "lower-id peer must send RelaySignalingTo via relay with InitJoiner targeting the lost peer",
+            "lower-id peer must send RelaySignalingTo via relay with InitConnect targeting the lost peer",
         );
 
         assert!(
@@ -240,13 +240,13 @@ mod test {
                 o,
                 Output::SendMessage {
                     peer_to,
-                    data: MsgPayload::RelaySignalingTo { dst, data: RelayPayload::InitHost(_) },
+                    data: MsgPayload::RelaySignalingTo { dst, data: RelayPayload::InitConnect(_) },
                 } if peer_to == &c_id && dst == &a_id
             )
         });
         assert!(
             relay_intro_sent,
-            "higher-id peer must send RelaySignalingTo via relay with InitHost targeting the lost peer",
+            "higher-id peer must send RelaySignalingTo via relay with InitConnect targeting the lost peer",
         );
 
         assert!(

@@ -38,7 +38,8 @@ impl From<fn()> for NoArgCallback {
     }
 }
 
-pub struct PeerCallback(Box<dyn Fn(&PeerID) -> Result<()> + Send + Sync>);
+type PeerCallbackFn = dyn Fn(&PeerID) -> Result<()> + Send + Sync;
+pub struct PeerCallback(Box<PeerCallbackFn>);
 
 impl PeerCallback {
     pub fn from_fn<F>(f: F) -> Self
@@ -62,9 +63,8 @@ impl From<fn(PeerID)> for PeerCallback {
     }
 }
 
-pub struct MessageCallback<Msg: UserMsgPayload>(
-    Box<dyn Fn(&PeerID, &Msg) -> Result<()> + Send + Sync>,
-);
+type MessageCallbackFn<Msg> = dyn Fn(&PeerID, &Msg) -> Result<()> + Send + Sync;
+pub struct MessageCallback<Msg: UserMsgPayload>(Box<MessageCallbackFn<Msg>>);
 
 impl<Msg: UserMsgPayload> MessageCallback<Msg> {
     pub fn from_fn<F>(f: F) -> Self
