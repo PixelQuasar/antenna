@@ -11,7 +11,6 @@ keywords = ["p2p", "mesh", "webrtc", "wasm"]
 categories = ["development-tools"]
 
 [features]
-default = ["web", "signaling-client"]
 web = ["dep:antenna-client-web"]
 native = ["dep:antenna-client-native"]
 signaling-client = [

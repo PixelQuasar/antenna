@@ -8,7 +8,7 @@ name = "native-chat"
 path = "src/main.rs"
 
 [dependencies]
-antenna = { workspace = true }
+antenna = { workspace = true, features = ["native"] }
 tokio = { workspace = true }
 serde = { workspace = true }
 anyhow = { workspace = true }
