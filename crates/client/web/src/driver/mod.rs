@@ -276,7 +276,7 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
         Self::setup_joiner_data_channel(driver.clone(), &peer_id, conn.clone())?;
         Self::attach_ice_state_observer(peer_id.clone(), driver.clone(), &conn);
 
-        let sdp = conn.create_answer(&offer.extract_sdp()?).await?;
+        let sdp = conn.create_answer(&offer.get_sdp_verified(&peer_id)?).await?;
 
         let outputs = driver.borrow_mut().fsm.process(Input::<Msg>::Handshake {
             from: peer_id.clone(),
@@ -320,7 +320,7 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
             Self::attach_data_channel_callbacks(peer_id, driver, dc)?;
         }
 
-        conn.accept_answer(&answer.extract_sdp()?).await?;
+        conn.accept_answer(&answer.get_sdp_verified(&peer_id)?).await?;
 
         Ok(vec![])
     }

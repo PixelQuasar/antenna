@@ -2,7 +2,7 @@ use crate::{
     deserialize_base64_pubkey, deserialize_base64_vec, serialize_base64_pubkey,
     serialize_base64_vec,
 };
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, ensure};
 use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use biscuit_auth::{Biscuit, PublicKey, builder::AuthorizerBuilder, datalog::RunLimits};
 use serde::{Deserialize, Serialize};
@@ -36,10 +36,15 @@ impl SignalingPayload {
     }
 
     pub fn peer_id(&self) -> PeerID {
-        PeerID::new(BASE64_URL_SAFE_NO_PAD.encode(self.pubkey.to_bytes()))
+        PeerID(self.pubkey)
     }
 
-    pub fn extract_sdp(&self) -> Result<String> {
+    /// Verify the payload was signed by `expected_sender` and return the SDP.
+    pub fn get_sdp_verified(&self, expected_sender: &PeerID) -> Result<String> {
+        ensure!(
+            self.pubkey == expected_sender.pubkey(),
+            "pubkey does not match sender PeerID"
+        );
         let token = Biscuit::from(&self.token, self.pubkey)?;
         let mut authorizer = AuthorizerBuilder::new()
             .policy("allow if true")?

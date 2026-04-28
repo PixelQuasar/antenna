@@ -20,8 +20,8 @@ mod test {
         let sender_id = tampered.peer_id();
 
         assert!(
-            legitimate.verify(&tampered, &sender_id).is_err(),
-            "verify must reject a payload whose token bytes were tampered with"
+            tampered.get_sdp_verified(&sender_id).is_err(),
+            "get_sdp_verified must reject a payload whose token bytes were tampered with"
         );
     }
 
@@ -40,8 +40,8 @@ mod test {
         let claimed_sender = forged.peer_id();
 
         assert!(
-            legitimate.verify(&forged, &claimed_sender).is_err(),
-            "verify must reject a payload whose pubkey doesn't match the token's signer"
+            forged.get_sdp_verified(&claimed_sender).is_err(),
+            "get_sdp_verified must reject a payload whose pubkey doesn't match the token's signer"
         );
     }
 
@@ -58,7 +58,7 @@ mod test {
         };
         let sender_id = payload.peer_id();
 
-        let extracted = id.verify(&payload, &sender_id).unwrap();
+        let extracted = payload.get_sdp_verified(&sender_id).unwrap();
         assert_eq!(extracted, real_sdp);
     }
 }

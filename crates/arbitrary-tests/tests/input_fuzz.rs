@@ -1,7 +1,7 @@
 //! peer-level fuzzing
 
 use antenna_arbitrary_tests::{arb_input, arb_peer_id, identity_peer_ids};
-use antenna_protocol::{Input, MeshNodeFSM, PeerID};
+use antenna_protocol::{Input, MeshNodeFSM};
 use proptest::prelude::*;
 
 const RANDOM_POOL_SIZE: usize = 2;
@@ -53,7 +53,7 @@ proptest! {
     #[test]
     fn leave_clears_state(
         prefix in proptest::collection::vec(
-            arb_input(vec![PeerID::new("a"), PeerID::new("b")]),
+            arb_input(identity_peer_ids().into_iter().take(2).collect()),
             0..30,
         ),
     ) {

@@ -4,7 +4,6 @@ use crate::{
     Scheduled, SignalingPayload, UserMsgPayload,
 };
 use anyhow::{Result, anyhow};
-use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Default, Clone)]
@@ -50,7 +49,7 @@ impl MeshNodeFSM {
 
     pub fn with_identity(identity: Identity) -> Self {
         Self {
-            id: PeerID::new(BASE64_URL_SAFE_NO_PAD.encode(identity.pubkey().to_bytes())),
+            id: identity.peer_id(),
             identity,
             connections: HashMap::new(),
             pending_handshakes: VecDeque::new(),
@@ -292,7 +291,6 @@ impl MeshNodeFSM {
         if let Some(ctx) = ctx {
             match ctx.fsm.state() {
                 HandshakeState::Connected => {
-                    self.identity.add_known_peer(peer.clone());
                     self.lost_peers.remove(&peer);
                     outputs.push(Output::PeerConnected { peer: peer.clone() });
                     for existing in self.connections.keys() {
@@ -370,7 +368,7 @@ impl MeshNodeFSM {
         let mut outputs: Vec<Output<Msg>> = vec![];
         match &event {
             HandshakeInput::Offer(payload) | HandshakeInput::Answer(payload) => {
-                self.identity.verify(payload, peer)?;
+                payload.get_sdp_verified(peer)?;
             }
             HandshakeInput::AnswerCreated(answer) => {
                 let answer = SignalingPayload {

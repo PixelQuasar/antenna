@@ -17,7 +17,7 @@ pub fn js_no_arg(f: js_sys::Function) -> NoArgCallback {
 pub fn js_peer(f: js_sys::Function) -> PeerCallback {
     let f = SendWrapper::new(f);
     PeerCallback::from_fn(move |peer| {
-        let peer = js_sys::JsString::from(peer.as_str());
+        let peer = js_sys::JsString::from(peer.to_string());
         f.call1(&JsValue::NULL, &peer)
             .map(|_| ())
             .map_err(|e| anyhow!("Failed to call JS peer callback: {:#?}", e))
@@ -29,7 +29,7 @@ pub fn js_message<Msg: UserMsgPayload + 'static>(f: js_sys::Function) -> Message
     MessageCallback::from_fn(move |peer, data| {
         let msg_obj = to_js_object(data)
             .map_err(|e| anyhow!("Failed to serialize message payload: {:#?}", e))?;
-        let peer = js_sys::JsString::from(peer.as_str());
+        let peer = js_sys::JsString::from(peer.to_string());
         f.call2(&JsValue::NULL, &peer, &msg_obj)
             .map(|_| ())
             .map_err(|e| anyhow!("Failed to call JS message callback: {:#?}", e))

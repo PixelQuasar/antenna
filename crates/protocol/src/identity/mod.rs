@@ -1,11 +1,11 @@
 mod peer_id;
 
-use crate::{SignalingPayload, deserialize_base64_keypair, serialize_base64_keypair};
+use crate::{deserialize_base64_keypair, serialize_base64_keypair};
+use anyhow::Result;
 use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use biscuit_auth::{Biscuit, KeyPair, PublicKey};
 pub use peer_id::PeerID;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 
 #[derive(Serialize, Deserialize)]
 pub struct Identity {
@@ -14,7 +14,6 @@ pub struct Identity {
         deserialize_with = "deserialize_base64_keypair"
     )]
     keypair: KeyPair,
-    known_peers: HashSet<PeerID>,
 }
 
 impl Default for Identity {
@@ -27,7 +26,6 @@ impl Identity {
     pub fn new() -> Self {
         Self {
             keypair: KeyPair::new(),
-            known_peers: HashSet::new(),
         }
     }
 
@@ -35,27 +33,15 @@ impl Identity {
         self.keypair.public()
     }
 
-    pub fn create_token(&self, sdp: &str) -> anyhow::Result<Vec<u8>> {
+    pub fn peer_id(&self) -> PeerID {
+        PeerID(self.keypair.public())
+    }
+
+    pub fn create_token(&self, sdp: &str) -> Result<Vec<u8>> {
         let sdp_b64 = BASE64_URL_SAFE_NO_PAD.encode(sdp);
         Ok(Biscuit::builder()
             .fact(format!("sdp(\"{sdp_b64}\")").as_str())?
             .build(&self.keypair)?
             .to_vec()?)
-    }
-
-    pub fn verify(
-        &self,
-        payload: &SignalingPayload,
-        expected_sender: &PeerID,
-    ) -> anyhow::Result<String> {
-        let derived_id = BASE64_URL_SAFE_NO_PAD.encode(payload.pubkey.to_bytes());
-        anyhow::ensure!(
-            derived_id == expected_sender.as_str(),
-            "pubkey does not match sender PeerID"
-        );
-        payload.extract_sdp()
-    }
-    pub fn add_known_peer(&mut self, peer: PeerID) {
-        self.known_peers.insert(peer);
     }
 }

@@ -97,8 +97,12 @@ pub fn arb_matching_payload_pair() -> impl Strategy<Value = (PeerID, SignalingPa
         })
 }
 
+/// Generates random `PeerID`s by sampling the long-lived `identity_pool()`.
+/// Each PeerID is now a `PublicKey`, so we can't conjure one from a random
+/// string — we draw from the pre-generated identity pool that's already
+/// used for signed payloads.
 pub fn arb_peer_id() -> impl Strategy<Value = PeerID> {
-    "[a-zA-Z0-9_-]{1,16}".prop_map(PeerID::new)
+    proptest::sample::select(identity_peer_ids())
 }
 
 pub fn arb_peer_from_pool(pool: Vec<PeerID>) -> impl Strategy<Value = PeerID> {
