@@ -3,8 +3,8 @@ use antenna_client_shared::{
     EXECUTE_FUEL, EventType, IceServerConfig, IdentityStorage, RtcCallbacks,
 };
 use antenna_protocol::{
-    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID, Scheduled,
-    SignalingPayload, UserMsgPayload,
+    HandshakeInput, HandshakeMode, HandshakeOutput, HandshakeStrategy, Input, MeshNodeFSM,
+    MsgPayload, Output, PeerID, Scheduled, SignalingPayload, UserMsgPayload,
 };
 use anyhow::{Context, Result};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -63,12 +63,110 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Driver<Msg> {
         cbs.lock().await.emit(event)
     }
 
+    /// Bootstrap host: create an open SDP offer and return it base64-encoded.
+    pub async fn start(driver: Arc<Mutex<Self>>) -> Result<String> {
+        let outputs = Self::execute(driver, Input::InitOpenOffer).await?;
+        outputs
+            .into_iter()
+            .find_map(|o| match o {
+                Output::OfferReady(payload) => Some(payload),
+                _ => None,
+            })
+            .context("Offer not found on starting")?
+            .to_base64()
+    }
+
+    /// Bootstrap joiner: accept the host's base64 offer, return our base64 answer.
+    pub async fn receive_offer(driver: Arc<Mutex<Self>>, offer: &str) -> Result<String> {
+        let offer = SignalingPayload::from_base64(offer)?;
+        let peer_id = offer.peer_id();
+        Self::execute(
+            driver.clone(),
+            Input::InitHandshake {
+                with: peer_id,
+                mode: HandshakeMode::Bootstrap,
+                strategy: HandshakeStrategy::Joiner,
+            },
+        )
+        .await?;
+        let outputs = Self::execute(
+            driver,
+            Input::Handshake {
+                from: peer_id,
+                event: HandshakeInput::Offer(offer),
+            },
+        )
+        .await?;
+        outputs
+            .into_iter()
+            .find_map(|o| match o {
+                Output::AnswerReady(payload) => Some(payload),
+                _ => None,
+            })
+            .context("Answer not found on receiving offer")?
+            .to_base64()
+    }
+
+    /// Bootstrap host: accept the joiner's base64 answer to complete the handshake.
+    pub async fn receive_answer(driver: Arc<Mutex<Self>>, answer: &str) -> Result<()> {
+        let answer = SignalingPayload::from_base64(answer)?;
+        let peer_id = answer.peer_id();
+        Self::execute(
+            driver,
+            Input::Handshake {
+                from: peer_id,
+                event: HandshakeInput::Answer(answer),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Fire-and-forget user message to a single peer.
+    pub fn send(driver: Arc<Mutex<Self>>, peer_to: PeerID, data: Msg) {
+        Self::dispatch_input(
+            driver,
+            Input::Send {
+                peer_to,
+                data: MsgPayload::User(data),
+            },
+            "Peer::send",
+        );
+    }
+
+    /// Fire-and-forget user message to every connected peer.
+    pub fn broadcast(driver: Arc<Mutex<Self>>, data: Msg) {
+        Self::dispatch_input(
+            driver,
+            Input::Broadcast {
+                data: MsgPayload::User(data),
+            },
+            "Peer::broadcast",
+        );
+    }
+
+    /// Initiate graceful departure from the mesh.
+    pub fn leave(driver: Arc<Mutex<Self>>) {
+        Self::dispatch_input(driver, Input::Leave, "Peer::leave");
+    }
+
+    /// Force-close the bootstrap link to `peer_id` from the FSM's perspective
+    /// (without touching the underlying transport). Used in tests to simulate
+    /// abrupt disconnects.
+    pub async fn force_drop(driver: Arc<Mutex<Self>>, peer_id: PeerID) -> Result<()> {
+        Self::execute(
+            driver,
+            Input::Handshake {
+                from: peer_id,
+                event: HandshakeInput::ConnectionDropped,
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
     /// Spawn an async task that runs an FSM input through the execute loop
-    pub(crate) fn dispatch_input(
-        driver: Arc<Mutex<Self>>,
-        input: Input<Msg>,
-        context: &'static str,
-    ) {
+    fn dispatch_input(driver: Arc<Mutex<Self>>, input: Input<Msg>, context: &'static str) {
         tokio::spawn(async move {
             if let Err(e) = Driver::execute(driver, input).await {
                 eprintln!("{context}: {e:#}");
@@ -78,7 +176,7 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Driver<Msg> {
 
     /// Execute fsm input and handle its output as side effect on the platform layer.
     /// Returns the outputs that aren't consumed as side effects
-    pub async fn execute(driver: Arc<Mutex<Self>>, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
+    async fn execute(driver: Arc<Mutex<Self>>, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
         let outputs = {
             let mut d = driver.lock().await;
             d.fsm.process(input)?

@@ -6,11 +6,8 @@ use std::{
 
 use crate::{Driver, JsEventCallback, Storage};
 use antenna_client_shared::{Event, IceServerConfig, RtcCallbacks, STORAGE_IDENTITY_KEY};
-use antenna_protocol::{
-    HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MsgPayload, Output, PeerID,
-    SignalingPayload, UserMsgPayload,
-};
-use anyhow::{Context, Result};
+use antenna_protocol::{PeerID, UserMsgPayload};
+use anyhow::Result;
 use wasm_bindgen::closure::Closure;
 
 pub struct Peer<Msg>
@@ -70,7 +67,7 @@ where
                 if left.replace(true) {
                     return;
                 }
-                Driver::dispatch_input(driver.clone(), Input::Leave, "beforeunload Leave");
+                Driver::leave(driver.clone());
             }
         });
         let _callback_buffer = vec![JsEventCallback::new(window.into(), "beforeunload", cb)];
@@ -84,7 +81,7 @@ where
     }
 
     pub fn my_id(&self) -> PeerID {
-        self.driver.borrow().id().clone()
+        *self.driver.borrow().id()
     }
 
     pub fn subscribe(&self, subscription: Event<Msg>) -> u64 {
@@ -96,90 +93,30 @@ where
     }
 
     pub async fn start(&self) -> Result<String> {
-        let outputs = Driver::execute(self.driver.clone(), Input::InitOpenOffer).await?;
-
-        outputs
-            .into_iter()
-            .find_map(|o| match o {
-                Output::OfferReady(payload) => Some(payload),
-                _ => None,
-            })
-            .context("Offer not found on starting")?
-            .to_base64()
+        Driver::start(self.driver.clone()).await
     }
 
     pub async fn receive_offer(&self, offer: &str) -> Result<String> {
-        let offer = SignalingPayload::from_base64(offer)?;
-        let peer_id = offer.peer_id();
-        Driver::execute(
-            self.driver.clone(),
-            Input::InitHandshake {
-                with: peer_id.clone(),
-                mode: HandshakeMode::Bootstrap,
-                strategy: HandshakeStrategy::Joiner,
-            },
-        )
-        .await?;
-        let outputs = Driver::execute(
-            self.driver.clone(),
-            Input::Handshake {
-                from: peer_id,
-                event: HandshakeInput::Offer(offer),
-            },
-        )
-        .await?;
-
-        outputs
-            .into_iter()
-            .find_map(|o| match o {
-                Output::AnswerReady(payload) => Some(payload),
-                _ => None,
-            })
-            .context("Answer not found on receiving offer")?
-            .to_base64()
+        Driver::receive_offer(self.driver.clone(), offer).await
     }
 
     pub async fn receive_answer(&self, answer: &str) -> Result<()> {
-        let answer = SignalingPayload::from_base64(answer)?;
-        let peer_id = answer.peer_id();
-        Driver::execute(
-            self.driver.clone(),
-            Input::Handshake {
-                from: peer_id,
-                event: HandshakeInput::Answer(answer),
-            },
-        )
-        .await?;
-
-        Ok(())
+        Driver::receive_answer(self.driver.clone(), answer).await
     }
 
     pub fn send(&self, peer_id: PeerID, data: Msg) {
-        Driver::dispatch_input(
-            self.driver.clone(),
-            Input::Send {
-                peer_to: peer_id,
-                data: MsgPayload::User(data),
-            },
-            "Peer::send",
-        );
+        Driver::send(self.driver.clone(), peer_id, data);
     }
 
     pub fn broadcast(&self, data: Msg) {
-        Driver::dispatch_input(
-            self.driver.clone(),
-            Input::Broadcast {
-                data: MsgPayload::User(data),
-            },
-            "Peer::broadcast",
-        );
+        Driver::broadcast(self.driver.clone(), data);
     }
 
     pub fn leave(&self) {
         if self.left.replace(true) {
             return;
         }
-        Driver::dispatch_input(self.driver.clone(), Input::Leave, "Peer::leave");
+        Driver::leave(self.driver.clone());
     }
 
     pub fn is_connected(&self, peer_id: PeerID) -> bool {

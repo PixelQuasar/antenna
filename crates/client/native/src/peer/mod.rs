@@ -1,9 +1,6 @@
 use antenna_client_shared::{Event, IceServerConfig, RtcCallbacks};
-use antenna_protocol::{
-    HandshakeInput, HandshakeMode, HandshakeStrategy, Input, MsgPayload, Output, PeerID,
-    SignalingPayload, UserMsgPayload,
-};
-use anyhow::{Context, Result};
+use antenna_protocol::{PeerID, UserMsgPayload};
+use anyhow::Result;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -38,7 +35,7 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Peer<Msg> {
     }
 
     pub async fn my_id(&self) -> PeerID {
-        self.driver.lock().await.id().clone()
+        *self.driver.lock().await.id()
     }
 
     pub async fn subscribe(&self, subscription: Event<Msg>) -> u64 {
@@ -50,87 +47,30 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Peer<Msg> {
     }
 
     pub async fn start(&self) -> Result<String> {
-        let outputs = Driver::execute(self.driver.clone(), Input::InitOpenOffer).await?;
-        outputs
-            .into_iter()
-            .find_map(|o| match o {
-                Output::OfferReady(payload) => Some(payload),
-                _ => None,
-            })
-            .context("Offer not found on starting")?
-            .to_base64()
+        Driver::start(self.driver.clone()).await
     }
 
     pub async fn receive_offer(&self, offer: &str) -> Result<String> {
-        let offer = SignalingPayload::from_base64(offer)?;
-        let peer_id = offer.peer_id();
-        Driver::execute(
-            self.driver.clone(),
-            Input::InitHandshake {
-                with: peer_id.clone(),
-                mode: HandshakeMode::Bootstrap,
-                strategy: HandshakeStrategy::Joiner,
-            },
-        )
-        .await?;
-        let outputs = Driver::execute(
-            self.driver.clone(),
-            Input::Handshake {
-                from: peer_id,
-                event: HandshakeInput::Offer(offer),
-            },
-        )
-        .await?;
-        outputs
-            .into_iter()
-            .find_map(|o| match o {
-                Output::AnswerReady(payload) => Some(payload),
-                _ => None,
-            })
-            .context("Answer not found on receiving offer")?
-            .to_base64()
+        Driver::receive_offer(self.driver.clone(), offer).await
     }
 
     pub async fn receive_answer(&self, answer: &str) -> Result<()> {
-        let answer = SignalingPayload::from_base64(answer)?;
-        let peer_id = answer.peer_id();
-        Driver::execute(
-            self.driver.clone(),
-            Input::Handshake {
-                from: peer_id,
-                event: HandshakeInput::Answer(answer),
-            },
-        )
-        .await?;
-        Ok(())
+        Driver::receive_answer(self.driver.clone(), answer).await
     }
 
     pub fn send(&self, peer_id: PeerID, data: Msg) {
-        Driver::dispatch_input(
-            self.driver.clone(),
-            Input::Send {
-                peer_to: peer_id,
-                data: MsgPayload::User(data),
-            },
-            "Peer::send",
-        );
+        Driver::send(self.driver.clone(), peer_id, data);
     }
 
     pub fn broadcast(&self, data: Msg) {
-        Driver::dispatch_input(
-            self.driver.clone(),
-            Input::Broadcast {
-                data: MsgPayload::User(data),
-            },
-            "Peer::broadcast",
-        );
+        Driver::broadcast(self.driver.clone(), data);
     }
 
     pub fn leave(&self) {
         if self.left.swap(true, Ordering::SeqCst) {
             return;
         }
-        Driver::dispatch_input(self.driver.clone(), Input::Leave, "Peer::leave");
+        Driver::leave(self.driver.clone());
     }
 
     pub async fn is_connected(&self, peer_id: &PeerID) -> bool {
@@ -143,14 +83,6 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Peer<Msg> {
 
     /// Force a connection drop to `peer_id`, used in tests
     pub async fn force_drop(&self, peer_id: PeerID) -> Result<()> {
-        Driver::execute(
-            self.driver.clone(),
-            Input::Handshake {
-                from: peer_id,
-                event: HandshakeInput::ConnectionDropped,
-            },
-        )
-        .await?;
-        Ok(())
+        Driver::force_drop(self.driver.clone(), peer_id).await
     }
 }

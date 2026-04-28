@@ -3,8 +3,8 @@ use antenna_client_shared::{
     EXECUTE_FUEL, EventType, IceServerConfig, IdentityStorage, RtcCallbacks,
 };
 use antenna_protocol::{
-    HandshakeInput, HandshakeOutput, Input, MeshNodeFSM, MsgPayload, Output, PeerID, Scheduled,
-    SignalingPayload, UserMsgPayload,
+    HandshakeInput, HandshakeMode, HandshakeOutput, HandshakeStrategy, Input, MeshNodeFSM,
+    MsgPayload, Output, PeerID, Scheduled, SignalingPayload, UserMsgPayload,
 };
 use anyhow::{Context, Result, anyhow};
 use std::{
@@ -60,8 +60,8 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
         self.fsm.connected_peers()
     }
 
-    /// Send user message to remote peer nby its id.
-    fn send(&self, peer: &PeerID, data: &MsgPayload<Msg>) -> Result<Vec<Output<Msg>>> {
+    /// Push an outbound `MsgPayload` over the data channel to a known peer.
+    fn dispatch_outbound(&self, peer: &PeerID, data: &MsgPayload<Msg>) -> Result<Vec<Output<Msg>>> {
         let conn = self.connections.get(peer).context("Peer not found")?;
         if let Some(dc) = conn.dc().borrow().as_ref() {
             dc.send_data(data)?;
@@ -69,17 +69,100 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
         Ok(vec![])
     }
 
-    /// Helper: emit a single event
+    /// Emit a single event
     fn emit(driver: &Rc<RefCell<Self>>, event: EventType<Msg>) -> Result<()> {
         driver.borrow().callbacks.borrow().emit(event)
     }
 
-    /// spawn an async task that runs an FSM input
-    pub(crate) fn dispatch_input(
-        driver: Rc<RefCell<Self>>,
-        input: Input<Msg>,
-        context: &'static str,
-    ) {
+    /// Bootstrap host: create an open SDP offer and return it base64-encoded.
+    pub async fn start(driver: Rc<RefCell<Self>>) -> Result<String> {
+        let outputs = Self::execute(driver, Input::InitOpenOffer).await?;
+        outputs
+            .into_iter()
+            .find_map(|o| match o {
+                Output::OfferReady(payload) => Some(payload),
+                _ => None,
+            })
+            .context("Offer not found on starting")?
+            .to_base64()
+    }
+
+    /// Bootstrap joiner: accept the host's base64 offer, return our base64 answer.
+    pub async fn receive_offer(driver: Rc<RefCell<Self>>, offer: &str) -> Result<String> {
+        let offer = SignalingPayload::from_base64(offer)?;
+        let peer_id = offer.peer_id();
+        Self::execute(
+            driver.clone(),
+            Input::InitHandshake {
+                with: peer_id.clone(),
+                mode: HandshakeMode::Bootstrap,
+                strategy: HandshakeStrategy::Joiner,
+            },
+        )
+        .await?;
+        let outputs = Self::execute(
+            driver,
+            Input::Handshake {
+                from: peer_id,
+                event: HandshakeInput::Offer(offer),
+            },
+        )
+        .await?;
+        outputs
+            .into_iter()
+            .find_map(|o| match o {
+                Output::AnswerReady(payload) => Some(payload),
+                _ => None,
+            })
+            .context("Answer not found on receiving offer")?
+            .to_base64()
+    }
+
+    /// Bootstrap host: accept the joiner's base64 answer to complete the handshake.
+    pub async fn receive_answer(driver: Rc<RefCell<Self>>, answer: &str) -> Result<()> {
+        let answer = SignalingPayload::from_base64(answer)?;
+        let peer_id = answer.peer_id();
+        Self::execute(
+            driver,
+            Input::Handshake {
+                from: peer_id,
+                event: HandshakeInput::Answer(answer),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Fire-and-forget user message to a single peer.
+    pub fn send(driver: Rc<RefCell<Self>>, peer_to: PeerID, data: Msg) {
+        Self::dispatch_input(
+            driver,
+            Input::Send {
+                peer_to,
+                data: MsgPayload::User(data),
+            },
+            "Peer::send",
+        );
+    }
+
+    /// Fire-and-forget user message to every connected peer.
+    pub fn broadcast(driver: Rc<RefCell<Self>>, data: Msg) {
+        Self::dispatch_input(
+            driver,
+            Input::Broadcast {
+                data: MsgPayload::User(data),
+            },
+            "Peer::broadcast",
+        );
+    }
+
+    /// Initiate graceful departure from the mesh.
+    pub fn leave(driver: Rc<RefCell<Self>>) {
+        Self::dispatch_input(driver, Input::Leave, "Peer::leave");
+    }
+
+    /// Spawn an async task that runs an FSM input
+    fn dispatch_input(driver: Rc<RefCell<Self>>, input: Input<Msg>, context: &'static str) {
         spawn_local(async move {
             if let Err(e) = Driver::execute(driver, input).await {
                 web_sys::console::error_1(&JsValue::from_str(&format!("{context}: {e:#}")));
@@ -89,7 +172,7 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
 
     /// Execute fsm input and handle its output as side effect on platform layer entities.
     /// Returns the outputs that aren't consumed as side effects.
-    pub async fn execute(driver: Rc<RefCell<Self>>, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
+    async fn execute(driver: Rc<RefCell<Self>>, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
         let outputs = driver.borrow_mut().fsm.process(input)?;
         let mut queue = VecDeque::from(outputs);
         let mut returned: Vec<Output<Msg>> = Vec::new();
@@ -111,7 +194,9 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                 Output::Handshake { peer, event } => {
                     Self::execute_handshake(driver.clone(), Some(peer), event).await?
                 }
-                Output::SendMessage { peer_to, data } => driver.borrow().send(&peer_to, &data)?,
+                Output::SendMessage { peer_to, data } => {
+                    driver.borrow().dispatch_outbound(&peer_to, &data)?
+                }
                 Output::ReceiveMessage { peer_from, data } => {
                     if let MsgPayload::User(data) = data {
                         Self::emit(&driver, EventType::UserMessage(peer_from, data))?;
@@ -276,7 +361,9 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
         Self::setup_joiner_data_channel(driver.clone(), &peer_id, conn.clone())?;
         Self::attach_ice_state_observer(peer_id.clone(), driver.clone(), &conn);
 
-        let sdp = conn.create_answer(&offer.get_sdp_verified(&peer_id)?).await?;
+        let sdp = conn
+            .create_answer(&offer.get_sdp_verified(&peer_id)?)
+            .await?;
 
         let outputs = driver.borrow_mut().fsm.process(Input::<Msg>::Handshake {
             from: peer_id.clone(),
@@ -320,7 +407,8 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
             Self::attach_data_channel_callbacks(peer_id, driver, dc)?;
         }
 
-        conn.accept_answer(&answer.get_sdp_verified(&peer_id)?).await?;
+        conn.accept_answer(&answer.get_sdp_verified(&peer_id)?)
+            .await?;
 
         Ok(vec![])
     }
