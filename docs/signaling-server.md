@@ -96,4 +96,4 @@ antenna-протокола через relay handshake (см. [protocol.md](./pro
 
 ## Тривиальная реализация
 
-Тривиальная реализация signaling-сервера размещена в docker hub по ссылке:
+Тривиальная реализация signaling-сервера размещена в docker hub по ссылке: https://hub.docker.com/repository/docker/quasarity/antenna-signaling-server
