@@ -1,0 +1,9 @@
+target
+**/target
+.git
+.github
+docs
+**/pkg
+**/node_modules
+*.md
+.DS_Store
