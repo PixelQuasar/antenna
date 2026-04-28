@@ -3,6 +3,12 @@ name = "antenna-signaling-server"
 version = "0.1.0"
 edition = "2024"
 rust-version.workspace = true
+description = "Reference signaling server (axum + websocket) for bootstrapping antenna peers."
+license.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 antenna-client-shared.workspace = true

@@ -3,6 +3,12 @@ name = "antenna-client-native"
 version = "0.1.0"
 edition = "2024"
 rust-version.workspace = true
+description = "Native rust (over Tokio & webrtc-rs) platform implementation for the antenna P2P mesh protocol."
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
 
 [features]
 default = ["signaling-client"]

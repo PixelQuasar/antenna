@@ -12,6 +12,11 @@ members = [
 
 [workspace.package]
 rust-version = "1.89.0"
+license = "MIT"
+repository = "https://github.com/PixelQuasar/antenna"
+readme = "README.md"
+keywords = ["p2p", "mesh", "webrtc", "wasm"]
+categories = ["network-programming"]
 
 [workspace.dependencies.antenna]
 version = "0.1.0"

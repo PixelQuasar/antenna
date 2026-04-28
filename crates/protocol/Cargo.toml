@@ -3,6 +3,12 @@ name = "antenna-protocol"
 version = "0.1.0"
 edition = "2024"
 rust-version.workspace = true
+description = "SansIO core driving the antenna P2P mesh protocol."
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 anyhow.workspace = true
