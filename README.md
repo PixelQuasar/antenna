@@ -7,12 +7,12 @@ native applications, although the focus is on the browser.
 
 ### Implemented features by platform:
 
-| Feature | WASM | rust tokio |
-| :--- | :---: | :---: |
-| Peer implementation | ✅ | ✅ |
-| Signaling client | ✅ | ✅ |
+| Feature             | WASM | rust tokio |
+| :------------------ | :--: | :--------: |
+| Peer implementation |  ✅  |     ✅     |
+| Signaling client    |  ✅  |     ✅     |
 
-### Usage 
+### Usage
 
 [See WASM example](https://github.com/PixelQuasar/antenna/tree/main/example/minimal-chat)
 
@@ -21,12 +21,13 @@ native applications, although the focus is on the browser.
 [See bin example](https://github.com/PixelQuasar/antenna/tree/main/example/shell-chat)
 
 #### Instantiate peer (native):
+
 ```rust
 let peer = Arc::new(Peer::new(Storage::new("./antenna-identity.json")));
 ```
 
-
 #### Subscribe on events:
+
 ```rust
 peer.subscribe(Event::UserMessage(MessageCallback::<Message>::from_fn(
     |peer_id, msg| {
@@ -36,8 +37,8 @@ peer.subscribe(Event::UserMessage(MessageCallback::<Message>::from_fn(
 )))
 ```
 
-
 #### simple REPL example for performing handshake and broadcast messages:
+
 ```rust
 while let Ok(Some(line)) = lines.next_line().await {
     let line = line.trim();
@@ -68,6 +69,5 @@ while let Ok(Some(line)) = lines.next_line().await {
     }
 }
 ```
-
 
 [Know more in docs](https://github.com/PixelQuasar/antenna/blob/main/docs/index.md)
