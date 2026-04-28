@@ -184,71 +184,70 @@ client.join("my-room".to_string(), peer.clone()).await?;
 
 ## Handshake
 
-Для установки соединения между пирами необходимо провести хандшейк. В ходе antenna-хандшейка решается две проблемы:
-обмен SDP-контрактами и распознавание IDENTITY друг друга (TODO написать подробнее).
+Перед тем как два пира смогут обмениваться сообщениями, они должны провести handshake. Antenna-handshake решает две задачи:
 
-Хандшейк спроектирован так, чтобы минимизировать делегацию сигналинг-части на юзера, но при этом не завязываться на
-конкретном инструменте сигналинга. В ходе хандшейка два пира выбирают свои роли: Host и Joiner. В ходе хандшейка они
-обмениваются информацией друг о друге, что позволяет установить соединение - offer, answer. Host отправляет offer, а
-joiner принимает его и отправляет answer, после чего host initiates peer connection Абстракто, хэндшейк представляет из
-себя следующую картину:
+- **Обмен SDP для установки соединения** — каждая сторона сообщает другой свою сетевую конфигурацию: ICE-кандидаты, DTLS-фингерпринты и прочее по спецификации webRTC.
+- **Верификация идентичности** — каждая сторона удостоверяется, что собеседник владеет тем публичным ключом, под которым представился. Это исключает man-in-the-middle (подробнее в Identity verifying).
+
+Конкретный транспорт для обмена offer и answer antenna не диктует — это может быть встроенный signaling-сервер, копи-паст, QR-коды или любой свой канал. От пиров требуется лишь передать друг другу две строки.
+
+В рамках handshake'а стороны принимают 2 роли - **Host** и **Joiner**: host отправляет offer, joiner принимает его и возвращает answer. После завершения handshake'а роли пропадают — пиры становятся равноправными.
 
 ```mermaid
 sequenceDiagram
-
-    participant A
-    participant B
+    participant A as Host
+    participant B as Joiner
 
     A ->> B: offer
     B ->> A: answer
     A <<-->> B: establishing connection
-
 ```
+
+Antenna различает два режима handshake'а: **Bootstrap** (между двумя пирами через произвольный внешний транспорт) и **Relay** (между двумя пирами через уже подключённого посредника). Подробности — в разделе Handshake mode.
 
 ### Offer & Answer
 
-Offer & Answer - handshake-объекты, по которым пиры узнают друг о друге. Сигналинг-объекты состоят из двух сущностей:
-публичный ключ и подписанный им токен.
+Offer и Answer — handshake-объекты, через которые пиры узнают друг о друге. Каждый из них состоит из публичного ключа и подписанного им токена. На уровне API оба передаются как base64-строки (см. Connection API).
 
 #### Публичный ключ
 
-Является публичным ключем схемы ED25519, является также уникальным идентификатором пира в меше. Персистентен, способ
-хранения зависит от платформы (local storage/файловая система).
+ED25519-публичный ключ. Служит уникальным идентификатором пира в меше. Персистентен, способ хранения зависит от платформы (`localStorage` для web, файл для native).
 
 #### Токен
 
-Генерируется библиотекой biscuit, хранит в себе SDP-дескрипцию пира. SDP-дескрипция необходима, чтобы установить
-соединение. Все содержимое токена подписывается публичным ключем и верифицируется при получении в другом пире.
+Генерируется библиотекой biscuit и хранит SDP-дескрипцию пира — данные, нужные webRTC для установки соединения. Содержимое токена подписывается приватным ключом пары и верифицируется публичным ключом, прикреплённым к offer/answer (см. раздел Identity verifying).
 
 ### Handshake strategy
 
-Стратегии хандшейка бывают 2 видов - Host и Joiner. Влияет только на то, кто из пиров инициирует negotiation. Любой пир
-может быть и host, и joiner. По завершению хандшейка стратегия стирается, пиры становятся "равноправными".
-
 #### Host
 
-Пир, инициирующий negotiation. Упрощенно, жизненный цикл хоста состоит из следующих шагов:
+Пир, первым отправляющий offer. Жизненный цикл:
 
-1. Init, generate offer
-2. Wait for answer, receive answer
-3. Connect to other peer via DataChannel
+1. Создаёт offer
+2. Ожидает answer, принимает его
+3. Устанавливает DataChannel-соединение
 
 #### Joiner
 
-Пир, принимающий offer. Упрощенно, жизненный цикл джоинера состоит из следующих шагов:
+Пир, принимающий offer. Жизненный цикл:
 
-1. receive offer, generate answer
-2. wait for connection, connect
+1. Принимает offer, генерирует answer
+2. Ожидает установки соединения хостом
 
 ### Handshake mode
 
-Режим хандшейка бывает двух видов: Bootstrap и Relay. TODO кратко описать различия
+Antenna различает два режима handshake'а:
+
+- **Bootstrap** — для первого подключения к меш'у. Сигналинг-канал между двумя пирами обеспечивает приложение (signaling-сервер, копи-паст, QR-код, любой транспорт).
+- **Relay** — для подключения к уже связному меш'у или для recover'а после разрыва. Сигналинг автоматически идёт через уже подключённого пира-посредника поверх существующих DataChannel'ов; от приложения ничего не требуется.
 
 #### Bootstrap
 
-Бутстрап соединению необходим внешний транспорт, отданный в ответственность юзеру Это может быть как произвольная передача через копирование (как в minimal-chat), так и использование signaling сервера, как в chat-with-signaling-server.
+Bootstrap-соединению необходим внешний транспорт, ответственность за который лежит на приложении. Это может быть ручная передача SDP копи-пастом (как в `minimal-chat`), использование встроенного signaling-сервера (как в `chat-with-signaling-server`) или любой свой канал.
 
-Подробная схема bootstrap-соединения:
+На уровне API, как было описано выше, весь bootstrap-flow свёрнут до пары вызовов: `peer.start()` → передать offer → `peer.receive_offer()` → передать answer → `peer.receive_answer()`
+
+Подробная схема внутренних сообщений FSM (для контрибьюторов):
 
 ```mermaid
 sequenceDiagram
@@ -257,106 +256,127 @@ sequenceDiagram
     participant BD
     participant B
 
-    alt await open SDP offer
-        AD ->> A: Input::InitOpenOffer
-        A ->> AD: Output::InitOpenOffer
-        AD ->> A: Input::OpenOfferCreated
-        A ->> A: write offer to metadata containing SDP, public key and biscuit token
-    end
-    AD ->> BD: get offer from FSM metadata and transfer it to B client somehow
 
-    alt await SDP answer
-        BD ->> B: Input::InitHandshake bootstrap
-        BD ->> B: HandshakeInput::Offer
-        B ->> BD: HandshakeOutput::RequestSDPAnswer
-        BD ->> B: HandshakeInput::AnswerCreated
-        B ->> B: write answer to metadata containing SDP, public key and biscuit token
-    end
+    note over AD: start
+    A ->> AD: Input::InitOpenOffer
+    AD ->> A: Output::InitOpenOffer
+    A ->> AD: Input::OpenOfferCreated(sdp)
+    AD ->> A: Output::OfferReady(SignalingPayload)
 
-    BD ->> AD: get answer from FSM metadata and transfer it back to A
-    AD ->> A: HandshakeInput::Answer
-    A ->> AD: HandshakeOutput::AcceptSDPAnswer
-    AD <<->> BD: webRTC onOpen callback invocation, DC established
-    note over A: connected & available
-    note over B: connected & available
+    AD ->> BD: app передаёт offer на сторону B (любым транспортом)
+
+    note over BD: receive_offer
+    B ->> BD: Input::InitHandshake { mode: Bootstrap, strategy: Joiner }
+    B ->> BD: Input::Handshake { Offer }
+    BD ->> B: Output::Handshake { RequestSDPAnswer }
+    B ->> BD: Input::Handshake { AnswerCreated(sdp) }
+    BD ->> B: Output::AnswerReady(SignalingPayload)
+
+    BD ->> AD: app передаёт answer обратно на A
+
+    note over AD: receive_answer
+    A ->> AD: Input::Handshake { Answer }
+    AD ->> A: Output::Handshake { AcceptSDPAnswer }
+    AD <<->> BD: webRTC DataChannel established
+    note over A: Connected & Available
+    note over B: Connected & Available
 ```
 
 #### Relay
 
-Relay-хандшейк может произойти между двумя пирами, которые еще не подключены друг к другу, но при этом оба подключены к одному пиру. Relay-подключение происходит полностью под капотом - транспортом выступает DataChannel pipe через B. Благодаря relay-хандшейку каждый новый пир в меше требует лишь одно bootsrap-соединение - остальные проходят через relay.
+Relay-handshake — это handshake между двумя пирами, у которых нет прямого соединения, но есть общий уже подключённый посредник. Сигналинг идёт через DataChannel этого посредника, без участия приложения и signaling-сервера. Благодаря relay новичку нужно одно bootstrap-соединение, чтобы оказаться в меше из N пиров — остальные N-1 соединений достраиваются автоматически и всегда детерминировано, что гарантирует что меш всегда будет полным на уровне протокола.
 
-A and B connected. Add C:
+Relay срабатывает в двух случаях:
 
-```mermaid
-flowchart LR
+- **Mesh-extension** — когда любой existing-пир завершает handshake с новичком, его Connected-ветка FSM рассылает relay-init для всех своих Connected-пиров. Это автоматически достраивает full mesh без дополнительных bootstrap'ов.
+- **Reconnect** — после потери соединения reconnect-tick FSM пытается восстановить связь с потерянным пиром через общего живого соседа.
 
-B -- bootstrap --> C
-A -- bootstrap --> B
-A <-. relay through B .-> C
-
-```
-
-And then add D:
+A и B соединены, добавляем C:
 
 ```mermaid
 flowchart LR
 
-B -- bootstrap --> C
 A -- bootstrap --> B
-B <-. relay through C .-> D
-D -- bootsrrap --> C
-A <-. relay through B .-> C
-A <-. relay through C .-> D
-
+B -- bootstrap --> C
+A <-. relay через B .-> C
 ```
 
-Relay соединения инициируются в конце bootstrap-подключения: пусть пир B подключается к A, пир A подключен к пирам C, D. После подключения к пиру B, он отправит пирам C, D запросы на relay-соединения с пиром B, после завершения хандшейков меш станет полным.
+Затем добавляем D:
 
-Подробная схема relay-соединения:
+```mermaid
+flowchart LR
+
+A -- bootstrap --> B
+B -- bootstrap --> C
+D -- bootstrap --> C
+A <-. relay через B .-> C
+A <-. relay через C .-> D
+B <-. relay через C .-> D
+```
+
+Подробная схема relay-handshake'а на уровне FSM.
+предполагается `A.id < C.id`, поэтому A выбирает роль Host, C — Joiner.
 
 ```mermaid
 sequenceDiagram
     participant A
-    participant AD
-    participant BD
+    participant AD as A driver
+    participant BD as B driver
     participant B
-    participant CD
+    participant CD as C driver
     participant C
 
-    note over A: connected & available
-    note over B: connected & available
-    A <<-->> B: already connected and established DC
-    B <<->> C: establishing bootstrap connection
-    note over C: connected
+    A -->> B: уже соединены через DC
+    B -->> C: bootstrap-handshake B↔C только что завершился
 
-    B ->> C: Msg RelayPayload::InitJoiner
-    C ->> C: Input::InitHandshake relay via B
-    B ->> A: Msg RelayPayload::InitHost
-    A ->> A: Input::InitHandshake relay via B
-    A <<-->> C: handshake established
-    A ->> A: HandshakeInput::Init
-    A ->> AD: HandshakeOutput::InitSDPOffer
-    AD ->> A: HandshakeInput::OfferCreated
+    B ->> A: RelayFrom { src: C, InitConnect }
+    A ->> A: InitHandshake { with: C, mode: Relay(B), strategy: Host }
+    B ->> C: RelayFrom { src: A, InitConnect }
+    C ->> C: InitHandshake { with: A, mode: Relay(B), strategy: Joiner }
 
-    A ->> B: RelayTo(RelayPayload::Offer)
-    B ->> C: RelayFrom(RelayPayload::Offer)
+    A ->> AD: Output::Handshake { InitSDPOffer }
+    AD ->> A: Input::Handshake { OfferCreated(sdp) }
 
-    C ->> C: HandshakeInput::Offer
-    C ->> CD: HandshakeOutput::RequestSDPAnswer
-    CD ->> C: HandshakeInput::AnswerCreated
+    A ->> B: RelayTo { dst: C, Offer }
+    B ->> C: RelayFrom { src: A, Offer }
 
-    C ->> B: RelayTo(RelayPayload::Answer)
-    B ->> A: RelayFrom(RelayPayload::Answer)
+    C ->> CD: Output::Handshake { RequestSDPAnswer }
+    CD ->> C: Input::Handshake { AnswerCreated(sdp) }
 
-    A ->> A: HandshakeInput::Answer
-    A ->> AD: HandshakeOutput::AcceptSDPAnswer
-    AD <<->> CD: webRTC onOpen callback invocation, DC
+    C ->> B: RelayTo { dst: A, Answer }
+    B ->> A: RelayFrom { src: C, Answer }
 
-    note over C: available
+    A ->> AD: Output::Handshake { AcceptSDPAnswer }
+    AD -->> CD: webRTC DataChannel established
+    A -->> C: Connected
 ```
 
-Важно отметить, что после прохождения хэндшейка и установки PeerConnection, иерархия между пирами "хост-джоинер"
-пропадает и пиры становятся полностью равноправными.
+### Гарантии и свойства хандшейков
+
+#### Полнота меша после relay
+
+**Свойство.** Если пир P через bootstrap подключается к любому пиру Q из уже связного полного меша M, то после стабилизации handshake'ов P оказывается соединён напрямую с каждым пиром в M.
+
+**Доказательство:** По реализации, в момент перехода bootstrap-handshake'а P↔Q в Connected, Q эмитит relay-init-сообщение для каждого `existing ∈ M \ {Q}`. Каждый такой existing получает init и инициирует встречный relay-handshake с P через Q как посредника. После завершения всех handshake'ов — M ∪ {P} снова полный mesh.
+
+#### Согласованность ролей в relay-handshake
+
+**Свойство.** В любом relay-handshake'е (mesh-расширение при подключении нового пира или reconnect после разрыва) роли распределяются по идентификаторам: пир с меньшим ID становится Host, с большим — Joiner. Обе стороны выбирают свою роль независимо и не могут выбрать одинаковую.
+
+**Доказательство:**
+Выбор роли происходит в двух местах FSM: `handle_relay_signaling_from` (при получении `RelayPayload::InitConnect`) и `handle_reconnect_attempt` (по тику). Оба используют сравнение `self.id < other`. Поскольку строгий порядок на PeerID антисимметричен, обе стороны приходят к согласованному решению без какого-либо обмена.
+
+#### Слияние двух мешей
+
+**Свойство.** Если пир P ∈ M₁ устанавливает bootstrap-соединение с пиром Q ∈ M₂, где M₁ и M₂ — два независимых полных меша (M₁ ∩ M₂ = ∅), то после стабилизации handshake'ов получается единый полный меш M₁ ∪ M₂.
+
+**Доказательство:**
+После завершения P-Q применяем свойство полноты меша после relay:
+
+- к паре (P, Q ∈ M₂): P оказывается соединён со всеми пирами M₂;
+- к паре (Q, P ∈ M₁): Q оказывается соединён со всеми пирами M₁.
+
+Теперь и P, и Q соединены со всем M₁ ∪ M₂ — оба выступают посредниками перед членами мешей друг друга. Для любой пары (m₁ ∈ M₁ \ {P}, m₂ ∈ M₂ \ {Q}) оба пира соединены с P (или Q), и Connected-ветка FSM на посреднике при добавлении нового соединения эмитит relay-init-пары для всех existing-пиров. По индукции на завершившихся handshake'ах — каждая пара (m₁, m₂) рано или поздно получает приглашение и соединяется через P или Q как посредника. Финальный mesh M₁ ∪ M₂ — полный.
 
 ## Peer connection
 
