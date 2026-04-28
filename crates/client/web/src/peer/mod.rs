@@ -1,8 +1,4 @@
-use std::{
-    cell::{Cell, RefCell},
-    collections::HashSet,
-    rc::Rc,
-};
+use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use crate::{Driver, JsEventCallback, Storage};
 use antenna_client_shared::{Event, IceServerConfig, RtcCallbacks, STORAGE_IDENTITY_KEY};
@@ -16,7 +12,6 @@ where
 {
     driver: Rc<RefCell<Driver<Msg>>>,
     callbacks: Rc<RefCell<RtcCallbacks<Msg>>>,
-    left: Rc<Cell<bool>>,
     _callback_buffer: Vec<JsEventCallback>,
 }
 
@@ -57,16 +52,11 @@ where
             callbacks.clone(),
             storage,
         )));
-        let left = Rc::new(Cell::new(false));
 
         let window = web_sys::window().expect("no global window");
         let cb = Closure::<dyn FnMut()>::new({
-            let left = left.clone();
             let driver = driver.clone();
             move || {
-                if left.replace(true) {
-                    return;
-                }
                 Driver::leave(driver.clone());
             }
         });
@@ -75,7 +65,6 @@ where
         Self {
             driver,
             callbacks,
-            left,
             _callback_buffer,
         }
     }
@@ -113,9 +102,6 @@ where
     }
 
     pub fn leave(&self) {
-        if self.left.replace(true) {
-            return;
-        }
         Driver::leave(self.driver.clone());
     }
 

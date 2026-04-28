@@ -11,7 +11,7 @@ pub use handshake::{
     HandshakeStrategy, Host, Joiner, SignalingPayload,
 };
 pub use identity::{Identity, PeerID};
-pub use mesh::MeshNodeFSM;
+pub use mesh::{FSMState, MeshNodeFSM};
 pub use state::{Input, MsgPayload, Output, RelayPayload, Scheduled, UserMsgPayload};
 pub(crate) use utils::{
     MAX_RECONNECT_ATTEMPTS, RECONNECT_INTERVAL_MS, deserialize_base64_keypair,

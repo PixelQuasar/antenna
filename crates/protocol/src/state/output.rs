@@ -1,4 +1,6 @@
-use crate::{MsgPayload, PeerID, Scheduled, SignalingPayload, UserMsgPayload, handshake::HandshakeOutput};
+use crate::{
+    MsgPayload, PeerID, Scheduled, SignalingPayload, UserMsgPayload, handshake::HandshakeOutput,
+};
 
 /// Common event that client FSM sends
 #[derive(Debug, Clone)]
@@ -39,13 +41,18 @@ pub enum Output<Msg: UserMsgPayload> {
     /// Notify about peer lost due to connection failure (abrupt, candidate for reconnect)
     PeerLost { peer: PeerID },
 
-    /// All relay handshakes complete — this peer is fully meshed and may send messages
+    /// Node-level status: first peer reached `Connected` (FSMState: Init → Connected).
+    Connected,
+
+    /// Node-level status: all relay handshakes complete (FSMState: Connected → Available).
     Available,
 
-    /// Mesh has no connected peers — this peer can no longer send messages
+    /// Node-level status: a relay handshake is in progress or no peers are connected
+    /// (FSMState: Available → Connected, or any → Init).
     Unavailable,
 
     /// Local node sent disconnect notices to all peers; driver must close all connections
+    /// (FSMState: anything → Left).
     Disconnecting,
 
     /// Driver should schedule a timer

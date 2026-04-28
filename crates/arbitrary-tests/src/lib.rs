@@ -220,6 +220,7 @@ pub enum ObservedEvent {
     PeerConnected(PeerID),
     PeerDisconnected(PeerID),
     PeerLost(PeerID),
+    Connected,
     Available,
     Unavailable,
     Disconnecting,
@@ -335,6 +336,7 @@ impl MeshSim {
             Output::PeerLost { peer: cp } => self
                 .events
                 .push((peer.clone(), ObservedEvent::PeerLost(cp))),
+            Output::Connected => self.events.push((peer.clone(), ObservedEvent::Connected)),
             Output::Available => self.events.push((peer.clone(), ObservedEvent::Available)),
             Output::Unavailable => self.events.push((peer.clone(), ObservedEvent::Unavailable)),
             Output::Disconnecting => self

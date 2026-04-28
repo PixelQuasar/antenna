@@ -16,6 +16,15 @@ pub struct HandshakeContext {
     pub mode: HandshakeMode,
 }
 
+/// Coarse mesh-membership state for the local node
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FSMState {
+    Init,
+    Connected,
+    Available,
+    Left,
+}
+
 /// Core FSM of antenna client, handles negotiation handshakes (but not signaling!!)
 /// and abstract mesh logic
 pub struct MeshNodeFSM {
@@ -34,6 +43,10 @@ pub struct MeshNodeFSM {
     /// Peers we lost abruptly and are trying to reconnect to. Cleared on successful
     /// reconnect (`HandshakeState::Connected`) or on `Input::Leave`.
     lost_peers: HashMap<PeerID, DroppedPeerState>,
+
+    /// Coarse mesh-membership state; recomputed after each `process` call.
+    /// Once `Left`, stays `Left`.
+    state: FSMState,
 }
 
 impl Default for MeshNodeFSM {
@@ -54,6 +67,49 @@ impl MeshNodeFSM {
             connections: HashMap::new(),
             pending_handshakes: VecDeque::new(),
             lost_peers: HashMap::new(),
+            state: FSMState::Init,
+        }
+    }
+
+    pub fn state(&self) -> FSMState {
+        self.state
+    }
+
+    fn compute_state(&self) -> FSMState {
+        if self.state == FSMState::Left {
+            return FSMState::Left;
+        }
+        if self.connected_peers().is_empty() {
+            return FSMState::Init;
+        }
+        let in_progress_relays = self.connections.values().any(|ctx| {
+            matches!(ctx.mode, HandshakeMode::Relay(_))
+                && *ctx.fsm.state() != HandshakeState::Connected
+        });
+        if in_progress_relays {
+            FSMState::Connected
+        } else {
+            FSMState::Available
+        }
+    }
+
+    /// Outputs emitted for a state edge. Multi-step jumps (e.g. Init →
+    fn state_transition_outputs<Msg: UserMsgPayload>(
+        prev: FSMState,
+        new: FSMState,
+    ) -> Vec<Output<Msg>> {
+        match (prev, new) {
+            (FSMState::Init, FSMState::Connected) => vec![Output::Connected],
+            (FSMState::Init, FSMState::Available) => {
+                vec![Output::Connected, Output::Available]
+            }
+            (FSMState::Connected, FSMState::Available) => vec![Output::Available],
+            (FSMState::Available, FSMState::Connected) => vec![Output::Unavailable],
+            (FSMState::Connected | FSMState::Available, FSMState::Init) => {
+                vec![Output::Unavailable]
+            }
+            (_, FSMState::Left) => vec![Output::Disconnecting],
+            _ => vec![],
         }
     }
 
@@ -174,6 +230,17 @@ impl MeshNodeFSM {
     }
 
     pub fn process<Msg: UserMsgPayload>(&mut self, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
+        let prev_state = self.state;
+        let mut outputs = self.dispatch(input)?;
+        let new_state = self.compute_state();
+        if prev_state != new_state {
+            self.state = new_state;
+            outputs.extend(Self::state_transition_outputs::<Msg>(prev_state, new_state));
+        }
+        Ok(outputs)
+    }
+
+    fn dispatch<Msg: UserMsgPayload>(&mut self, input: Input<Msg>) -> Result<Vec<Output<Msg>>> {
         match input {
             Input::InitHandshake {
                 with,
@@ -210,7 +277,10 @@ impl MeshNodeFSM {
     }
 
     fn handle_leave<Msg: UserMsgPayload>(&mut self) -> Result<Vec<Output<Msg>>> {
-        let mut out = vec![Output::Disconnecting];
+        if self.state == FSMState::Left {
+            return Ok(vec![]);
+        }
+        let mut out = vec![];
         for peer in self.connections.keys() {
             if self.is_connected(peer) {
                 out.push(Output::SendMessage {
@@ -222,6 +292,7 @@ impl MeshNodeFSM {
         self.connections.clear();
         self.pending_handshakes.clear();
         self.lost_peers.clear();
+        self.state = FSMState::Left;
         Ok(out)
     }
 
@@ -234,13 +305,6 @@ impl MeshNodeFSM {
         let mut out = Vec::new();
         if was_connected.is_some() {
             out.push(Output::PeerDisconnected { peer });
-            if self
-                .connections
-                .values()
-                .any(|ctx| *ctx.fsm.state() != HandshakeState::Connected)
-            {
-                out.push(Output::Unavailable);
-            }
         }
         Ok(out)
     }
@@ -342,18 +406,6 @@ impl MeshNodeFSM {
                 }
                 _ => {}
             }
-        }
-
-        let in_progress_relays = self
-            .connections
-            .values()
-            .filter(|ctx| {
-                matches!(ctx.mode, HandshakeMode::Relay(_))
-                    && *ctx.fsm.state() != HandshakeState::Connected
-            })
-            .count();
-        if in_progress_relays == 0 && !self.connected_peers().is_empty() {
-            outputs.push(Output::Available);
         }
 
         Ok(outputs)
@@ -549,7 +601,7 @@ impl MeshNodeFSM {
                         from: src,
                         event: HandshakeInput::Init,
                     }),
-                    HandshakeStrategy::Joiner => Ok(vec![Output::Unavailable]),
+                    HandshakeStrategy::Joiner => Ok(vec![]),
                 }
             }
             RelayPayload::Offer(offer) => self.process::<Msg>(Input::Handshake {

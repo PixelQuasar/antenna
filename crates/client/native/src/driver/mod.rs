@@ -235,6 +235,10 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Driver<Msg> {
                     Self::emit(&driver, EventType::PeerDropped(peer)).await?;
                     vec![]
                 }
+                Output::Connected => {
+                    Self::emit(&driver, EventType::Connected).await?;
+                    vec![]
+                }
                 Output::Available => {
                     Self::emit(&driver, EventType::Available).await?;
                     vec![]
@@ -300,7 +304,7 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Driver<Msg> {
                 Self::execute_accept_answer(driver, peer, answer).await
             }
             HandshakeOutput::Close => Self::execute_close(driver, peer).await,
-            HandshakeOutput::Connected => Self::execute_connected(driver).await,
+            HandshakeOutput::Connected => Ok(vec![]),
         }
     }
 
@@ -384,7 +388,9 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Driver<Msg> {
         Self::setup_joiner_data_channel(driver.clone(), &peer_id, conn.clone());
         Self::attach_ice_state_observer(peer_id.clone(), driver.clone(), &conn);
 
-        let sdp = conn.create_answer(&offer.get_sdp_verified(&peer_id)?).await?;
+        let sdp = conn
+            .create_answer(&offer.get_sdp_verified(&peer_id)?)
+            .await?;
 
         let outputs = {
             let mut d = driver.lock().await;
@@ -431,7 +437,8 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Driver<Msg> {
             Self::attach_data_channel_callbacks(peer_id, driver.clone(), dc);
         }
 
-        conn.accept_answer(&answer.get_sdp_verified(&peer_id)?).await?;
+        conn.accept_answer(&answer.get_sdp_verified(&peer_id)?)
+            .await?;
 
         Ok(vec![])
     }
@@ -451,11 +458,6 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Driver<Msg> {
             conn.close().await;
         }
         Self::emit(&driver, EventType::Disconnected).await?;
-        Ok(vec![])
-    }
-
-    async fn execute_connected(driver: Arc<Mutex<Self>>) -> Result<Vec<Output<Msg>>> {
-        Self::emit(&driver, EventType::Connected).await?;
         Ok(vec![])
     }
 

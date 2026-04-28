@@ -3,7 +3,6 @@ use antenna_protocol::{PeerID, UserMsgPayload};
 use anyhow::Result;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
 
 use crate::{Driver, Storage};
@@ -12,7 +11,6 @@ use crate::{Driver, Storage};
 pub struct Peer<Msg: UserMsgPayload + Send + Sync + 'static> {
     driver: Arc<Mutex<Driver<Msg>>>,
     callbacks: Arc<Mutex<RtcCallbacks<Msg>>>,
-    left: Arc<AtomicBool>,
 }
 
 impl<Msg: UserMsgPayload + Send + Sync + 'static> Peer<Msg> {
@@ -27,11 +25,7 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Peer<Msg> {
             callbacks.clone(),
             storage,
         )));
-        Self {
-            driver,
-            callbacks,
-            left: Arc::new(AtomicBool::new(false)),
-        }
+        Self { driver, callbacks }
     }
 
     pub async fn my_id(&self) -> PeerID {
@@ -67,9 +61,6 @@ impl<Msg: UserMsgPayload + Send + Sync + 'static> Peer<Msg> {
     }
 
     pub fn leave(&self) {
-        if self.left.swap(true, Ordering::SeqCst) {
-            return;
-        }
         Driver::leave(self.driver.clone());
     }
 

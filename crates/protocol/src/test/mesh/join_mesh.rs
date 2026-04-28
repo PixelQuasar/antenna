@@ -195,6 +195,7 @@ pub(crate) fn establish_relay_connection(
                 Output::OfferReady(_) | Output::AnswerReady(_) => {
                     panic!("relay handshakes should never surface bootstrap SDP outputs");
                 }
+                Output::Connected => {}
                 Output::Available => {}
                 Output::Unavailable => {}
                 Output::Disconnecting => {}

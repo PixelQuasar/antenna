@@ -226,6 +226,10 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                     Self::emit(&driver, EventType::PeerDropped(peer))?;
                     vec![]
                 }
+                Output::Connected => {
+                    Self::emit(&driver, EventType::Connected)?;
+                    vec![]
+                }
                 Output::Available => {
                     Self::emit(&driver, EventType::Available)?;
                     vec![]
@@ -272,7 +276,7 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
                 Self::execute_accept_answer(driver, peer, answer).await
             }
             HandshakeOutput::Close => Self::execute_close(driver, peer).await,
-            HandshakeOutput::Connected => driver.borrow_mut().execute_connected(),
+            HandshakeOutput::Connected => Ok(vec![]),
         }
     }
 
@@ -438,12 +442,6 @@ impl<Msg: UserMsgPayload + 'static> Driver<Msg> {
             .callbacks
             .borrow()
             .emit(EventType::Disconnected)?;
-        Ok(vec![])
-    }
-
-    /// Execute current peer connected to mesh
-    fn execute_connected(&mut self) -> Result<Vec<Output<Msg>>> {
-        self.callbacks.borrow().emit(EventType::Connected)?;
         Ok(vec![])
     }
 
