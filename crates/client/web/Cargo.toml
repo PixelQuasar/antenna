@@ -1,6 +1,6 @@
 [package]
 name = "antenna-client-web"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version.workspace = true
 description = "Web-over-WASM platform implementation for the antenna P2P mesh protocol."
@@ -31,3 +31,6 @@ getrandom.workspace = true
 async-trait.workspace = true
 antenna-client-shared.workspace = true
 send_wrapper.workspace = true
+
+[package.metadata.docs.rs]
+targets = ["wasm32-unknown-unknown"]

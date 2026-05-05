@@ -1,43 +1,43 @@
-## Базовая информация
+## Basic information
 
-Antenna - SDK for building decentralized P2P over WebRTC. SDK спроектирован быть максимально гибким для пользователя,
-используя при этом преимущества протокола webRTC, при этом полностью инкапсулируя его API и решая насущные задачи вроде
-сигналинга и реконнекта самостоятельно. Antenna кросплатформенный SDK и может быть использован как в браузерных, так и в
-нативных приложениях, хоть фокус на браузере. SDK построен на Antenna-protocol, о котором мы поговорим далее.
+Antenna - SDK for building decentralized P2P over WebRTC. The SDK is designed to be maximally flexible for the user
+while taking advantage of the WebRTC protocol, fully encapsulating its API and solving pressing problems like
+signaling and reconnection on its own. Antenna is a cross-platform SDK and can be used in both browser and
+native applications, though the focus is on the browser. The SDK is built on Antenna-protocol, which we'll discuss next.
 
-## Какую проблему решает Antenna
+## What problem does Antenna solve
 
-webRTC — единственный способ установить истинное P2P-соединение в браузере, однако webRTC API крайне низкоуровневый, и работать с ним напрямую — боль. Чистый webRTC даёт только DataChannel и требует от приложения вручную провести SDP-обмен и поддерживать каждое peer connection отдельно. Antenna берёт на себя:
+WebRTC is the only way to establish a true P2P connection in a browser, but the WebRTC API is extremely low-level, and working with it directly is painful. Plain WebRTC only gives you a DataChannel and requires the application to manually perform the SDP exchange and maintain each peer connection separately. Antenna takes on:
 
-- Mesh-абстракция поверх запутанного webRTC.
-- Mesh-расширение и стабилизация: как только новый пир присоединяется к мешу, он автоматически подключается ко всем участникам; при разрыве отдельных соединений в меше они самовосстанавливаются.
-- Идентичности и верификация: каждый пир имеет персистентный ED25519-ключ, все SDP-дескрипции подписываются при отправке и верифицируются при получении, Man-in-the-Middle в ходе handshake'а исключён.
-- Кроссплатформенность: одно sansIO-ядро работает с двумя platform-driver'ами — web и native, несмотря на то, что сами реализации webRTC на этих платформах абсолютно разные.
-- Отделенный от основной логики сигналинг: предоставляется опциональный встроенный сигналинг-сервер только с минимальной задачей — транспорт для bootstrap-handshake'а. Пользователь может подключить любой свой транспорт вместо него.
+- Mesh abstraction over the convoluted WebRTC.
+- Mesh extension and stabilization: as soon as a new peer joins the mesh, it automatically connects to all participants; when individual connections in the mesh break, they self-heal.
+- Identities and verification: each peer has a persistent ED25519 key, all SDP descriptions are signed when sent and verified when received, man-in-the-middle during the handshake is excluded.
+- Cross-platform: a single sansIO core works with two platform drivers — web and native, despite the WebRTC implementations on these platforms being completely different.
+- Signaling decoupled from the main logic: an optional bundled signaling server is provided with a minimal task only — a transport for the bootstrap handshake. The user can plug in any custom transport instead.
 
-## Сценарии использования
+## Use cases
 
-Antenna имеет смысл там, где нужна P2P-коммуникация, особенно в web-среде:
+Antenna makes sense where P2P communication is needed, especially in the web environment:
 
-- P2P-чаты и комнатные мессенджеры;
-- real-time multiplayer-игры;
-- collaborative editing — общие документы, доски, кодшеринг (Antenna не реализует CRDT-логику сама — её можно построить поверх обмена сообщениями).
+- P2P chats;
+- real-time multiplayer games;
+- collaborative editing — shared documents, boards, code-sharing (Antenna does not implement CRDT logic itself — it can be built on top of message exchange).
 
-Antenna не подходит для больших мешей (>~50 пиров) — full mesh растёт как N².
+Antenna is not suitable for large meshes (>~50 peers) — full mesh grows as N².
 
-## Структура меша
+## Mesh structure
 
-Antenna строит полный меш: каждый пир держит webRTC-соединение с каждым другим пиром в группе.
+Antenna builds a full mesh: each peer holds a WebRTC connection with every other peer in the group.
 
-Из этого следует:
+This implies:
 
-- любые два пира обмениваются сообщениями напрямую
-- падение одного пира не разрывает остальной mesh
-- число соединений растёт как N², поэтому модель рассчитана на небольшие группы
+- any two peers exchange messages directly
+- the failure of one peer does not break the rest of the mesh
+- the number of connections grows as N², so the model is designed for small groups
 
-## Структура пира
+## Peer structure
 
-Пир состоит из трех вложенных модулей: Peer, Driver и FSM.
+A peer consists of three nested modules: Peer, Driver, and FSM.
 
 ```mermaid
 flowchart LR
@@ -55,82 +55,82 @@ DRIVER --FSM input--> FSM
 
 ### Peer
 
-Peer — публичный API-объект, через который приложение управляет пиром. Он платформозависим, но API почти идентично на
-обеих платформах (подробнее в секции API).
+Peer is the public API object through which the application controls the peer. It is platform-dependent, but the API is almost identical on
+both platforms (more details in the API section).
 
 ### Driver
 
-Driver — платформозависимая прослойка между Peer и FSM. Транслирует вызовы Peer API в Input-сообщения для FSM, а
-Output FSM — в события для Peer; управляет внешними API: webRTC и персистентным хранилищем. Реализован отдельно для каждой
-платформы: web (через WASM) и нативный раст. Именно благодаря этому слою FSM остаётся полностью
-платформо-независимым.
+Driver is a platform-dependent layer between Peer and FSM. It translates Peer API calls into Input messages for the FSM, and
+FSM Output into events for Peer; it manages external APIs: WebRTC and persistent storage. Implemented separately for each
+platform: web (via WASM) and native Rust. It is precisely thanks to this layer that the FSM remains fully
+platform-independent.
 
 ### FSM
 
-FSM — конечный автомат протокола, реализованный в sansIO-философии: синхронно принимает Input-сообщения и возвращает
-Output-команды, без какого-либо внешнего I/O. Такая изоляция от сетевого API (а следовательно и от платформы) делает
-FSM полностью платформо-независимым и легко тестируемым.
+FSM is the protocol's finite state machine, implemented in the sansIO philosophy: it synchronously accepts Input messages and returns
+Output commands, without any external I/O. This isolation from the network API (and consequently from the platform) makes the
+FSM fully platform-independent and easy to test.
 
 # Antenna API
 
 ## Peer object
 
-Главный рабочий объект библиотеки — `Peer<Msg>`, generic над пользовательским типом сообщения. API, предоставляемое
-Peer, можно разделить на 3 категории: обеспечение connecting, отправку сообщений и систему подписок на события.
+The library's main working object is `Peer<Msg>`, generic over the user's message type. The API provided by
+Peer can be divided into 3 categories: providing connecting, sending messages, and the event subscription system.
 
 ### UserMsgPayload
 
-Тип сообщения `Msg` должен реализовывать трейт `UserMsgPayload`. Трейт пустой и автоматически реализуется для любого
-типа, удовлетворяющего `Serialize + DeserializeOwned + Clone`.
+The message type `Msg` must implement the `UserMsgPayload` trait. The trait is empty and is automatically implemented for any
+type satisfying `Serialize + DeserializeOwned + Clone`.
 
 ### Connection API
 
-API соединений позволяет проводить bootstrap-соединение между двумя пирами и graceful disconnection.
+The connection API allows performing a bootstrap connection between two peers and graceful disconnection.
 
-Состоит из 4 методов:
+It consists of 4 methods:
 
-- `start` — инициирует хандшейк, создавая и возвращая offer и переводя пир в состояние ожидания ансвера.
-- `receive_offer` — обрабатывает оффер, генерирует на его основе ансвер и возвращает его, переводя пир в состояние
-  ожидания соединения по DataChannel.
-- `receive_answer` — обрабатывает ансвер и инициирует DataChannel-соединение между пирами, переводя обоих в Connected
-  и позволяя начать отправлять сообщения.
-- `leave` — инициирует выход из меша, предварительно рассылая disconnect-сообщение всем пирам в меше.
+- `start` — initiates the handshake, creates and returns an offer, and transitions the peer into the awaiting-answer state.
+- `receive_offer` — processes an offer, generates an answer based on it, and returns it, transitioning the peer into the state
+  of awaiting a DataChannel connection.
+- `receive_answer` — processes an answer and initiates the DataChannel connection between the peers, transitioning both into Connected
+  and allowing them to start sending messages.
+- `leave` — initiates leaving the mesh, first sending a disconnect message to all peers in the mesh.
 
 ```rust
-// Сторона A
+// Side A
 let offer = peer.start().await?;
 let answer = somehow_get_from_b();
 peer.receive_answer(&answer).await?;
 
-// Сторона B
+// Side B
 let offer = somehow_get_from_a();
 let answer = peer.receive_offer(&offer).await?;
 ```
 
 ### Sending API
 
-Sending API позволяет отправлять сообщения другим пирам в меше.
+The sending API allows sending messages to other peers in the mesh.
 
-- `send` — отправить клиентское сообщение определённому пиру.
-- `broadcast` — отправить сообщение всем пирам в меше.
+- `send` — send a client message to a specific peer.
+- `broadcast` — send a message to all peers in the mesh.
 
 ### Subscription API
 
-Subscription API позволяет подписываться на клиентские события Peer. Всего есть 2 метода:
+The subscription API allows subscribing to client events of Peer. There are 2 methods in total:
 
-- `subscribe` — подписаться на событие, возвращает идентификатор.
-- `unsubscribe` — отписаться от события по идентификатору.
+- `subscribe` — subscribe to an event, returns an identifier.
+- `unsubscribe` — unsubscribe from an event by identifier.
 
-Список возможных событий:
+List of possible events:
 
-- `Connected` — текущий пир подключился к мешу.
-- `UserMessage` — пришло сообщение от другого пира.
-- `Disconnected` — текущий пир отсоединился.
-- `PeerConnected` — remote пир присоединился к мешу.
-- `PeerDisconnected` — remote пир отсоединился от меша.
-- `PeerLost` — remote пир непредсказуемо отсоединился (пропало соединение).
-- `Available` — пир соединился со всеми в меше и готов к отправке сообщений.
-- `Unavailable` — пир не соединился со всеми в меше.
+- `Connected` — the current peer connected to the mesh.
+- `UserMessage` — a message arrived from another peer.
+- `Disconnected` — the current peer disconnected.
+- `PeerConnected` — a remote peer joined the mesh.
+- `PeerDisconnected` — a remote peer left the mesh.
+- `PeerLost` — a remote peer disconnected unpredictably (the connection was lost).
+- `Available` — the peer connected to everyone in the mesh and is ready to send messages.
+- `Unavailable` — the peer is not connected to everyone in the mesh.
 
 ```rust
 peer.subscribe(Event::PeerConnected(PeerCallback::from_fn(|peer_id| {
@@ -146,50 +146,50 @@ peer.subscribe(Event::UserMessage(MessageCallback::from_fn(|peer_id, msg: Messag
 
 ## Signaling server
 
-Signaling server - предоставляемый SDK хелпер, автоматизирующий bootstrap-соединения. Он управляет сущностями комнат, включающих в себя подключенные пиры.
+Signaling server — a helper provided by the SDK that automates bootstrap connections. It manages room entities, which include the connected peers.
 
-[Спецификация](./signaling-server.md)
+[Specification](./signaling-server.md)
 
 ## Signaling client
 
-Signaling client — встроенный клиент сигналинг-сервера, автоматизирующий bootstrap-handshake через WebSocket.
+Signaling client — a built-in signaling-server client that automates the bootstrap handshake over WebSocket.
 
-У клиента 2 метода:
+The client has 2 methods:
 
-- `connect(url)` — открыть WebSocket-соединение с сигналинг-сервером.
-- `join(room_id, peer)` — войти в комнату и провести bootstrap-handshake с одним из её участников.
+- `connect(url)` — open a WebSocket connection to the signaling server.
+- `join(room_id, peer)` — enter a room and perform the bootstrap handshake with one of its participants.
 
-Также signaling-клиент устанавливает listener на событие `Disconnect`, чтобы корректно покинуть комнату при `leave()`.
+The signaling client also installs a listener on the `Disconnect` event in order to leave the room correctly on `leave()`.
 
 ```rust
 let client = SignalingClient::connect("wss://signaling.example.com/ws").await?;
 
-// Вместо вызова bootstrap api, описанного выше:
+// Instead of calling the bootstrap api described above:
 client.join("my-room".to_string(), peer.clone()).await?;
 ```
 
-## Платформы
+## Platforms
 
 ### Web
 
-Веб-версия компилируется в WebAssembly через `wasm-bindgen`. Под капотом — браузерное webRTC API, вызываемое в rust-коде через браузерные системные биндинги. Приложение, используемое библиотеку, компилируется wasm-модуль и вызывается из JS-кода через api.
+The web version is compiled to WebAssembly via `wasm-bindgen`. Under the hood — the browser's WebRTC API, called from Rust code through browser system bindings. The application using the library compiles a wasm module and is invoked from JS code through an api.
 
-Пример использования: `minimal-chat`.
+Usage example: `minimal-chat`.
 
 ### Native
 
-Нативная реализация предназначена для вызова в обычном rust коде. Она построена на tokio-рантайме и использует реализацию `webrtc-rs` в качестве webRTC-API.
+The native implementation is intended to be called from regular Rust code. It is built on the tokio runtime and uses the `webrtc-rs` implementation as the WebRTC API.
 
-Пример использования: `shell-chat`.
+Usage example: `shell-chat`.
 
-## ICE-серверы
+## ICE servers
 
-webRTC использует ICE-фреймворк, чтобы пробить путь между пирами через NAT и firewall'ы. Для этого нужны вспомогательные серверы:
+WebRTC uses the ICE framework to punch a path between peers through NATs and firewalls. This requires auxiliary servers:
 
-- **STUN** — помогает пиру узнать свой публичный IP/port для прямого P2P-соединения. Покрывает большинство домашних NAT'ов (full-cone, restricted-cone, port-restricted-cone) — порядка 80-90% сценариев.
-- **TURN** — relay-сервер, проксирующий трафик между пирами, когда прямое P2P невозможно (симметричный NAT, корпоративные firewall'ы, CGNAT, double NAT).
+- **STUN** — helps a peer learn its public IP/port for a direct P2P connection. Covers most home NATs (full-cone, restricted-cone, port-restricted-cone) — about 80-90% of scenarios.
+- **TURN** — a relay server that proxies traffic between peers when direct P2P is impossible (symmetric NAT, corporate firewalls, CGNAT, double NAT).
 
-По умолчанию antenna подключает публичный Google STUN. TURN antenna **не предоставляет** — это ответственность приложения; нужный TURN-сервер подключается через `IceServerConfig::with_credentials`.
+By default, antenna connects to public Google STUN. TURN antenna **does not provide** — it is the application's responsibility; the required TURN server is plugged in via `IceServerConfig::with_credentials`.
 
 ```rust
 let ice_servers = vec![
@@ -203,18 +203,18 @@ let ice_servers = vec![
 let peer = Peer::with_ice_servers(ice_servers);
 ```
 
-Если приложение работает в локальной сети или с пирами за предсказуемыми NAT'ами — TURN можно не подключать.
+If the application runs on a local network or with peers behind predictable NATs — TURN can be omitted.
 
 ## Handshake
 
-Перед тем как два пира смогут обмениваться сообщениями, они должны провести handshake. Antenna-handshake решает две задачи:
+Before two peers can exchange messages, they must perform a handshake. The Antenna handshake solves two tasks:
 
-- **Обмен SDP для установки соединения** — каждая сторона сообщает другой свою сетевую конфигурацию: ICE-кандидаты, DTLS-фингерпринты и прочее по спецификации webRTC.
-- **Верификация идентичности** — каждая сторона удостоверяется, что собеседник владеет тем публичным ключом, под которым представился. Это исключает man-in-the-middle (подробнее в Identity verifying).
+- **SDP exchange to establish the connection** — each side communicates its network configuration to the other: ICE candidates, DTLS fingerprints, and the rest per the WebRTC specification.
+- **Identity verification** — each side ensures that the other party owns the public key under which it presented itself. This excludes man-in-the-middle (more details in Identity verifying).
 
-Конкретный транспорт для обмена offer и answer antenna не диктует — это может быть встроенный signaling-сервер, копи-паст, QR-коды или любой свой канал. От пиров требуется лишь передать друг другу две строки.
+Antenna does not dictate a specific transport for exchanging offer and answer — it can be the bundled signaling server, copy-paste, QR codes, or any custom channel. Peers are only required to pass two strings to each other.
 
-В рамках handshake'а стороны принимают 2 роли - **Host** и **Joiner**: host отправляет offer, joiner принимает его и возвращает answer. После завершения handshake'а роли пропадают — пиры становятся равноправными.
+Within the handshake, the sides take 2 roles — **Host** and **Joiner**: the host sends the offer, the joiner accepts it and returns the answer. After the handshake completes, the roles disappear — peers become equal.
 
 ```mermaid
 sequenceDiagram
@@ -226,51 +226,51 @@ sequenceDiagram
     A <<-->> B: establishing connection
 ```
 
-Antenna различает два режима handshake'а: **Bootstrap** (между двумя пирами через произвольный внешний транспорт) и **Relay** (между двумя пирами через уже подключённого посредника). Подробности — в разделе Handshake mode.
+Antenna distinguishes two handshake modes: **Bootstrap** (between two peers via an arbitrary external transport) and **Relay** (between two peers via an already connected intermediary). Details — in the Handshake mode section.
 
 ### Offer & Answer
 
-Offer и Answer — handshake-объекты, через которые пиры узнают друг о друге. Каждый из них состоит из публичного ключа и подписанного им токена. На уровне API оба передаются как base64-строки (см. Connection API).
+Offer and Answer are handshake objects through which peers learn about each other. Each of them consists of a public key and a token signed by it. At the API level, both are passed as base64 strings (see Connection API).
 
-#### Публичный ключ
+#### Public key
 
-ED25519-публичный ключ. Служит уникальным идентификатором пира в меше. Персистентен, способ хранения зависит от платформы (`localStorage` для web, файл для native).
+ED25519 public key. Serves as a unique identifier for the peer in the mesh. Persistent, the storage method depends on the platform (`localStorage` for web, file for native).
 
-#### Токен
+#### Token
 
-Генерируется библиотекой biscuit и хранит SDP-дескрипцию пира — данные, нужные webRTC для установки соединения. Содержимое токена подписывается приватным ключом пары и верифицируется публичным ключом, прикреплённым к offer/answer (см. раздел Identity verifying).
+Generated by the biscuit library and stores the peer's SDP description — data needed by WebRTC to establish a connection. The token's contents are signed by the pair's private key and verified by the public key attached to the offer/answer (see the Identity verifying section).
 
 ### Handshake strategy
 
 #### Host
 
-Пир, первым отправляющий offer. Жизненный цикл:
+The peer that sends the offer first. Lifecycle:
 
-1. Создаёт offer
-2. Ожидает answer, принимает его
-3. Устанавливает DataChannel-соединение
+1. Creates an offer
+2. Awaits an answer, accepts it
+3. Establishes the DataChannel connection
 
 #### Joiner
 
-Пир, принимающий offer. Жизненный цикл:
+The peer that accepts an offer. Lifecycle:
 
-1. Принимает offer, генерирует answer
-2. Ожидает установки соединения хостом
+1. Accepts the offer, generates an answer
+2. Awaits connection establishment by the host
 
 ### Handshake mode
 
-Antenna различает два режима handshake'а:
+Antenna distinguishes two handshake modes:
 
-- **Bootstrap** — для первого подключения к меш'у. Сигналинг-канал между двумя пирами обеспечивает приложение (signaling-сервер, копи-паст, QR-код, любой транспорт).
-- **Relay** — для подключения к уже связному меш'у или для recover'а после разрыва. Сигналинг автоматически идёт через уже подключённого пира-посредника поверх существующих DataChannel'ов; от приложения ничего не требуется.
+- **Bootstrap** — for the first connection to a mesh. The application provides the signaling channel between the two peers (signaling server, copy-paste, QR code, any transport).
+- **Relay** — for connecting to an already-connected mesh or for recovery after a disconnection. Signaling automatically goes through an already connected peer-intermediary on top of existing DataChannels; nothing is required from the application.
 
 #### Bootstrap
 
-Bootstrap-соединению необходим внешний транспорт, ответственность за который лежит на приложении. Это может быть ручная передача SDP копи-пастом (как в `minimal-chat`), использование встроенного signaling-сервера (как в `chat-with-signaling-server`) или любой свой канал.
+A bootstrap connection requires an external transport, the responsibility for which lies with the application. This can be manual SDP transfer via copy-paste (as in `minimal-chat`), use of the bundled signaling server (as in `chat-with-signaling-server`), or any custom channel.
 
-На уровне API, как было описано выше, весь bootstrap-flow свёрнут до пары вызовов: `peer.start()` → передать offer → `peer.receive_offer()` → передать answer → `peer.receive_answer()`
+At the API level, as described above, the entire bootstrap flow collapses to a pair of calls: `peer.start()` → pass the offer → `peer.receive_offer()` → pass the answer → `peer.receive_answer()`
 
-Подробная схема внутренних сообщений FSM (для контрибьюторов):
+Detailed scheme of FSM internal messages (for contributors):
 
 ```mermaid
 sequenceDiagram
@@ -286,7 +286,7 @@ sequenceDiagram
     A ->> AD: Input::OpenOfferCreated(sdp)
     AD ->> A: Output::OfferReady(SignalingPayload)
 
-    AD ->> BD: app передаёт offer на сторону B (любым транспортом)
+    AD ->> BD: app passes the offer to side B (via any transport)
 
     note over BD: receive_offer
     B ->> BD: Input::InitHandshake { mode: Bootstrap, strategy: Joiner }
@@ -295,7 +295,7 @@ sequenceDiagram
     B ->> BD: Input::Handshake { AnswerCreated(sdp) }
     BD ->> B: Output::AnswerReady(SignalingPayload)
 
-    BD ->> AD: app передаёт answer обратно на A
+    BD ->> AD: app passes the answer back to A
 
     note over AD: receive_answer
     A ->> AD: Input::Handshake { Answer }
@@ -307,24 +307,24 @@ sequenceDiagram
 
 #### Relay
 
-Relay-handshake — это handshake между двумя пирами, у которых нет прямого соединения, но есть общий уже подключённый посредник. Сигналинг идёт через DataChannel этого посредника, без участия приложения и signaling-сервера. Благодаря relay новичку нужно одно bootstrap-соединение, чтобы оказаться в меше из N пиров — остальные N-1 соединений достраиваются автоматически и всегда детерминировано, что гарантирует что меш всегда будет полным на уровне протокола.
+Relay handshake — a handshake between two peers that have no direct connection but share a common already-connected intermediary. Signaling goes through that intermediary's DataChannel, without involvement from the application or the signaling server. Thanks to relay, a newcomer needs one bootstrap connection to end up in a mesh of N peers — the remaining N-1 connections are built up automatically and always deterministically, which guarantees that the mesh will always be full at the protocol level.
 
-Relay срабатывает в двух случаях:
+Relay triggers in two cases:
 
-- **Mesh-extension** — когда любой existing-пир завершает handshake с новичком, его Connected-ветка FSM рассылает relay-init для всех своих Connected-пиров. Это автоматически достраивает full mesh без дополнительных bootstrap'ов.
-- **Reconnect** — после потери соединения reconnect-tick FSM пытается восстановить связь с потерянным пиром через общего живого соседа.
+- **Mesh extension** — when any existing peer completes a handshake with a newcomer, its FSM Connected branch dispatches relay-init for all of its Connected peers. This automatically completes the full mesh without additional bootstraps.
+- **Reconnect** — after a connection loss, the FSM's reconnect-tick attempts to restore the link with the lost peer through a common live neighbor.
 
-A и B соединены, добавляем C:
+A and B are connected, we add C:
 
 ```mermaid
 flowchart LR
 
 A -- bootstrap --> B
 B -- bootstrap --> C
-A <-. relay через B .-> C
+A <-. relay via B .-> C
 ```
 
-Затем добавляем D:
+Then we add D:
 
 ```mermaid
 flowchart LR
@@ -332,13 +332,13 @@ flowchart LR
 A -- bootstrap --> B
 B -- bootstrap --> C
 D -- bootstrap --> C
-A <-. relay через B .-> C
-A <-. relay через C .-> D
-B <-. relay через C .-> D
+A <-. relay via B .-> C
+A <-. relay via C .-> D
+B <-. relay via C .-> D
 ```
 
-Подробная схема relay-handshake'а на уровне FSM.
-предполагается `A.id < C.id`, поэтому A выбирает роль Host, C — Joiner.
+Detailed scheme of the relay handshake at the FSM level.
+Assumed that `A.id < C.id`, so A picks the Host role, C — Joiner.
 
 ```mermaid
 sequenceDiagram
@@ -349,8 +349,8 @@ sequenceDiagram
     participant CD as C driver
     participant C
 
-    A -->> B: уже соединены через DC
-    B -->> C: bootstrap-handshake B↔C только что завершился
+    A -->> B: already connected via DC
+    B -->> C: bootstrap-handshake B↔C just completed
 
     B ->> A: RelayFrom { src: C, InitConnect }
     A ->> A: InitHandshake { with: C, mode: Relay(B), strategy: Host }
@@ -374,99 +374,99 @@ sequenceDiagram
     A -->> C: Connected
 ```
 
-### Гарантии и свойства хандшейков
+### Handshake guarantees and properties
 
-#### Полнота меша после relay
+#### Mesh completeness after relay
 
-**Свойство.** Если пир P через bootstrap подключается к любому пиру Q из уже связного полного меша M, то после стабилизации handshake'ов P оказывается соединён напрямую с каждым пиром в M.
+**Property.** If a peer P bootstrap-connects to any peer Q from an already-connected full mesh M, then after the handshakes stabilize P ends up directly connected to every peer in M.
 
-**Доказательство:** По реализации, в момент перехода bootstrap-handshake'а P↔Q в Connected, Q эмитит relay-init-сообщение для каждого `existing ∈ M \ {Q}`. Каждый такой existing получает init и инициирует встречный relay-handshake с P через Q как посредника. После завершения всех handshake'ов — M ∪ {P} снова полный mesh.
+**Proof:** By implementation, at the moment the bootstrap handshake P↔Q transitions to Connected, Q emits a relay-init message for each `existing ∈ M \ {Q}`. Each such existing peer receives the init and initiates a counter relay-handshake with P via Q as the intermediary. After all handshakes complete — M ∪ {P} is again a full mesh.
 
-#### Согласованность ролей в relay-handshake
+#### Role consistency in a relay handshake
 
-**Свойство.** В любом relay-handshake'е (mesh-расширение при подключении нового пира или reconnect после разрыва) роли распределяются по идентификаторам: пир с меньшим ID становится Host, с большим — Joiner. Обе стороны выбирают свою роль независимо и не могут выбрать одинаковую.
+**Property.** In any relay handshake (mesh extension upon a new peer joining, or reconnect after a break), roles are distributed by identifier: the peer with the smaller ID becomes Host, the one with the larger — Joiner. Both sides choose their role independently and cannot pick the same one.
 
-**Доказательство:**
-Выбор роли происходит в двух местах FSM: `handle_relay_signaling_from` (при получении `RelayPayload::InitConnect`) и `handle_reconnect_attempt` (по тику). Оба используют сравнение `self.id < other`. Поскольку строгий порядок на PeerID антисимметричен, обе стороны приходят к согласованному решению без какого-либо обмена.
+**Proof:**
+The role choice happens in two places in the FSM: `handle_relay_signaling_from` (on receiving `RelayPayload::InitConnect`) and `handle_reconnect_attempt` (on tick). Both use the comparison `self.id < other`. Since the strict order on PeerID is antisymmetric, both sides arrive at a consistent decision without any exchange.
 
-#### Слияние двух мешей
+#### Merging two meshes
 
-**Свойство.** Если пир P ∈ M₁ устанавливает bootstrap-соединение с пиром Q ∈ M₂, где M₁ и M₂ — два независимых полных меша (M₁ ∩ M₂ = ∅), то после стабилизации handshake'ов получается единый полный меш M₁ ∪ M₂.
+**Property.** If a peer P ∈ M₁ establishes a bootstrap connection with a peer Q ∈ M₂, where M₁ and M₂ are two independent full meshes (M₁ ∩ M₂ = ∅), then after the handshakes stabilize a single full mesh M₁ ∪ M₂ is obtained.
 
-**Доказательство:**
-После завершения P-Q применяем свойство полноты меша после relay:
+**Proof:**
+After P–Q completes, we apply the mesh-completeness-after-relay property:
 
-- к паре (P, Q ∈ M₂): P оказывается соединён со всеми пирами M₂;
-- к паре (Q, P ∈ M₁): Q оказывается соединён со всеми пирами M₁.
+- to the pair (P, Q ∈ M₂): P ends up connected to all peers of M₂;
+- to the pair (Q, P ∈ M₁): Q ends up connected to all peers of M₁.
 
-Теперь и P, и Q соединены со всем M₁ ∪ M₂ — оба выступают посредниками перед членами мешей друг друга. Для любой пары (m₁ ∈ M₁ \ {P}, m₂ ∈ M₂ \ {Q}) оба пира соединены с P (или Q), и Connected-ветка FSM на посреднике при добавлении нового соединения эмитит relay-init-пары для всех existing-пиров. По индукции на завершившихся handshake'ах — каждая пара (m₁, m₂) рано или поздно получает приглашение и соединяется через P или Q как посредника. Финальный mesh M₁ ∪ M₂ — полный.
+Now both P and Q are connected to all of M₁ ∪ M₂ — both act as intermediaries for members of each other's meshes. For any pair (m₁ ∈ M₁ \ {P}, m₂ ∈ M₂ \ {Q}), both peers are connected to P (or Q), and the FSM's Connected branch on the intermediary, when adding a new connection, emits relay-init pairs for all existing peers. By induction over completed handshakes — every pair (m₁, m₂) eventually receives an invitation and connects via P or Q as the intermediary. The final mesh M₁ ∪ M₂ is full.
 
-## Пересоединение
+## Reconnection
 
-При неожиданном разрыве DataChannel antenna автоматически пытается восстановить соединение, не требуя действий от юзера.
+On an unexpected DataChannel break, antenna automatically tries to restore the connection without requiring action from the user.
 
-В момент разрыва FSM эмитит событие о внезапной потере пира, и периодически пытается восстановить связь через relay-handshake с любым общим Connected-посредником.
+At the moment of the break, the FSM emits an event about the sudden loss of the peer, and periodically tries to restore the connection via a relay handshake with any common Connected intermediary.
 
-Цикл останавливается:
+The cycle stops:
 
-- **при успехе** — peer снова Connected, эмитится `PeerConnected`;
-- **по лимиту попыток** — после нескольких неудач reconnect прекращается;
-- **если в меше не осталось общих посредников** — relay-handshake невозможен, попытки сразу прекращаются.
+- **on success** — the peer is Connected again, `PeerConnected` is emitted;
+- **on attempt limit** — after several failures, reconnection ceases;
+- **if no common intermediaries remain in the mesh** — a relay handshake is impossible, attempts cease immediately.
 
 ## Peer connection
 
 ### Message format
 
-Все фреймы, идущие через DataChannel, бывают одного из нескольких видов:
+All frames going through DataChannel come in one of several kinds:
 
-- **Пользовательское сообщение** — то, что приложение отправило через `send` / `broadcast`. Только этот вид доходит до пользовательских callback'ов.
-- **Relay сигналинг** — пара сообщений для пересылки signaling-данных между двумя пирами через общего посредника (см. Handshake → Relay).
-- **Явное отсоединение** — уведомление при graceful-выходе пира.
+- **User message** — what the application sent via `send` / `broadcast`. Only this kind reaches user callbacks.
+- **Relay signaling** — a pair of messages for forwarding signaling data between two peers via a common intermediary (see Handshake → Relay).
+- **Explicit disconnect** — a notification on a peer's graceful exit.
 
-Wire-формат фрейма — JSON-объект с тег-полем-дискриминатором вида сообщения. DataChannel используется в default-режиме SCTP — **ordered + reliable**: сообщения доставляются без потерь и в порядке отправки.
+The wire format of a frame is a JSON object with a tag-discriminator field for the message kind. DataChannel is used in default SCTP mode — **ordered + reliable**: messages are delivered without loss and in send order.
 
 ### System messages
 
-Системные сообщения — все виды, кроме User payload. Их получение и отправка проходят через FSM и драйвер, до клиента они не доходят. Они нужны чтобы совершать фоновые действия над мешем для сохранения гарантий.
+System messages — all kinds except User payload. Their reception and sending pass through the FSM and the driver and do not reach the client. They are needed to perform background actions on the mesh to preserve guarantees.
 
 #### Relay
 
-Для установления handshake'а между двумя несоединёнными пирами используется пара relay-сообщений:
+To establish a handshake between two unconnected peers, a pair of relay messages is used:
 
-- **Relayto** — отправитель шлёт посреднику со словами "перешли это пиру `dst`";
-- **RelayFrom** — посредник пересылает целевому пиру со словами "вот сообщение от `src`".
+- **RelayTo** — the sender sends to the intermediary saying "forward this to peer `dst`";
+- **RelayFrom** — the intermediary forwards to the target peer saying "here is a message from `src`".
 
-Полезная нагрузка внутри relay-сообщения — одного из трёх видов:
+The payload inside a relay message is one of three kinds:
 
-- **init** — приглашение к relay-handshake'у с указанием peer'а, с которым нужно соединиться;
-- **offer** — SDP-offer внутри relay-handshake'а;
-- **answer** — SDP-answer внутри relay-handshake'а.
+- **init** — an invitation to a relay handshake, indicating the peer to connect with;
+- **offer** — SDP offer inside a relay handshake;
+- **answer** — SDP answer inside a relay handshake.
 
 #### Disconnect
 
-Disconnect-сообщение отправляется пиром всем участникам меша при graceful-выходе. На web-платформе отправка происходит автоматически из `Drop` у `Peer` и из `beforeunload`-обработчика; на native — только при явном вызове `peer.leave()`.
+A disconnect message is sent by the peer to all mesh participants on a graceful exit. On the web platform, sending happens automatically from `Drop` on `Peer` and from a `beforeunload` handler; on native — only on an explicit call to `peer.leave()`.
 
-Разница graceful vs abrupt:
+The difference graceful vs abrupt:
 
-- **Graceful** (Disconnect-сообщение дошло) — у других пиров эмитится `PeerDisconnected`, переподключение не вызывается.
-- **Abrupt** (соединение разорвалось без Disconnect-сообщения) — у других пиров пир помечается как оборвавшийся, и они начинают попытку переподключения.
+- **Graceful** (Disconnect message arrived) — `PeerDisconnected` is emitted on other peers, reconnection is not invoked.
+- **Abrupt** (the connection broke without a Disconnect message) — on other peers the peer is marked as broken, and they begin a reconnection attempt.
 
-### Криптографическая надежность
+### Cryptographic strength
 
-Antenna защищает три свойства: конфиденциальность сообщений, целостность данных и аутентичность отправителя. Реализуются комбинацией DTLS на транспортном уровне и ED25519-подписей в signaling-данных.
+Antenna protects three properties: message confidentiality, data integrity, and sender authenticity. They are realized by a combination of DTLS at the transport layer and ED25519 signatures in signaling data.
 
-#### Приватность и целостность транспорта: DTLS
+#### Transport privacy and integrity: DTLS
 
-Все webRTC DataChannel-соединения по спецификации шифруются DTLS — TLS поверх UDP/SCTP. DTLS обеспечивает симметричное шифрование на сессионных ключах и MAC на каждом пакете. Сессионные ключи устанавливаются по Diffie-Hellman в процессе webRTC-handshake'а; обмен DTLS-фингерпринтами идёт внутри SDP.
+All WebRTC DataChannel connections are, per the specification, encrypted with DTLS — TLS over UDP/SCTP. DTLS provides symmetric encryption with session keys and a MAC on every packet. Session keys are established via Diffie-Hellman during the WebRTC handshake; the exchange of DTLS fingerprints occurs inside SDP.
 
-Из коробки даёт защиту от прослушивания и модификации трафика после установки DataChannel'а.
+Out of the box this gives protection against eavesdropping and modification of traffic after the DataChannel is established.
 
-#### Идентичность и аутентичность: ED25519 через biscuit
+#### Identity and authenticity: ED25519 via biscuit
 
-Каждый пир имеет персистентную ED25519-ключевую пару. ED25519 — эллиптическая кривая в Edwards-форме: ~128-битная безопасность, детерминированные подписи (в отличие от ECDSA), быстрая верификация. Публичный ключ одновременно служит уникальным идентификатором пира в меше.
+Each peer has a persistent ED25519 key pair. ED25519 is an elliptic curve in Edwards form: ~128-bit security, deterministic signatures (unlike ECDSA), fast verification. The public key simultaneously serves as a unique peer identifier in the mesh.
 
-В handshake'е SDP-дескрипции упакованы в [biscuit-токен](https://www.biscuitsec.org/) — подписанный приватным ключом контейнер с верифицируемой подписью. Это гарантирует, что offer/answer действительно от заявленного владельца ключа и не были модифицированы in-flight.
+In the handshake, SDP descriptions are packed into a [biscuit token](https://www.biscuitsec.org/) — a container signed with the private key with a verifiable signature. This guarantees that the offer/answer truly comes from the claimed key owner and was not modified in-flight.
 
-## Структура кода
+## Code structure
 
-[Подробнее здесь](./architecture.md)
+[More details here](./architecture.md)

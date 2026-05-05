@@ -6,6 +6,7 @@ use antenna_protocol::{PeerID, UserMsgPayload};
 use anyhow::Result;
 use wasm_bindgen::closure::Closure;
 
+/// User-facing handle to a mesh peer running in the browser.
 pub struct Peer<Msg>
 where
     Msg: UserMsgPayload + 'static,

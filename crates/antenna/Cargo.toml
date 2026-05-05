@@ -1,6 +1,6 @@
 [package]
 name = "antenna"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version.workspace = true
 description = "WASM-compatible library for building P2P meshes over WebRTC."
@@ -23,3 +23,7 @@ antenna-protocol.workspace = true
 antenna-client-shared.workspace = true
 antenna-client-web = { workspace = true, optional = true }
 antenna-client-native = { workspace = true, optional = true }
+
+[package.metadata.docs.rs]
+features = ["web", "signaling-client"]
+targets = ["wasm32-unknown-unknown"]

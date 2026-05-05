@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "antenna"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "antenna-client-native",
  "antenna-client-shared",
@@ -66,7 +66,7 @@ dependencies = [
 
 [[package]]
 name = "antenna-client-native"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "antenna-client-shared",
  "antenna-protocol",
@@ -83,7 +83,7 @@ dependencies = [
 
 [[package]]
 name = "antenna-client-shared"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "antenna-protocol",
  "anyhow",
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "antenna-client-web"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "antenna-client-shared",
  "antenna-protocol",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "antenna-protocol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

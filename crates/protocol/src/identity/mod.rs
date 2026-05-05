@@ -7,6 +7,9 @@ use biscuit_auth::{Biscuit, KeyPair, PublicKey};
 pub use peer_id::PeerID;
 use serde::{Deserialize, Serialize};
 
+/// Persistent ED25519 identity of a peer.
+///
+/// The public half is the [`PeerID`] used to address the peer in the mesh.
 #[derive(Serialize, Deserialize)]
 pub struct Identity {
     #[serde(

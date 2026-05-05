@@ -16,17 +16,27 @@ pub struct HandshakeContext {
     pub mode: HandshakeMode,
 }
 
-/// Coarse mesh-membership state for the local node
+/// Coarse mesh-membership state for the local node.
+///
+/// Recomputed after every [`MeshNodeFSM::process`] call. Once `Left`, stays `Left`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FSMState {
+    /// No peer is `Connected` yet — the node has not joined any mesh.
     Init,
+    /// At least one peer is `Connected`, but some relay handshake is still in progress.
     Connected,
+    /// All peer handshakes have settled — the node is fully meshed and ready to send.
     Available,
+    /// The node has issued [`Input::Leave`]; terminal.
     Left,
 }
 
-/// Core FSM of antenna client, handles negotiation handshakes (but not signaling!!)
-/// and abstract mesh logic
+/// Top-level state machine for a mesh node.
+///
+/// Owns the local [`Identity`], every per-peer [`HandshakeFSM`], and the
+/// coarse [`FSMState`]. [`MeshNodeFSM::process`] is the single entry point:
+/// feed it an [`Input`], get back a `Vec<Output>`. No I/O happens here —
+/// outputs are commands the driver must execute.
 pub struct MeshNodeFSM {
     /// current peer ID
     id: PeerID,

@@ -2,35 +2,35 @@
 
 ## antenna
 
-Фасадный crate, который пользователь подключает в свой проект. Реэкспортирует `antenna-protocol` и одну из платформенных реализаций по feature-флагу: `web` (WASM) или `native` (tokio). Опциональный feature `signaling-client` подтягивает встроенный сигналинг-клиент.
+Facade crate that the user adds to their project. Re-exports `antenna-protocol` and one of the platform implementations via a feature flag: `web` (WASM) or `native` (tokio). The optional `signaling-client` feature pulls in the bundled signaling client.
 
 ## protocol
 
-SansIO-ядро протокола. Содержит `MeshNodeFSM` и весь handshake/relay/reconnect-автомат. Не знает ни про webRTC, ни про tokio/wasm — взаимодействует с миром через `Input`/`Output` сообщения. Это делает ядро тестируемым без сети и переносимым между платформами.
+SansIO core of the protocol. Contains `MeshNodeFSM` and the entire handshake/relay/reconnect automaton. Knows nothing about WebRTC, tokio, or wasm — it interacts with the world through `Input`/`Output` messages. This makes the core testable without a network and portable across platforms.
 
 ## client/shared
 
-Общие платформонезависимые абстракции, переиспользуемые в `client/web` и `client/native`: типы событий и колбэков (`Event`, `RtcCallbacks`), конфигурация ICE-серверов (`IceServerConfig`), интерфейс persistent storage для identity, общие константы.
+Common platform-independent abstractions reused in `client/web` and `client/native`: event and callback types (`Event`, `RtcCallbacks`), ICE-server configuration (`IceServerConfig`), the persistent-storage interface for identity, shared constants.
 
 ## client/web
 
-Платформенная реализация для браузера. Компилируется в WebAssembly через `wasm-bindgen`, использует браузерный webRTC API через `web-sys`-биндинги. Сохраняет identity в `localStorage`, автоматически слушает `beforeunload` для graceful-выхода.
+Platform implementation for the browser. Compiled to WebAssembly via `wasm-bindgen`, uses the browser's WebRTC API through `web-sys` bindings. Stores identity in `localStorage`, automatically listens for `beforeunload` for a graceful exit.
 
 ## client/native
 
-Платформенная реализация для нативного rust. Построена на tokio-рантайме, использует crate `webrtc-rs` в качестве webRTC-стека. Identity хранится в файле, путь к которому передаётся через `Storage`.
+Platform implementation for native Rust. Built on the tokio runtime, uses the `webrtc-rs` crate as the WebRTC stack. Identity is stored in a file whose path is passed in through `Storage`.
 
 ## signaling-server
 
-Референс-реализация встроенного сигналинг-сервера на axum + tokio. WebSocket-эндпойнт, in-memory комнаты, без аутентификации.
+Reference implementation of the bundled signaling server on axum + tokio. WebSocket endpoint, in-memory rooms, no authentication.
 
 ## arbitrary-tests
 
-Property-based тесты на `MeshNodeFSM` через [proptest](https://crates.io/crates/proptest). Гоняет случайные последовательности `Input`-сообщений и проверяет инварианты протокола (полнота меша, отсутствие зависших состояний, корректность статус-переходов).
+Property-based tests on `MeshNodeFSM` via [proptest](https://crates.io/crates/proptest). Drives random sequences of `Input` messages and checks protocol invariants (mesh completeness, absence of stuck states, correctness of status transitions).
 
 ## integration-tests
 
-End-to-end интеграционные тесты с реальным webRTC-стеком (через `client/native`). Проверяют сценарии bootstrap'а пар, расширения меша, graceful leave, reconnect после force-drop. Запускаются через `cargo nextest` (см. `.config/nextest.toml`).
+End-to-end integration tests with a real WebRTC stack (via `client/native`). Verify scenarios for pair bootstrap, mesh extension, graceful leave, reconnect after force-drop. Run via `cargo nextest` (see `.config/nextest.toml`).
 
 # Tests
 

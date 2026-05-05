@@ -3,7 +3,7 @@ use antenna_protocol::Identity;
 use anyhow::{Context, Result};
 use std::path::Path;
 
-/// Identity persistence backed by a single JSON file
+/// Identity persistence backed by a single JSON file.
 pub struct Storage {
     path: String,
 }

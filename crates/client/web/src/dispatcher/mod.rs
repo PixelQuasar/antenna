@@ -5,6 +5,8 @@ use anyhow::anyhow;
 use send_wrapper::SendWrapper;
 use wasm_bindgen::prelude::*;
 
+/// Wrap a JS function (zero arguments) into a [`NoArgCallback`] for
+/// `Peer::subscribe(Event::Connected(...))` and similar.
 pub fn js_no_arg(f: js_sys::Function) -> NoArgCallback {
     let f = SendWrapper::new(f);
     NoArgCallback::from_fn(move || {
@@ -14,6 +16,8 @@ pub fn js_no_arg(f: js_sys::Function) -> NoArgCallback {
     })
 }
 
+/// Wrap a JS function `(peerId: string)` into a [`PeerCallback`] for
+/// `Event::PeerConnected` and similar peer-scoped events.
 pub fn js_peer(f: js_sys::Function) -> PeerCallback {
     let f = SendWrapper::new(f);
     PeerCallback::from_fn(move |peer| {
@@ -24,6 +28,9 @@ pub fn js_peer(f: js_sys::Function) -> PeerCallback {
     })
 }
 
+/// Wrap a JS function `(peerId: string, msg: object)` into a
+/// [`MessageCallback`] for `Event::UserMessage`. `msg` is serialized to a
+/// plain JS object via `serde-wasm-bindgen`.
 pub fn js_message<Msg: UserMsgPayload + 'static>(f: js_sys::Function) -> MessageCallback<Msg> {
     let f = SendWrapper::new(f);
     MessageCallback::from_fn(move |peer, data| {

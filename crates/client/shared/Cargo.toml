@@ -1,9 +1,9 @@
 [package]
 name = "antenna-client-shared"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version.workspace = true
-description = "Shared tlayer used by antenna platform implementation."
+description = "Shared layer used by antenna platform implementations."
 license.workspace = true
 repository.workspace = true
 readme = "README.md"

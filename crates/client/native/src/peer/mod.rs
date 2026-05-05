@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 
 use crate::{Driver, Storage};
 
-/// Native concurrent peer implementation
+/// User-facing handle to a mesh peer running on a Tokio runtime.
 pub struct Peer<Msg: UserMsgPayload + Send + Sync + 'static> {
     driver: Arc<Mutex<Driver<Msg>>>,
     callbacks: Arc<Mutex<RtcCallbacks<Msg>>>,

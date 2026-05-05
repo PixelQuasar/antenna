@@ -1,6 +1,6 @@
 [package]
 name = "antenna-client-native"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version.workspace = true
 description = "Native rust (over Tokio & webrtc-rs) platform implementation for the antenna P2P mesh protocol."

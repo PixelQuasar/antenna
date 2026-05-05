@@ -19,25 +19,25 @@ keywords = ["p2p", "mesh", "webrtc", "wasm"]
 categories = ["network-programming"]
 
 [workspace.dependencies.antenna]
-version = "0.1.0"
+version = "0.1.1"
 path = "crates/antenna"
 
 [workspace.dependencies.antenna-protocol]
-version = "0.1.0"
+version = "0.1.1"
 path = "crates/protocol"
 
 [workspace.dependencies.antenna-client-web]
-version = "0.1.0"
+version = "0.1.1"
 path = "crates/client/web"
 default-features = false
 
 [workspace.dependencies.antenna-client-native]
-version = "0.1.0"
+version = "0.1.1"
 path = "crates/client/native"
 default-features = false
 
 [workspace.dependencies.antenna-client-shared]
-version = "0.1.0"
+version = "0.1.1"
 path = "crates/client/shared"
 
 [workspace.dependencies.anyhow]

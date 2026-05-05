@@ -1,3 +1,7 @@
+//! Platform-independent traits and constants shared between the antenna platform drivers
+//! ([`antenna-client-web`](https://crates.io/crates/antenna-client-web) and
+//! [`antenna-client-native`](https://crates.io/crates/antenna-client-native)).
+
 mod dispatcher;
 mod ice;
 mod signaling;

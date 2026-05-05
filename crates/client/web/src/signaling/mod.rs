@@ -10,6 +10,7 @@ use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{MessageEvent, WebSocket};
 
+/// Browser-side client for the bundled antenna signaling server.
 pub struct SignalingClient {
     ws: WebSocket,
     rx: mpsc::UnboundedReceiver<String>,

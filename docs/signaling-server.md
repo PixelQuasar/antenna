@@ -1,16 +1,16 @@
 # Signaling server
 
-Signaling server - предоставляемый SDK хелпер, автоматизирующий bootstrap-соединения. Управляет комнатами и
-подключенными к ним пирами.
+Signaling server — a helper provided by the SDK that automates bootstrap connections. Manages rooms and the
+peers connected to them.
 
-## Транспорт
+## Transport
 
-WebSocket, единственный эндпойнт `GET /ws`. Каждый пир открывает собственное WS-соединение и держит его открытым с
-момента входа в комнату до выхода.
+WebSocket, a single endpoint `GET /ws`. Each peer opens its own WS connection and keeps it open from the
+moment it enters the room until it leaves.
 
-## Формат сообщений
+## Message format
 
-JSON WebSocket-фреймы:
+JSON WebSocket frames:
 
 ```js
 {
@@ -19,36 +19,36 @@ JSON WebSocket-фреймы:
 }
 ```
 
-Сообщения клиента серверу:
+Client-to-server messages:
 
-| `type`       | Поля                | Назначение                     |
-| ------------ | ------------------- | ------------------------------ |
-| `join`       | `room_id`           | Войти в комнату                |
-| `offer`      | `room_id`, `offer`  | Прислать SDP-offer как host    |
-| `answer`     | `room_id`, `answer` | Прислать SDP-answer как joiner |
-| `disconnect` | `room_id`           | Покинуть комнату               |
+| `type`       | Fields              | Purpose                      |
+| ------------ | ------------------- | ---------------------------- |
+| `join`       | `room_id`           | Enter the room               |
+| `offer`      | `room_id`, `offer`  | Send an SDP offer as host    |
+| `answer`     | `room_id`, `answer` | Send an SDP answer as joiner |
+| `disconnect` | `room_id`           | Leave the room               |
 
-Сообщения сервера клиенту:
+Server-to-client messages:
 
-| `type`            | Поля     | Назначение                                        |
-| ----------------- | -------- | ------------------------------------------------- |
-| `request_offer`   | —        | "Ты — host этой комнаты, пришли offer"            |
-| `offer_received`  | `offer`  | "Ты — joiner, вот offer от host'а, пришли answer" |
-| `answer_received` | `answer` | "Твой offer принят, вот answer от joiner'а"       |
+| `type`            | Fields   | Purpose                                                        |
+| ----------------- | -------- | -------------------------------------------------------------- |
+| `request_offer`   | —        | "You are the host of this room, send an offer"                 |
+| `offer_received`  | `offer`  | "You are the joiner, here is the host's offer, send an answer" |
+| `answer_received` | `answer` | "Your offer was accepted, here is the joiner's answer"         |
 
-`offer` и `answer` для сервера - непрозрачные строки. Сервер их не парсит и не валидирует, за это отвечает peer
-(см. [protocol.md](./protocol.md) → Handshake).
+`offer` and `answer` are opaque strings to the server. The server does not parse or validate them — that is the peer's responsibility
+(see [protocol.md](./protocol.md) → Handshake).
 
-## Сценарии
+## Scenarios
 
 ### Connect
 
-Клиент открывает WebSocket на `GET /ws`. Сообщений не отправляется, в комнату пир ещё не вступает - это произойдёт
-позже, по `join`.
+The client opens a WebSocket on `GET /ws`. No messages are sent, and the peer does not yet enter a room — that happens
+later, on `join`.
 
-### Join в пустую комнату
+### Join an empty room
 
-Клиент шлёт `join`. Сервер запоминает peer'а как первого участника комнаты и ничего не отвечает.
+The client sends `join`. The server remembers the peer as the first participant of the room and does not respond.
 
 ```mermaid
 sequenceDiagram
@@ -59,11 +59,11 @@ sequenceDiagram
     note over S: room created, A registered
 ```
 
-### Join в непустую комнату
+### Join a non-empty room
 
-Клиент шлёт `join`. Сервер выбирает любого существующего peer'а как партнёра по bootstrap-handshake'у и пробрасывает
-три сообщения между ним и новичком. Кто из двух становится host'ом, а кто joiner'ом - определяет сервер; клиенту
-достаточно реагировать на пришедшее `request_offer` или `offer_received`.
+The client sends `join`. The server picks any existing peer as the partner for the bootstrap handshake and forwards
+three messages between it and the newcomer. Which of the two becomes the host and which the joiner is decided by the server; the client
+only needs to react to the incoming `request_offer` or `offer_received`.
 
 ```mermaid
 sequenceDiagram
@@ -77,23 +77,23 @@ sequenceDiagram
     S ->> N: offer_received { offer }
     N ->> S: answer { room_id, answer }
     S ->> H: answer_received { answer }
-    note over N,H: WebRTC DataChannel устанавливается напрямую
+    note over N,H: WebRTC DataChannel established directly
 ```
 
-Шаги клиентов:
+Client steps:
 
-- host получает `request_offer` → вызывает `peer.start()` → результат шлёт в поле `offer`;
-- joiner получает `offer_received` → вызывает `peer.receive_offer(offer)` → результат шлёт в поле `answer`;
-- host получает `answer_received` → вызывает `peer.receive_answer(answer)`.
+-   the host receives `request_offer` → calls `peer.start()` → sends the result in the `offer` field;
+-   the joiner receives `offer_received` → calls `peer.receive_offer(offer)` → sends the result in the `answer` field;
+-   the host receives `answer_received` → calls `peer.receive_answer(answer)`.
 
-После этого сигналинг свою задачу выполнил. Подключение к остальным peer'ам комнаты происходит уже силами
-antenna-протокола через relay handshake (см. [protocol.md](./protocol.md)).
+After that, signaling has done its job. Connecting to the remaining peers of the room happens by means of
+the antenna protocol through a relay handshake (see [protocol.md](./protocol.md)).
 
 ### Disconnect
 
-Клиент либо явно шлёт `disconnect`, либо просто закрывает WebSocket. Для сервера эти два случая эквивалентны - peer
-удаляется из комнаты.
+The client either explicitly sends `disconnect` or simply closes the WebSocket. For the server these two cases are equivalent — the peer
+is removed from the room.
 
-## Тривиальная реализация
+## Trivial implementation
 
-Тривиальная реализация signaling-сервера размещена в docker hub по ссылке: https://hub.docker.com/repository/docker/quasarity/antenna-signaling-server
+A trivial implementation of the signaling server is hosted on docker hub at: https://hub.docker.com/repository/docker/quasarity/antenna-signaling-server

@@ -2,6 +2,10 @@ use antenna_protocol::{PeerID, UserMsgPayload};
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 
+/// Driver-emitted event — the data side of a notification.
+///
+/// Drivers emit `EventType` values into [`RtcCallbacks::emit`], which fans
+/// them out to user-registered [`Event`] subscriptions.
 #[derive(Clone)]
 pub enum EventType<Msg: UserMsgPayload> {
     Connected,
@@ -14,6 +18,7 @@ pub enum EventType<Msg: UserMsgPayload> {
     Unavailable,
 }
 
+/// Callback for events that carry no payload (`Connected`, `Available`, …).
 pub struct NoArgCallback(Box<dyn Fn() -> Result<()> + Send + Sync>);
 
 impl NoArgCallback {
@@ -39,6 +44,7 @@ impl From<fn()> for NoArgCallback {
 }
 
 type PeerCallbackFn = dyn Fn(&PeerID) -> Result<()> + Send + Sync;
+/// Callback for peer-scoped events (`PeerConnected`, `PeerDisconnected`, `PeerLost`).
 pub struct PeerCallback(Box<PeerCallbackFn>);
 
 impl PeerCallback {
@@ -64,6 +70,7 @@ impl From<fn(PeerID)> for PeerCallback {
 }
 
 type MessageCallbackFn<Msg> = dyn Fn(&PeerID, &Msg) -> Result<()> + Send + Sync;
+/// Callback for `UserMessage` events — receives the sender [`PeerID`] and message body.
 pub struct MessageCallback<Msg: UserMsgPayload>(Box<MessageCallbackFn<Msg>>);
 
 impl<Msg: UserMsgPayload> MessageCallback<Msg> {
@@ -88,14 +95,26 @@ impl<Msg: UserMsgPayload + 'static> From<fn(PeerID, Msg)> for MessageCallback<Ms
     }
 }
 
+/// User-facing subscription — pairs an event kind with the callback to run.
+///
+/// Pass to `Peer::subscribe` to register; the returned id is what
+/// `Peer::unsubscribe` consumes.
 pub enum Event<Msg: UserMsgPayload> {
+    /// Local node connected to its first peer.
     Connected(NoArgCallback),
+    /// Message arrived from a remote peer.
     UserMessage(MessageCallback<Msg>),
+    /// Local node left the mesh.
     Disconnected(NoArgCallback),
+    /// Remote peer joined the mesh.
     PeerConnected(PeerCallback),
+    /// Remote peer left gracefully.
     PeerDisconnected(PeerCallback),
+    /// Remote peer dropped abruptly (reconnect will be attempted).
     PeerLost(PeerCallback),
+    /// All in-progress relay handshakes settled — node is fully meshed.
     Available(NoArgCallback),
+    /// At least one relay handshake is in progress, or no peers connected.
     Unavailable(NoArgCallback),
 }
 
@@ -139,6 +158,10 @@ fn event_kind<Msg: UserMsgPayload>(event: &EventType<Msg>) -> SubscriptionKind {
     }
 }
 
+/// Subscription registry that backs `Peer::subscribe` / `Peer::unsubscribe`.
+///
+/// Drivers own one instance and call [`Self::emit`] on every protocol event;
+/// it routes to all matching user callbacks.
 pub struct RtcCallbacks<Msg: UserMsgPayload> {
     next_callback_id: u64,
     subscriptions: HashMap<u64, Event<Msg>>,

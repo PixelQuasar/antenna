@@ -10,6 +10,12 @@ use std::time::Duration;
 
 use crate::PeerID;
 
+/// SDP offer or answer signed by the sender's [`crate::Identity`].
+///
+/// The wire form is a base64 string carrying the sender's public key plus
+/// a biscuit token whose verified `sdp` fact contains the actual SDP. This
+/// is what `Peer::start` / `receive_offer` / `receive_answer` produce and
+/// consume.
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
 pub struct SignalingPayload {
     #[serde(

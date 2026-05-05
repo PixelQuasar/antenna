@@ -20,6 +20,11 @@ pub use strategy::{HandshakeStrategy, StrategyFSM};
 
 use crate::PeerID;
 
+/// Per-peer handshake state machine.
+///
+/// One [`HandshakeFSM`] exists per remote peer in [`crate::MeshNodeFSM`].
+/// Dispatches to a [`Host`] or [`Joiner`] strategy depending on which side
+/// initiates the SDP exchange.
 pub struct HandshakeFSM {
     strategy: HandshakeStrategy,
     fsm: StrategyFSM,
@@ -63,11 +68,14 @@ impl HandshakeFSM {
     }
 }
 
+/// How the SDP offer/answer pair is exchanged between two peers.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum HandshakeMode {
-    /// Initial handshake with completely new peer, establishing first datachannel with that peer to our mesh
+    /// First connection between two strangers — signaling goes through an
+    /// external transport (the bundled signaling server, copy-paste, QR, etc.).
     Bootstrap,
 
-    /// Handshake of newly connected peer with all others through "inviter" data channel.
+    /// Newcomer joining an existing mesh — signaling is relayed over the data
+    /// channel of the given intermediary peer; no external transport needed.
     Relay(PeerID),
 }

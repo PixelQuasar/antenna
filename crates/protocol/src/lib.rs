@@ -1,3 +1,15 @@
+//! SansIO core of the [antenna](https://crates.io/crates/antenna) P2P mesh SDK.
+//!
+//! This crate is the platform-independent engine that drives every antenna
+//! peer. It contains no network, no async runtime, no WebRTC — only a
+//! synchronous state machine that turns [`Input`] events into [`Output`]
+//! commands. Platform drivers (`antenna-client-web`, `antenna-client-native`)
+//! wrap it and perform the actual I/O.
+//!
+//! The full protocol — handshake
+//! modes, relay, reconnection, mesh-completeness guarantees — is described
+//! in [`docs/protocol.md`](https://github.com/PixelQuasar/antenna/blob/main/docs/protocol.md).
+
 mod handshake;
 mod identity;
 mod mesh;

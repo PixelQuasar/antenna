@@ -10,7 +10,7 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 
 use crate::Peer;
 
-/// Native WebSocket signaling client
+/// Native client for the bundled antenna signaling server.
 pub struct SignalingClient {
     stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
 }

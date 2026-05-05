@@ -1,3 +1,8 @@
+//! WebAssembly platform driver for the antenna P2P mesh protocol.
+//!
+//! Wraps `antenna-protocol`'s `MeshNodeFSM` and bridges it to the browser's
+//! `RTCPeerConnection`, `RTCDataChannel`, and `WebSocket` via `web-sys`.
+
 mod dispatcher;
 mod driver;
 mod peer;

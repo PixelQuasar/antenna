@@ -2,7 +2,7 @@ use antenna_client_shared::IdentityStorage;
 use antenna_protocol::Identity;
 use anyhow::{Context, Result, anyhow};
 
-/// Identity persistence backed by `window.localStorage`
+/// Identity persistence backed by `window.localStorage`.
 pub struct Storage {
     path: String,
 }
