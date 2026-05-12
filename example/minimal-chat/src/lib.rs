@@ -82,7 +82,7 @@ impl ChatApp {
 
     fn on_message(peer: PeerID, data: Message) {
         web_sys::console::log_2(
-            &JsValue::from_str(peer.as_str()),
+            &JsValue::from_str(&peer.to_string()),
             &JsValue::from_str(&data.text),
         );
     }
@@ -122,7 +122,7 @@ impl ChatApp {
         self.peer
             .connected_peers()
             .into_iter()
-            .map(|p| JsValue::from_str(p.as_str()))
+            .map(|p| JsValue::from_str(&p.to_string()))
             .collect()
     }
 }
